@@ -1,0 +1,20 @@
+{
+  "name": "LR Rota — Leandro na Rota",
+  "short_name": "LR Rota",
+  "description": "Rotas, pontos turísticos, custos e vídeos animados para o canal Leandro na Rota.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFFFFF",
+  "theme_color": "#0A5BD6",
+  "lang": "pt",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

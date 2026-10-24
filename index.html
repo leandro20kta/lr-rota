@@ -1,0 +1,649 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>LR Rota</title>
+<meta name="theme-color" content="#0A5BD6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="LR Rota">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Caveat:wght@700&display=swap">
+<style>
+:root{--brand:#0A5BD6;--brand-dark:#08449F;--brand-tint:#EAF1FF;--ink:#0F172A;--muted:#5B6474;--line:#E5E9F0;--bg:#FFFFFF;--soft:#F7F9FC;--warn:#7A2E0B;--warn-bg:#FFF6F2;--ok:#145F2D;--ok-bg:#E8F5EC;--rec:#D9480F;--sat:env(safe-area-inset-top);--sab:env(safe-area-inset-bottom)}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased;overscroll-behavior:none}
+body{position:fixed;inset:0;overflow:hidden}
+button,input,select,textarea{font-family:inherit;font-size:inherit}
+button{cursor:pointer}
+a{color:var(--brand)}
+.screen{display:none;position:absolute;inset:0;flex-direction:column;overflow:hidden}
+.screen.active{display:flex}
+.scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 20px 24px}
+.topbar{display:flex;align-items:center;gap:12px;padding:calc(var(--sat) + 14px) 20px 12px}
+.topbar h1{margin:0;font-size:22px;font-weight:800;letter-spacing:-.4px}
+.topbar .sub{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.topbar .grow{flex:1;display:flex;flex-direction:column}
+.iconbtn{width:40px;height:40px;border-radius:50%;border:0;background:#F1F4F9;display:flex;align-items:center;justify-content:center;color:var(--ink);flex:none}
+.iconbtn.tint{background:var(--brand-tint);color:var(--brand)}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;height:54px;border-radius:14px;border:0;background:var(--brand);color:#fff;font-size:15px;font-weight:700;width:100%;text-decoration:none}
+.btn:disabled{opacity:.5}
+.btn.ghost{background:#fff;color:var(--ink);border:1.5px solid #D5DBE5}
+.btn.dark{background:var(--ink)}
+.btn.sm{height:40px;font-size:13px;border-radius:10px}
+.row{display:flex;gap:10px}
+.card{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#fff}
+.card .item{display:flex;align-items:center;gap:12px;padding:13px 14px;border-bottom:1px solid var(--line)}
+.card .item:last-child{border-bottom:0}
+.item .grow{flex:1;display:flex;flex-direction:column;min-width:0}
+.item .t{font-size:14px;font-weight:600}
+.item .s{font-size:12px;color:var(--muted)}
+.item input[type=text],.item input[type=number],.item input[type=password]{border:0;background:transparent;outline:none;font-weight:600;color:var(--brand);text-align:right;width:120px;padding:0}
+.item input.wide{width:100%;text-align:left;color:var(--ink);font-size:16px}
+.label{font-size:13px;font-weight:700;margin:16px 0 8px}
+.hint{font-size:12px;color:var(--muted);line-height:1.5;margin:6px 0 0}
+.pill{padding:8px 14px;border-radius:999px;background:#F1F4F9;font-size:13px;font-weight:600;border:0;color:var(--ink)}
+.pill.on{background:var(--brand);color:#fff}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.stat{display:flex;flex-direction:column;gap:2px;padding:10px 8px;border-radius:12px;background:var(--soft)}
+.stat b{font-size:17px;font-weight:800}
+.stat span{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.stat.blue{background:var(--brand-tint)}.stat.blue b,.stat.blue span{color:var(--brand-dark)}
+.stat.warn{background:var(--warn-bg)}.stat.warn b,.stat.warn span{color:var(--warn)}
+.toggle{width:44px;height:26px;border-radius:13px;background:#D5DBE5;position:relative;border:0;flex:none}
+.toggle::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left .15s}
+.toggle.on{background:var(--brand)}.toggle.on::after{left:21px}
+.modes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.mode{display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 8px;border-radius:14px;border:2px solid var(--line);background:#fff;color:var(--ink);font-size:13px;font-weight:700}
+.mode.on{border-color:var(--brand);background:var(--brand-tint)}
+.mode svg{color:var(--muted)}.mode.on svg{color:var(--brand)}
+.map{position:absolute;inset:0;background:#E9EEF5}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:22px 22px 0 0;box-shadow:0 -6px 24px rgba(15,23,42,.14);padding:12px 20px calc(var(--sab) + 16px);display:flex;flex-direction:column;gap:12px;max-height:72%;overflow-y:auto}
+.handle{width:40px;height:4px;border-radius:2px;background:#D5DBE5;align-self:center}
+.float{position:absolute;display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;background:#fff;box-shadow:0 2px 8px rgba(15,23,42,.18);font-size:12px;font-weight:700;z-index:500}
+.fab{position:absolute;width:46px;height:46px;border-radius:50%;border:0;background:#fff;box-shadow:0 2px 8px rgba(15,23,42,.18);display:flex;align-items:center;justify-content:center;z-index:500;color:var(--ink);font-weight:800;font-size:12px}
+.banner{position:absolute;left:16px;right:16px;top:calc(var(--sat) + 12px);z-index:500;display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:18px;background:var(--brand);color:#fff;box-shadow:0 8px 24px rgba(10,91,214,.3)}
+.banner b{font-size:22px;font-weight:800;display:block;letter-spacing:-.3px}
+.banner span{font-size:13px;opacity:.92}
+.stop{display:flex;align-items:center;gap:12px;padding:10px 0}
+.stop .n{width:26px;height:26px;border-radius:50%;background:var(--brand);color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;flex:none}
+.stop .grow{flex:1;min-width:0}
+.stop .t{font-size:14px;font-weight:600}.stop .s{font-size:12px;color:var(--muted)}
+.stop .x{border:0;background:transparent;color:var(--muted);font-size:18px;padding:4px 8px}
+.tabs{display:flex;justify-content:space-around;padding:8px 0 calc(var(--sab) + 8px);border-top:1px solid #EEF1F5;background:#fff}
+.tab{display:flex;flex-direction:column;align-items:center;gap:4px;width:72px;border:0;background:transparent;color:var(--muted);font-size:11px;font-weight:600}
+.tab.on{color:var(--brand);font-weight:700}
+.guide{background:var(--brand-tint);border-radius:16px;padding:16px;font-size:15px;line-height:1.55;white-space:pre-wrap}
+.guide h3{margin:0 0 6px;font-size:11px;font-weight:700;color:var(--brand-dark);text-transform:uppercase;letter-spacing:.5px}
+textarea.note{width:100%;resize:none;padding:10px 12px;border:1px solid #D5DBE5;border-radius:10px;font-size:13px;line-height:1.4}
+.trip{display:flex;gap:12px;padding:12px;border:1px solid var(--line);border-radius:16px;margin-bottom:10px;width:100%;background:#fff;text-align:left;color:var(--ink)}
+.trip .thumb{width:84px;height:84px;border-radius:12px;background:#EEF3FA;flex:none;overflow:hidden}
+.trip .grow{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.badge{font-size:11px;font-weight:600;padding:4px 8px;border-radius:6px;background:#F1F4F9}
+.badge.ok{background:var(--ok-bg);color:var(--ok)}
+.preview{position:relative;width:100%;aspect-ratio:16/9;border-radius:16px;overflow:hidden;background:#101522}
+.preview canvas,.preview video{width:100%;height:100%;display:block}
+.rec{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--rec);animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.25}}
+.toast{position:absolute;left:50%;bottom:calc(var(--sab) + 90px);transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:999px;font-size:13px;font-weight:600;z-index:2000;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90%;text-align:center}
+.toast.show{opacity:1}
+.car-marker{width:34px;height:60px;background:url(icons/car.png) center/contain no-repeat;filter:drop-shadow(0 4px 6px rgba(0,0,0,.45));transform-origin:center}
+.leaflet-control-attribution{font-size:9px}
+.ring{width:148px;height:148px;border-radius:50%;background:var(--brand-tint);display:flex;align-items:center;justify-content:center;position:relative;margin:0 auto}
+.ring::before{content:"";position:absolute;inset:-16px;border-radius:50%;border:2px dashed #B9CFFA}
+.stylecard{display:flex;flex-direction:column;gap:6px;padding:8px;border-radius:12px;border:2px solid var(--line);background:#fff;color:var(--ink);font-size:11px;font-weight:700;text-align:left}
+.stylecard.on{border-color:var(--brand);background:var(--brand-tint)}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:rot .8s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+.sugg{position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 24px rgba(15,23,42,.12);z-index:50;max-height:220px;overflow-y:auto}
+.sugg button{display:block;width:100%;text-align:left;border:0;background:#fff;padding:10px 14px;font-size:13px;border-bottom:1px solid var(--line)}
+</style>
+</head>
+<body>
+
+<!-- 1 · GPS obrigatório -->
+<section id="s-gps" class="screen">
+  <div class="scroll" style="display:flex;flex-direction:column;padding-top:calc(var(--sat) + 40px)">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="width:40px;height:40px;border-radius:12px;background:var(--brand);display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg></div>
+      <div><div style="font-size:18px;font-weight:800;color:var(--brand)">LR Rota</div><div style="font-size:12px;color:var(--muted);font-weight:500">Leandro na Rota</div></div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:24px;text-align:center;padding:24px 0">
+      <div class="ring"><svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#0A5BD6" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="3" fill="#0A5BD6" stroke="none"/></svg></div>
+      <div><h1 style="margin:0 0 10px;font-size:26px;font-weight:800;letter-spacing:-.5px">Ative o GPS para continuar</h1><p style="margin:0;font-size:15px;line-height:1.5;color:var(--muted)">O LR Rota só funciona com a localização ligada. É ela que mede o trajeto, calcula combustível e gera o vídeo da viagem.</p></div>
+      <div id="gps-status" class="card" style="text-align:left"><div class="item"><span id="gps-dot" style="width:10px;height:10px;border-radius:50%;background:#D5DBE5"></span><div class="grow"><span class="t" id="gps-text">A aguardar permissão…</span></div></div></div>
+    </div>
+    <button class="btn" id="btn-gps">Ativar GPS e entrar</button>
+    <p class="hint" style="text-align:center">Se recusou antes: Definições do iPhone › Safari › Localização, ou Definições › Privacidade › Localização.</p>
+  </div>
+</section>
+
+<!-- 2 · Nova rota -->
+<section id="s-home" class="screen">
+  <div class="topbar"><div class="grow"><span class="sub">Leandro na Rota</span><h1>Para onde vamos?</h1></div><span class="float" style="position:static;box-shadow:none;background:var(--ok-bg);color:var(--ok)"><span style="width:8px;height:8px;border-radius:50%;background:#1B873F"></span>GPS ativo</span></div>
+  <div class="scroll">
+    <div class="card">
+      <div class="item" style="position:relative"><span style="width:12px;height:12px;border-radius:50%;border:3px solid var(--brand);flex:none"></span><div class="grow"><label class="s" for="origin" style="text-transform:uppercase;letter-spacing:.5px;font-weight:600;font-size:11px">Saída</label><input class="wide" id="origin" type="text" placeholder="A obter a sua posição…" autocomplete="off"><div class="sugg" id="sugg-origin" hidden></div></div><button class="pill" id="btn-mypos" style="font-size:12px;padding:6px 10px;background:var(--brand-tint);color:var(--brand)">Minha posição</button></div>
+      <div class="item" style="background:var(--soft);position:relative"><svg width="12" height="14" viewBox="0 0 24 28" fill="#0A5BD6" style="flex:none"><path d="M12 28s10-9 10-17A10 10 0 0 0 2 11c0 8 10 17 10 17z"/></svg><div class="grow"><label class="s" for="dest" style="text-transform:uppercase;letter-spacing:.5px;font-weight:600;font-size:11px">Destino</label><input class="wide" id="dest" type="text" placeholder="Ponte de Lima, Vigo, Paris…" autocomplete="off"><div class="sugg" id="sugg-dest" hidden></div></div></div>
+    </div>
+    <div class="label">Como vou chegar</div>
+    <div class="modes">
+      <button class="mode on" data-mode="car"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M7 17V11l2-5h6l2 5v6"/><circle cx="8" cy="17" r="2"/><circle cx="16" cy="17" r="2"/></svg>Carro</button>
+      <button class="mode" data-mode="plane"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 16l20-8-6 10-4-3-4 5-1-6z"/></svg>Avião</button>
+      <button class="mode" data-mode="mixed"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h6l2-4h8M4 12l2 4h6l2-4"/></svg>Misto</button>
+    </div>
+    <p class="hint">Avião e misto: a rota de carro vai até ao aeroporto mais próximo; o voo é desenhado em arco no vídeo.</p>
+    <div class="label">O que incluir no roteiro</div>
+    <div class="chips" id="chips">
+      <button class="pill on" data-k="attraction">Pontos turísticos</button><button class="pill on" data-k="restaurant">Restaurantes</button><button class="pill on" data-k="hotel">Hotéis</button><button class="pill" data-k="viewpoint">Miradouros</button><button class="pill" data-k="beach">Praias</button><button class="pill" data-k="museum">Museus</button>
+    </div>
+    <div class="label">Recentes</div>
+    <div id="recent"></div>
+    <div style="height:12px"></div>
+    <button class="btn" id="btn-plan">Planear rota <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+  </div>
+  <nav class="tabs" data-tabs></nav>
+</section>
+
+<!-- 3 · Plano -->
+<section id="s-plan" class="screen">
+  <div class="map" id="map-plan"></div>
+  <button class="fab" style="top:calc(var(--sat) + 12px);left:16px" data-go="home" aria-label="Voltar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
+  <span class="float" id="plan-count" style="top:calc(var(--sat) + 20px);right:16px">…</span>
+  <div class="sheet" id="plan-sheet">
+    <div class="handle"></div>
+    <div style="display:flex;align-items:baseline;justify-content:space-between"><h2 id="plan-title" style="margin:0;font-size:20px;font-weight:800;letter-spacing:-.4px">…</h2><span id="plan-when" style="font-size:13px;font-weight:600;color:var(--muted)"></span></div>
+    <div class="stats"><div class="stat"><span>Distância</span><b id="st-dist">–</b></div><div class="stat"><span>Tempo</span><b id="st-time">–</b></div><div class="stat blue"><span id="st-fuel-l">Gasóleo</span><b id="st-fuel">–</b></div><div class="stat warn"><span>Portagem</span><b id="st-toll">–</b></div></div>
+    <p class="hint" id="plan-note">Estimativas. Ajuste consumo e preço em Veículo.</p>
+    <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:13px;font-weight:700">Paradas sugeridas</span><button class="pill" data-go="guide" style="background:transparent;color:var(--brand);padding:0">Ver guia do destino</button></div>
+    <div id="stops"></div>
+    <button class="btn sm ghost" id="btn-addstop">+ Adicionar parada</button>
+    <div class="row"><button class="btn ghost" data-go="video">Vídeo</button><button class="btn" id="btn-start"><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M6 4l14 8-14 8z"/></svg>Iniciar viagem</button></div>
+  </div>
+</section>
+
+<!-- 4 · Guia -->
+<section id="s-guide" class="screen">
+  <div class="topbar"><button class="iconbtn" data-go="plan"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button><div class="grow"><span class="sub">Guia gerado por IA</span><h1 id="guide-title">Destino</h1></div><button class="iconbtn tint" id="btn-copy-guide" aria-label="Copiar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
+  <div class="scroll">
+    <div id="guide-body"></div>
+    <div class="label">Onde comer <span style="font-weight:500;color:var(--muted);font-size:12px">· do mapa, confirmar</span></div>
+    <div class="card" id="guide-food"></div>
+    <div class="label">Onde dormir</div>
+    <div class="card" id="guide-hotel"></div>
+    <div style="height:14px"></div>
+    <div class="row"><button class="btn ghost" id="btn-regen">Gerar com IA</button><button class="btn" id="btn-start2">Iniciar viagem</button></div>
+    <p class="hint">A IA precisa da chave Claude em Definições. Sem chave, o guia é montado a partir dos dados do mapa.</p>
+  </div>
+</section>
+
+<!-- 5 · Em rota -->
+<section id="s-drive" class="screen">
+  <div class="map" id="map-drive"></div>
+  <div class="banner"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V8M6 14l6-6 6 6"/></svg><div style="flex:1"><b id="dr-dist">–</b><span id="dr-next">a calcular…</span></div></div>
+  <span class="float" style="top:calc(var(--sat) + 96px);left:16px"><span class="rec"></span><span id="dr-rec">REC 00:00:00</span></span>
+  <span class="float" style="top:calc(var(--sat) + 96px);right:16px;color:var(--ok)" id="dr-gps">GPS · –</span>
+  <button class="fab" style="top:calc(var(--sat) + 150px);right:16px" id="btn-center" aria-label="Centrar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L4 20l8-4 8 4z"/></svg></button>
+  <button class="fab" style="top:calc(var(--sat) + 206px);right:16px" id="btn-flag" aria-label="Marcar ponto"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4h12l-2 4 2 4H5"/></svg></button>
+  <button class="fab" style="top:calc(var(--sat) + 262px);right:16px" id="btn-night">3D</button>
+  <div class="float" style="left:16px;bottom:236px;flex-direction:column;gap:0;border-radius:14px;padding:8px 12px"><b id="dr-speed" style="font-size:22px;line-height:1">0</b><span style="font-size:10px;color:var(--muted)">km/h</span></div>
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="stats"><div class="stat" style="background:transparent;text-align:center"><b id="dr-done">0,0</b><span>km feitos</span></div><div class="stat" style="background:transparent;text-align:center"><b id="dr-left">–</b><span>restantes</span></div><div class="stat" style="background:transparent;text-align:center"><b id="dr-fuel" style="color:var(--brand-dark)">€0,00</b><span>gasóleo</span></div><div class="stat" style="background:transparent;text-align:center"><b id="dr-toll" style="color:var(--warn)">€0,00</b><span>portagem</span></div></div>
+    <p class="hint" style="margin:0;padding:10px 12px;border-radius:12px;background:var(--soft)">Versão web: o GPS só grava com o ecrã ligado. Mantive o ecrã aceso. Para navegar com voz, abra no Waze e volte aqui no destino.</p>
+    <div class="row"><button class="btn ghost" id="btn-waze">Abrir no Waze</button><button class="btn dark" id="btn-finish">Terminar</button></div>
+  </div>
+</section>
+
+<!-- 6 · Vídeo -->
+<section id="s-video" class="screen">
+  <div class="topbar"><button class="iconbtn" data-go="plan"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button><div class="grow"><span class="sub">Gerado do trajeto</span><h1>Vídeo da viagem</h1></div></div>
+  <div class="scroll">
+    <div class="preview"><canvas id="vid-canvas" width="1280" height="720"></canvas><span class="float" id="vid-time" style="right:10px;bottom:10px;background:rgba(15,23,42,.78);color:#fff;box-shadow:none;font-size:11px">00:00 · 1080p</span></div>
+    <div class="label">Linha do tempo <span style="font-weight:500;color:var(--muted);font-size:12px" id="vid-info"></span></div>
+    <div class="row"><button class="pill on" data-dur="12">12 s</button><button class="pill" data-dur="24">24 s</button><button class="pill" data-dur="40">40 s</button></div>
+    <div class="label">Estilo</div>
+    <div class="row"><button class="pill on" data-style="dots">Pontilhado</button><button class="pill" data-style="solid">Linha sólida</button><button class="pill" data-style="follow">Câmera segue</button></div>
+    <div class="label">Formato</div>
+    <div class="row"><button class="pill on" data-fmt="169">16:9 YouTube</button><button class="pill" data-fmt="916">9:16 Shorts</button></div>
+    <div class="card" style="margin-top:14px"><div class="item"><div class="grow"><span class="t">Mostrar km, gasóleo e portagens</span></div><button class="toggle on" id="tg-stats"></button></div></div>
+    <div style="height:14px"></div>
+    <div class="row"><button class="btn ghost" id="btn-preview">▶ Pré-visualizar</button><button class="btn" id="btn-export">Exportar MP4</button></div>
+    <p class="hint" id="vid-note">Exporta pelo próprio telemóvel (sem servidor). Viagens longas aceleram sozinhas.</p>
+  </div>
+</section>
+
+<!-- 7 · Diário -->
+<section id="s-diary" class="screen">
+  <div class="topbar"><button class="iconbtn" data-go="history"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button><div class="grow"><span class="sub" id="di-sub">Viagem</span><h1>Quanto custou</h1></div></div>
+  <div class="scroll">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;padding:18px;border-radius:16px;background:var(--brand);color:#fff"><div><div style="font-size:12px;font-weight:600;opacity:.9;text-transform:uppercase;letter-spacing:.5px">Total</div><div id="di-total" style="font-size:36px;font-weight:800;letter-spacing:-.8px;line-height:1">€ 0,00</div></div><div style="text-align:right;font-size:12px;font-weight:600;opacity:.92"><div id="di-km">0 km</div><div id="di-stops">0 paradas</div></div></div>
+    <div class="label">Custos</div>
+    <div class="card">
+      <div class="item"><div class="grow"><span class="t">Gasóleo</span><span class="s" id="di-fuel-s">calculado pelo GPS</span></div><span>€</span><input type="number" step="0.01" id="di-fuel" placeholder="0,00"></div>
+      <div class="item"><div class="grow"><span class="t">Portagens</span><span class="s">ida e volta</span></div><span>€</span><input type="number" step="0.01" id="di-toll" placeholder="0,00"></div>
+      <div class="item"><div class="grow"><span class="t">Restaurante</span><input type="text" id="di-rest" placeholder="Nome e prato" class="wide" style="font-size:13px;color:var(--muted);font-weight:500"></div><span>€</span><input type="number" step="0.01" id="di-rest-v" placeholder="0,00"></div>
+      <div class="item"><div class="grow"><span class="t">Hotel</span><input type="text" id="di-hotel" placeholder="Nome · noites" class="wide" style="font-size:13px;color:var(--muted);font-weight:500"></div><span>€</span><input type="number" step="0.01" id="di-hotel-v" placeholder="0,00"></div>
+      <div class="item"><div class="grow"><span class="t">Outros</span><span class="s">estacionamento, bilhetes, café…</span></div><span>€</span><input type="number" step="0.01" id="di-other" placeholder="0,00"></div>
+    </div>
+    <div class="label">Avaliação</div>
+    <div class="card">
+      <div class="item"><div class="grow"><span class="t">Comida</span></div><select id="di-r1"><option>–</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></div>
+      <div class="item"><div class="grow"><span class="t">Atendimento</span></div><select id="di-r2"><option>–</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></div>
+      <div class="item"><div class="grow"><span class="t">Hotel valeu a pena?</span></div><select id="di-r3"><option>–</option><option>Sim, indico</option><option>Mais ou menos</option><option>Não indico</option></select></div>
+    </div>
+    <div class="label">Nota para o vídeo</div>
+    <textarea class="note" id="di-note" rows="3" placeholder="Dose farta, dá para dois. Chegar antes das 13h…"></textarea>
+    <div style="height:14px"></div>
+    <div class="row"><button class="btn ghost" id="btn-ficha">Copiar ficha</button><button class="btn" id="btn-save-diary">Guardar viagem</button></div>
+  </div>
+</section>
+
+<!-- 8 · Histórico -->
+<section id="s-history" class="screen">
+  <div class="topbar"><div class="grow"><span class="sub">Leandro na Rota</span><h1>Minhas viagens</h1></div><button class="iconbtn" data-go="settings" aria-label="Definições"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button></div>
+  <div class="scroll">
+    <div class="stats" style="grid-template-columns:repeat(3,minmax(0,1fr))"><div class="stat blue"><b id="h-km">0</b><span>km este ano</span></div><div class="stat"><b id="h-n">0</b><span>viagens</span></div><div class="stat"><b id="h-eur">€ 0</b><span>gastos</span></div></div>
+    <div style="height:14px"></div>
+    <div id="trips"></div>
+  </div>
+  <nav class="tabs" data-tabs></nav>
+</section>
+
+<!-- 9 · Veículo / Definições -->
+<section id="s-settings" class="screen">
+  <div class="topbar"><button class="iconbtn" data-go="history"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button><div class="grow"><span class="sub">Definições</span><h1>Meu veículo</h1></div></div>
+  <div class="scroll">
+    <div style="display:flex;align-items:center;gap:16px;padding:16px;border-radius:16px;background:#171D2B;color:#fff"><div style="width:96px;height:96px;border-radius:14px;background:#1B2232 url(icons/car.png) center/70% no-repeat;flex:none"></div><div style="flex:1"><div style="font-size:11px;font-weight:600;color:#94A3B8;text-transform:uppercase;letter-spacing:.5px">Ícone no mapa</div><div style="font-size:16px;font-weight:700;margin:4px 0">O seu carro</div><div style="font-size:12px;color:#CBD5E1;line-height:1.4">Tamanho padrão de GPS, roda com a direção.</div></div></div>
+    <div class="label">Veículo</div>
+    <div class="card">
+      <div class="item"><div class="grow"><span class="t">Nome</span></div><input type="text" id="v-name" placeholder="BMW 420 · preto"></div>
+      <div class="item"><div class="grow"><span class="t">Combustível</span></div><select id="v-fuel"><option value="Gasóleo">Gasóleo</option><option value="Gasolina">Gasolina</option><option value="Elétrico">Elétrico (kWh)</option></select></div>
+      <div class="item"><div class="grow"><span class="t">Consumo médio</span><span class="s">L/100 km (ou kWh/100 km)</span></div><input type="number" step="0.1" id="v-cons" placeholder="6,5" style="width:70px"></div>
+      <div class="item"><div class="grow"><span class="t">Preço do litro</span><span class="s">€ · atualizar ao abastecer</span></div><input type="number" step="0.01" id="v-price" placeholder="1,72" style="width:70px"></div>
+      <div class="item"><div class="grow"><span class="t">Via Verde</span></div><button class="toggle on" id="v-vv"></button></div>
+      <div class="item"><div class="grow"><span class="t">Portagem por km (autoestrada)</span><span class="s">€ · PT ≈ 0,09 · ES ≈ 0,10</span></div><input type="number" step="0.01" id="v-tollkm" placeholder="0,09" style="width:70px"></div>
+    </div>
+    <div class="label">Mapa</div>
+    <div class="card">
+      <div class="item"><div class="grow"><span class="t">Modo noite automático</span><span class="s">Escuro após o pôr do sol</span></div><button class="toggle on" id="m-night"></button></div>
+      <div class="item"><div class="grow"><span class="t">Linha da rota</span></div><select id="m-line"><option value="blue">Azul</option><option value="neon">Neon</option></select></div>
+      <div class="item"><div class="grow"><span class="t">Chave Google Maps</span><span class="s">Opcional · sem chave usa OpenStreetMap</span></div><input type="password" id="k-google" placeholder="AIza…"></div>
+    </div>
+    <div class="label">Inteligência artificial</div>
+    <div class="card">
+      <div class="item"><div class="grow"><span class="t">Chave Claude (Anthropic)</span><span class="s">Para gerar o guia do destino</span></div><input type="password" id="k-claude" placeholder="sk-ant-…"></div>
+    </div>
+    <div class="label">Dados</div>
+    <div class="row"><button class="btn sm ghost" id="btn-export-data">Exportar backup</button><button class="btn sm ghost" id="btn-wipe">Apagar tudo</button></div>
+    <p class="hint">Tudo fica guardado só no seu telemóvel. Faça backup de vez em quando.</p>
+    <div style="height:14px"></div>
+    <button class="btn" id="btn-save-settings">Guardar</button>
+  </div>
+</section>
+
+<!-- 10 · Capa -->
+<section id="s-cover" class="screen">
+  <div class="topbar"><button class="iconbtn" data-go="video"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button><div class="grow"><span class="sub" id="cv-sub">Viagem</span><h1>Capa do vídeo</h1></div></div>
+  <div class="scroll">
+    <div class="preview"><canvas id="cv-canvas" width="1280" height="720"></canvas></div>
+    <div class="label">Estilo</div>
+    <div class="row" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr))"><button class="stylecard on" data-cs="road">Estrada iluminada</button><button class="stylecard" data-cs="mini">Miniatura no mapa</button><button class="stylecard" data-cs="collage">Colagem manuscrita</button></div>
+    <div class="card" style="margin-top:14px">
+      <div class="item"><div class="grow"><span class="t">Foto de fundo</span><span class="s">A sua foto da estrada, com o seu carro</span></div><label class="pill" style="cursor:pointer">Escolher<input type="file" id="cv-photo" accept="image/*" hidden></label></div>
+      <div class="item"><div class="grow"><span class="t">Título</span></div><input type="text" id="cv-title" placeholder="Viana → Ponte de Lima" style="width:180px"></div>
+      <div class="item"><div class="grow"><span class="t">Subtítulo</span></div><input type="text" id="cv-subtitle" placeholder="A vila mais antiga de Portugal" style="width:180px"></div>
+      <div class="item"><div class="grow"><span class="t">Cartão com custos</span></div><button class="toggle on" id="cv-stats"></button></div>
+      <div class="item"><div class="grow"><span class="t">Cor da linha</span></div><select id="cv-color"><option value="gold">Dourada</option><option value="neon">Neon</option><option value="blue">Azul</option><option value="white">Branca</option></select></div>
+    </div>
+    <div style="height:14px"></div>
+    <button class="btn" id="btn-cover-export">Guardar capa 1280×720</button>
+  </div>
+</section>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+/* ===================== LR Rota — app ===================== */
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem('lr.'+k); return v==null? d : JSON.parse(v);}catch(e){return d;} },
+  set(k, v){ localStorage.setItem('lr.'+k, JSON.stringify(v)); }
+};
+const settings = Object.assign({name:'', fuel:'Gasóleo', cons:6.5, price:1.72, vv:true, tollkm:0.09, night:true, line:'blue', gkey:'', ckey:''}, store.get('settings', {}));
+let trips = store.get('trips', []);
+let current = store.get('current', null);   // trip being planned / driven
+let pos = null;                               // last GPS fix
+const eur = n => '€' + (Math.round(n*100)/100).toFixed(2).replace('.', ',');
+const km = m => (m/1000 < 10 ? (m/1000).toFixed(1) : Math.round(m/1000)).toString().replace('.', ',') + ' km';
+const mins = s => { const m = Math.round(s/60); return m < 60 ? m + ' min' : Math.floor(m/60) + ' h ' + String(m%60).padStart(2,'0'); };
+function toast(t, ms=2200){ const e = $('#toast'); e.textContent = t; e.classList.add('show'); clearTimeout(e._t); e._t = setTimeout(()=> e.classList.remove('show'), ms); }
+function go(name){ $$('.screen').forEach(s => s.classList.remove('active')); $('#s-'+name).classList.add('active'); location.hash = name; onShow(name); window.scrollTo(0,0); }
+$$('[data-go]').forEach(b => b.addEventListener('click', () => go(b.dataset.go)));
+function isNight(){ const h = new Date().getHours(); return settings.night && (h >= 19 || h < 7); }
+const TILES = { light: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', dark: 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png' };
+const ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>';
+function tileLayer(dark){ return L.tileLayer(dark ? TILES.dark : TILES.light, {attribution: ATTR, maxZoom: 19}); }
+function lineStyle(){ return settings.line === 'neon' ? {color:'#FF6A2A', weight:7, opacity:.95} : {color:'#2F7CFF', weight:7, opacity:.95}; }
+
+/* ---------- tabs ---------- */
+$$('[data-tabs]').forEach(n => { n.innerHTML = `
+  <button class="tab" data-go="home"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>Nova rota</button>
+  <button class="tab" data-go="history"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16M8 15V9M12 15V7M16 15v-4"/></svg>Viagens</button>
+  <button class="tab" data-go="video"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3"/></svg>Vídeo</button>
+  <button class="tab" data-go="settings"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M7 17V11l2-5h6l2 5v6"/><circle cx="8" cy="17" r="2"/><circle cx="16" cy="17" r="2"/></svg>Veículo</button>`;
+  n.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => go(b.dataset.go)));
+});
+
+/* ---------- GPS gate ---------- */
+let watchId = null;
+function requestGps(){
+  if(!navigator.geolocation){ $('#gps-text').textContent = 'Este telemóvel não tem GPS disponível.'; return; }
+  $('#gps-text').textContent = 'A pedir permissão…';
+  navigator.geolocation.getCurrentPosition(p => {
+    pos = p.coords; $('#gps-dot').style.background = '#1B873F'; $('#gps-text').textContent = 'Localização ativa · precisão ' + Math.round(p.coords.accuracy) + ' m';
+    store.set('gpsok', true); setTimeout(() => go(current && current.route ? 'plan' : 'home'), 500);
+    reverseGeocode(pos.latitude, pos.longitude).then(n => { if(n && !$('#origin').value) $('#origin').value = n; });
+  }, e => { $('#gps-dot').style.background = '#D9480F'; $('#gps-text').textContent = e.code === 1 ? 'Permissão recusada. Ative nas Definições e toque de novo.' : 'Sem sinal de GPS. Tente de novo.'; }, {enableHighAccuracy:true, timeout:15000, maximumAge:5000});
+}
+$('#btn-gps').addEventListener('click', requestGps);
+
+/* ---------- geocoding (Nominatim) ---------- */
+const NOM = 'https://nominatim.openstreetmap.org';
+async function geocode(q){ const r = await fetch(`${NOM}/search?format=jsonv2&limit=5&accept-language=pt&q=${encodeURIComponent(q)}`); return r.json(); }
+async function reverseGeocode(lat, lon){ try{ const r = await fetch(`${NOM}/reverse?format=jsonv2&accept-language=pt&lat=${lat}&lon=${lon}`); const j = await r.json(); const a = j.address || {}; return [a.road, a.village || a.town || a.city || a.municipality].filter(Boolean).join(', ') || j.display_name; }catch(e){ return null; } }
+function shortName(j){ const a = j.address || {}; return a.city || a.town || a.village || a.municipality || (j.display_name||'').split(',')[0]; }
+function wireSuggest(inputSel, boxSel, onPick){
+  const inp = $(inputSel), box = $(boxSel); let t;
+  inp.addEventListener('input', () => { clearTimeout(t); const q = inp.value.trim(); if(q.length < 3){ box.hidden = true; return; } t = setTimeout(async () => { try{ const res = await geocode(q); box.innerHTML = res.map((r,i) => `<button data-i="${i}">${r.display_name}</button>`).join(''); box.hidden = res.length === 0; box.querySelectorAll('button').forEach(b => b.addEventListener('click', () => { const r = res[+b.dataset.i]; inp.value = r.display_name.split(',').slice(0,2).join(','); box.hidden = true; onPick({lat:+r.lat, lon:+r.lon, name: shortName(r), full: r.display_name}); })); }catch(e){} }, 450); });
+}
+let origin = null, dest = null, mode = 'car';
+wireSuggest('#origin', '#sugg-origin', p => origin = p);
+wireSuggest('#dest', '#sugg-dest', p => dest = p);
+$('#btn-mypos').addEventListener('click', async () => { if(!pos){ toast('Sem posição GPS ainda'); return; } origin = {lat:pos.latitude, lon:pos.longitude, name:'Minha posição'}; $('#origin').value = 'A obter morada…'; const n = await reverseGeocode(pos.latitude, pos.longitude); $('#origin').value = n || 'Minha posição'; origin.name = (n||'').split(',').pop().trim() || 'Minha posição'; });
+$$('.mode').forEach(b => b.addEventListener('click', () => { $$('.mode').forEach(x => x.classList.remove('on')); b.classList.add('on'); mode = b.dataset.mode; }));
+$$('#chips .pill').forEach(b => b.addEventListener('click', () => b.classList.toggle('on')));
+
+/* ---------- routing (OSRM, follows roads) ---------- */
+async function route(a, b, vias=[]) {
+  const pts = [a, ...vias, b].map(p => `${p.lon},${p.lat}`).join(';');
+  const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${pts}?overview=full&geometries=geojson&steps=true&annotations=false`);
+  const j = await r.json(); if(j.code !== 'Ok') throw new Error('Rota não encontrada');
+  const rt = j.routes[0];
+  let tollM = 0; const refs = new Set();
+  rt.legs.forEach(l => l.steps.forEach(s => { const ref = (s.ref || '').split(';')[0]; if(/^(A\d|AP-?\d|A-\d|E\d)/i.test(ref)){ tollM += s.distance; refs.add(ref); } }));
+  return { coords: rt.geometry.coordinates.map(c => [c[1], c[0]]), distance: rt.distance, duration: rt.duration, tollM, refs: [...refs] };
+}
+async function nearestAirport(p){ const r = await fetch(`https://overpass-api.de/api/interpreter`, {method:'POST', body:`[out:json][timeout:20];node(around:120000,${p.lat},${p.lon})[aeroway=aerodrome][iata];out 5;`}); const j = await r.json(); const el = (j.elements||[]).sort((a,b)=> dist(p.lat,p.lon,a.lat,a.lon) - dist(p.lat,p.lon,b.lat,b.lon))[0]; return el ? {lat:el.lat, lon:el.lon, name:(el.tags.name||'Aeroporto') + ' (' + el.tags.iata + ')'} : null; }
+function dist(a,b,c,d){ const R=6371000, toR=x=>x*Math.PI/180, dLat=toR(c-a), dLon=toR(d-b); const h=Math.sin(dLat/2)**2+Math.cos(toR(a))*Math.cos(toR(c))*Math.sin(dLon/2)**2; return 2*R*Math.asin(Math.sqrt(h)); }
+
+/* ---------- POIs (Overpass) ---------- */
+async function pois(p, kinds){
+  const q = [];
+  if(kinds.includes('attraction')) q.push('nwr(around:3000,LAT,LON)[tourism~"attraction|castle|artwork"];nwr(around:3000,LAT,LON)[historic~"castle|monument|bridge|church|ruins|tower|archaeological_site"];');
+  if(kinds.includes('viewpoint')) q.push('nwr(around:6000,LAT,LON)[tourism=viewpoint];');
+  if(kinds.includes('museum')) q.push('nwr(around:3000,LAT,LON)[tourism=museum];');
+  if(kinds.includes('beach')) q.push('nwr(around:8000,LAT,LON)[natural=beach][name];');
+  if(kinds.includes('restaurant')) q.push('nwr(around:2000,LAT,LON)[amenity=restaurant][name];');
+  if(kinds.includes('hotel')) q.push('nwr(around:3000,LAT,LON)[tourism~"hotel|guest_house"][name];');
+  const body = `[out:json][timeout:25];(${q.join('').replaceAll('LAT', p.lat).replaceAll('LON', p.lon)});out center 60;`;
+  const r = await fetch('https://overpass-api.de/api/interpreter', {method:'POST', body}); const j = await r.json();
+  return (j.elements||[]).filter(e => e.tags && e.tags.name).map(e => { const lat = e.lat ?? e.center.lat, lon = e.lon ?? e.center.lon; const t = e.tags; let kind = 'attraction'; if(t.amenity === 'restaurant') kind = 'restaurant'; else if(t.tourism === 'hotel' || t.tourism === 'guest_house') kind = 'hotel'; else if(t.tourism === 'viewpoint') kind = 'viewpoint'; else if(t.tourism === 'museum') kind = 'museum'; else if(t.natural === 'beach') kind = 'beach'; return {name:t.name, kind, lat, lon, cuisine:t.cuisine, stars:t.stars, website:t.website, d: dist(p.lat,p.lon,lat,lon), desc: t.description || t['description:pt'] || ''}; }).sort((a,b) => a.d - b.d);
+}
+
+/* ---------- plan ---------- */
+let mapPlan, planLayer;
+$('#btn-plan').addEventListener('click', async () => {
+  if(!origin && pos) origin = {lat:pos.latitude, lon:pos.longitude, name: ($('#origin').value||'Minha posição').split(',').pop().trim()};
+  if(!origin){ toast('Indique a saída'); return; }
+  if(!dest){ const q = $('#dest').value.trim(); if(!q){ toast('Indique o destino'); return; } try{ const r = (await geocode(q))[0]; if(!r) throw 0; dest = {lat:+r.lat, lon:+r.lon, name: shortName(r), full:r.display_name}; }catch(e){ toast('Destino não encontrado'); return; } }
+  const btn = $('#btn-plan'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span> A planear…';
+  try{
+    const kinds = $$('#chips .pill.on').map(b => b.dataset.k);
+    const trip = { id: Date.now(), created: new Date().toISOString(), origin, dest, mode, kinds, stops: [], diary: {}, track: [], status: 'planned' };
+    let legs = [];
+    if(mode === 'car'){ legs.push({type:'car', ...(await route(origin, dest))}); }
+    else { const a1 = await nearestAirport(origin), a2 = await nearestAirport(dest); if(!a1 || !a2) throw new Error('Aeroporto não encontrado'); trip.airports = [a1, a2]; legs.push({type:'car', ...(await route(origin, a1))}); legs.push({type:'plane', coords: arc(a1, a2), distance: dist(a1.lat,a1.lon,a2.lat,a2.lon), duration: dist(a1.lat,a1.lon,a2.lat,a2.lon)/230 + 2*3600, tollM:0, refs:[]}); if(mode === 'mixed') legs.push({type:'car', ...(await route(a2, dest))}); }
+    trip.legs = legs; trip.route = legs.flatMap(l => l.coords);
+    trip.distance = legs.reduce((s,l) => s + (l.type==='car' ? l.distance : 0), 0); trip.flightKm = legs.filter(l=>l.type==='plane').reduce((s,l)=> s+l.distance,0)/1000;
+    trip.duration = legs.reduce((s,l) => s + l.duration, 0); trip.tollM = legs.reduce((s,l) => s + l.tollM, 0); trip.refs = legs.flatMap(l => l.refs);
+    try{ trip.pois = await pois(dest, kinds); }catch(e){ trip.pois = []; }
+    trip.stops = trip.pois.filter(p => ['attraction','viewpoint','museum','beach'].includes(p.kind)).slice(0,4).map(p => ({name:p.name, lat:p.lat, lon:p.lon, note: p.kind === 'viewpoint' ? 'Miradouro' : p.kind === 'museum' ? 'Museu' : p.kind === 'beach' ? 'Praia' : 'Ponto turístico'}));
+    current = trip; store.set('current', current);
+    const rec = store.get('recent', []); rec.unshift({o: origin.name, d: dest.name, km: Math.round(trip.distance/1000), mode}); store.set('recent', rec.slice(0,5));
+    go('plan');
+  }catch(e){ console.error(e); toast('Não consegui calcular: ' + e.message); }
+  btn.disabled = false; btn.innerHTML = 'Planear rota';
+});
+function arc(a, b){ const n = 48, out = []; for(let i=0;i<=n;i++){ const t = i/n; const lat = a.lat + (b.lat-a.lat)*t, lon = a.lon + (b.lon-a.lon)*t; const bulge = Math.sin(t*Math.PI) * Math.min(4, Math.abs(b.lon-a.lon)*0.18 + 0.4); out.push([lat + bulge, lon]); } return out; }
+function fuelCost(m){ return m/1000 * settings.cons/100 * settings.price; }
+function tollCost(m){ return settings.vv !== false ? m/1000 * settings.tollkm : m/1000 * settings.tollkm * 1.15; }
+function renderPlan(){
+  const t = current; if(!t) { go('home'); return; }
+  $('#plan-title').textContent = `${t.origin.name} → ${t.dest.name}`; $('#plan-when').textContent = new Date(t.created).toLocaleDateString('pt-PT', {day:'numeric', month:'short'});
+  $('#st-dist').textContent = km(t.distance) + (t.flightKm ? ` + ✈ ${Math.round(t.flightKm)} km` : ''); $('#st-time').textContent = mins(t.duration);
+  $('#st-fuel-l').textContent = settings.fuel; $('#st-fuel').textContent = eur(fuelCost(t.distance)); $('#st-toll').textContent = t.tollM ? eur(tollCost(t.tollM)) : '€0';
+  $('#plan-note').textContent = `Estimativa: ${settings.cons} L/100 km × ${eur(settings.price)}/L` + (t.refs.length ? ` · autoestradas: ${t.refs.join(', ')}` : ' · sem portagens detetadas');
+  $('#plan-count').textContent = `${t.stops.length} paradas · 1 destino`;
+  $('#stops').innerHTML = t.stops.map((s,i) => `<div class="stop"><span class="n">${i+1}</span><div class="grow"><div class="t">${s.name}</div><div class="s">${s.note||''}</div></div><button class="x" data-rm="${i}">✕</button></div>`).join('') || '<p class="hint">Sem pontos turísticos encontrados no mapa. Adicione manualmente.</p>';
+  $$('#stops [data-rm]').forEach(b => b.addEventListener('click', () => { t.stops.splice(+b.dataset.rm,1); store.set('current', t); renderPlan(); }));
+  if(!mapPlan){ mapPlan = L.map('map-plan', {zoomControl:false, attributionControl:true}); mapPlan._tiles = tileLayer(isNight()).addTo(mapPlan); }
+  if(planLayer) planLayer.remove(); planLayer = L.layerGroup().addTo(mapPlan);
+  t.legs.forEach(l => L.polyline(l.coords, l.type === 'plane' ? {color:'#2F7CFF', weight:4, dashArray:'2 10'} : Object.assign({}, lineStyle())).addTo(planLayer));
+  L.circleMarker(t.route[0], {radius:7, color:'#0A5BD6', weight:4, fillColor:'#fff', fillOpacity:1}).addTo(planLayer);
+  t.stops.forEach((s,i) => L.marker([s.lat,s.lon], {icon: L.divIcon({className:'', html:`<div style="width:24px;height:24px;border-radius:50%;background:#0A5BD6;color:#fff;font:800 11px Inter;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3)">${i+1}</div>`, iconSize:[24,24], iconAnchor:[12,12]})}).bindPopup(s.name).addTo(planLayer));
+  L.marker([t.dest.lat, t.dest.lon]).bindPopup(t.dest.name).addTo(planLayer);
+  setTimeout(() => mapPlan.invalidateSize(), 50); setTimeout(() => mapPlan.fitBounds(L.latLngBounds(t.route), {paddingTopLeft:[30,110], paddingBottomRight:[30, 360]}), 120);
+}
+$('#btn-addstop').addEventListener('click', async () => { const q = prompt('Nome do local a adicionar (ex.: Castelo de Monção)'); if(!q) return; try{ const r = (await geocode(q))[0]; if(!r) throw 0; current.stops.push({name: q, lat:+r.lat, lon:+r.lon, note:'Adicionado por mim'}); store.set('current', current); renderPlan(); }catch(e){ toast('Local não encontrado'); } });
+$('#btn-start').addEventListener('click', () => go('drive')); $('#btn-start2').addEventListener('click', () => go('drive'));
+
+/* ---------- guide ---------- */
+function renderGuide(){
+  const t = current; if(!t) return; $('#guide-title').textContent = t.dest.name;
+  const atr = (t.pois||[]).filter(p => ['attraction','viewpoint','museum','beach'].includes(p.kind)).slice(0,6);
+  const food = (t.pois||[]).filter(p => p.kind === 'restaurant').slice(0,5), hot = (t.pois||[]).filter(p => p.kind === 'hotel').slice(0,3);
+  const base = t.guide || `${t.dest.name} fica a ${km(t.distance)} de ${t.origin.name}, cerca de ${mins(t.duration)} de carro${t.refs.length ? ' pela ' + t.refs.join('/') : ''}.\n\nNão pode deixar de conhecer:\n` + (atr.length ? atr.map(a => '• ' + a.name + (a.desc ? ' — ' + a.desc : '')).join('\n') : '• (sem dados no mapa — gere com IA)') + `\n\nCustos previstos: ${eur(fuelCost(t.distance))} de ${settings.fuel.toLowerCase()}${t.tollM ? ' + ' + eur(tollCost(t.tollM)) + ' de portagens' : ''}.`;
+  $('#guide-body').innerHTML = `<div class="guide"><h3>Para dizer no vídeo</h3>${base.replace(/</g,'&lt;')}</div><p class="hint">Confirme datas e factos antes de gravar — a IA pode errar.</p>`;
+  $('#guide-food').innerHTML = food.map(f => `<div class="item"><div class="grow"><span class="t">${f.name}</span><span class="s">${f.cuisine ? f.cuisine.replace(/_/g,' ') : 'cozinha local'} · ${Math.round(f.d)} m do centro</span></div></div>`).join('') || '<div class="item"><span class="s">Sem restaurantes no mapa para esta zona.</span></div>';
+  $('#guide-hotel').innerHTML = hot.map(h => `<div class="item"><div class="grow"><span class="t">${h.name}</span><span class="s">${h.stars ? h.stars + ' estrelas · ' : ''}[PREÇO/NOITE] · avaliar depois</span></div></div>`).join('') || '<div class="item"><span class="s">Sem hotéis no mapa para esta zona.</span></div>';
+}
+$('#btn-copy-guide').addEventListener('click', async () => { try{ await navigator.clipboard.writeText($('#guide-body').innerText); toast('Guia copiado'); }catch(e){ toast('Não deu para copiar'); } });
+$('#btn-regen').addEventListener('click', async () => {
+  if(!settings.ckey){ toast('Falta a chave Claude em Definições', 3000); return; }
+  const t = current; const b = $('#btn-regen'); b.disabled = true; b.innerHTML = '<span class="spin"></span>';
+  const names = (t.pois||[]).slice(0,25).map(p => p.name + ' (' + p.kind + ')').join(', ');
+  try{
+    const r = await fetch('https://api.anthropic.com/v1/messages', {method:'POST', headers:{'content-type':'application/json', 'x-api-key': settings.ckey, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true'}, body: JSON.stringify({model:'claude-sonnet-4-5', max_tokens:900, messages:[{role:'user', content:`És o guionista do canal de YouTube "Leandro na Rota" (turismo em Portugal, Espanha e Europa, em português). Escreve um guia curto e falado, em 1.ª pessoa, para o Leandro ler no vídeo sobre ${t.dest.full || t.dest.name}, vindo de ${t.origin.name} (${km(t.distance)}, ${mins(t.duration)}). Estrutura: 1) resumo histórico em 3 frases; 2) "Não pode deixar de conhecer": 4 a 6 lugares com uma frase cada; 3) "O que comer": 2 a 3 pratos típicos e onde; 4) "Dica do Leandro": 1 conselho prático (horário, estacionamento, melhor luz para filmar). Lugares conhecidos no mapa: ${names || 'nenhum'}. Sem markdown, sem títulos com #, usa linhas e • para listas. Máximo 220 palavras.`}]})});
+    const j = await r.json(); if(j.error) throw new Error(j.error.message); t.guide = j.content.map(c => c.text || '').join('\n'); store.set('current', t); renderGuide(); toast('Guia gerado');
+  }catch(e){ toast('Erro da IA: ' + e.message, 4000); }
+  b.disabled = false; b.textContent = 'Gerar com IA';
+});
+
+/* ---------- drive ---------- */
+let mapDrive, driveLayer, carMarker, trackLine, recStart = null, recTimer = null, wakeLock = null, follow = true, lastFix = null;
+function startDrive(){
+  const t = current; if(!t){ go('home'); return; }
+  if(!mapDrive){ mapDrive = L.map('map-drive', {zoomControl:false}); mapDrive._tiles = tileLayer(isNight()).addTo(mapDrive); mapDrive.on('dragstart', () => follow = false); }
+  else { mapDrive.removeLayer(mapDrive._tiles); mapDrive._tiles = tileLayer(isNight()).addTo(mapDrive); }
+  if(driveLayer) driveLayer.remove(); driveLayer = L.layerGroup().addTo(mapDrive);
+  t.legs.forEach(l => L.polyline(l.coords, l.type === 'plane' ? {color:'#2F7CFF', weight:4, dashArray:'2 10'} : Object.assign({}, lineStyle(), {opacity:.55})).addTo(driveLayer));
+  t.stops.forEach((s,i) => L.marker([s.lat,s.lon], {icon: L.divIcon({className:'', html:`<div style="width:26px;height:26px;border-radius:50%;background:#fff;color:#0A5BD6;font:800 12px Inter;display:flex;align-items:center;justify-content:center;border:3px solid #2F7CFF">${i+1}</div>`, iconSize:[26,26], iconAnchor:[13,13]})}).addTo(driveLayer));
+  L.marker([t.dest.lat, t.dest.lon]).addTo(driveLayer);
+  trackLine = L.polyline(t.track.map(p => [p.lat, p.lon]), lineStyle()).addTo(driveLayer);
+  carMarker = L.marker(t.track.length ? [t.track.at(-1).lat, t.track.at(-1).lon] : t.route[0], {icon: L.divIcon({className:'', html:'<div class="car-marker" id="car-el"></div>', iconSize:[34,60], iconAnchor:[17,30]}), zIndexOffset: 1000}).addTo(driveLayer);
+  setTimeout(() => { mapDrive.invalidateSize(); mapDrive.setView(carMarker.getLatLng(), 16); }, 60);
+  t.status = 'driving'; if(!t.startedAt) t.startedAt = Date.now(); recStart = t.startedAt; store.set('current', t);
+  if(recTimer) clearInterval(recTimer); recTimer = setInterval(() => { const s = Math.floor((Date.now() - recStart)/1000); $('#dr-rec').textContent = 'REC ' + [s/3600, s/60%60, s%60].map(v => String(Math.floor(v)).padStart(2,'0')).join(':'); }, 1000);
+  if(watchId) navigator.geolocation.clearWatch(watchId);
+  watchId = navigator.geolocation.watchPosition(onFix, e => $('#dr-gps').textContent = 'GPS · sem sinal', {enableHighAccuracy:true, maximumAge:1000, timeout:10000});
+  if('wakeLock' in navigator) navigator.wakeLock.request('screen').then(w => wakeLock = w).catch(()=>{});
+  updateDriveStats();
+}
+function onFix(p){
+  const t = current; if(!t || t.status !== 'driving') return; const c = p.coords; pos = c;
+  $('#dr-gps').textContent = 'GPS · ' + Math.round(c.accuracy) + ' m';
+  const last = t.track.at(-1); const moved = last ? dist(last.lat, last.lon, c.latitude, c.longitude) : 0;
+  if(!last || moved > 6){ t.track.push({lat:c.latitude, lon:c.longitude, t:Date.now(), s:c.speed}); trackLine.addLatLng([c.latitude, c.longitude]); if(t.track.length % 10 === 0) store.set('current', t); }
+  carMarker.setLatLng([c.latitude, c.longitude]);
+  const hd = c.heading != null && !isNaN(c.heading) ? c.heading : (last ? bearing(last.lat,last.lon,c.latitude,c.longitude) : 0);
+  const el = document.getElementById('car-el'); if(el) el.style.transform = `rotate(${hd}deg)`;
+  $('#dr-speed').textContent = c.speed != null ? Math.round(c.speed*3.6) : '–';
+  if(follow) mapDrive.panTo([c.latitude, c.longitude], {animate:true, duration:.5});
+  updateDriveStats();
+}
+function bearing(a,b,c,d){ const y = Math.sin((d-b)*Math.PI/180)*Math.cos(c*Math.PI/180), x = Math.cos(a*Math.PI/180)*Math.sin(c*Math.PI/180) - Math.sin(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.cos((d-b)*Math.PI/180); return (Math.atan2(y,x)*180/Math.PI + 360) % 360; }
+function trackDist(tr){ let d = 0; for(let i=1;i<tr.length;i++) d += dist(tr[i-1].lat, tr[i-1].lon, tr[i].lat, tr[i].lon); return d; }
+function updateDriveStats(){
+  const t = current; const done = trackDist(t.track); const left = Math.max(0, t.distance - done);
+  $('#dr-done').textContent = (done/1000).toFixed(1).replace('.', ','); $('#dr-left').textContent = mins(left / Math.max(8, t.distance / Math.max(1, t.duration))); $('#dr-fuel').textContent = eur(fuelCost(done)); $('#dr-toll').textContent = eur(tollCost(Math.min(t.tollM, done * (t.tollM / Math.max(1,t.distance)))));
+  const here = t.track.at(-1) || {lat:t.route[0][0], lon:t.route[0][1]}; const next = t.stops.find(s => !s.done) || t.dest; const dn = dist(here.lat, here.lon, next.lat, next.lon);
+  $('#dr-dist').textContent = km(dn); $('#dr-next').textContent = 'até ' + next.name + (next === t.dest ? ' · destino' : ` · parada ${t.stops.indexOf(next)+1} de ${t.stops.length}`);
+  if(dn < 120 && next !== t.dest && !next.done){ next.done = true; toast('Chegou: ' + next.name, 4000); if(navigator.vibrate) navigator.vibrate(200); }
+}
+$('#btn-center').addEventListener('click', () => { follow = true; if(carMarker) mapDrive.setView(carMarker.getLatLng(), 16); });
+$('#btn-night').addEventListener('click', () => { const dark = mapDrive._tiles._url === TILES.dark; mapDrive.removeLayer(mapDrive._tiles); mapDrive._tiles = tileLayer(!dark).addTo(mapDrive); });
+$('#btn-flag').addEventListener('click', () => { if(!pos) return; const name = prompt('Nome do ponto (ex.: Miradouro lindo)') || 'Ponto marcado'; current.stops.push({name, lat:pos.latitude, lon:pos.longitude, note:'Marcado na viagem', done:true}); store.set('current', current); toast('Ponto marcado'); });
+$('#btn-waze').addEventListener('click', () => { const next = current.stops.find(s => !s.done) || current.dest; location.href = `https://waze.com/ul?ll=${next.lat},${next.lon}&navigate=yes`; });
+$('#btn-finish').addEventListener('click', () => { if(!confirm('Terminar a viagem e passar ao vídeo e custos?')) return; const t = current; t.status = 'done'; t.endedAt = Date.now(); t.trackDistance = trackDist(t.track); if(watchId){ navigator.geolocation.clearWatch(watchId); watchId = null; } if(recTimer) clearInterval(recTimer); if(wakeLock){ wakeLock.release(); wakeLock = null; } store.set('current', t); go('diary'); });
+
+/* ---------- diary ---------- */
+function renderDiary(){
+  const t = current; if(!t) return; const d = t.diary || (t.diary = {}); const dd = t.trackDistance || t.distance;
+  $('#di-sub').textContent = `${t.dest.name} · ${new Date(t.created).toLocaleDateString('pt-PT', {day:'numeric', month:'short'})}`;
+  $('#di-km').textContent = km(dd); $('#di-stops').textContent = t.stops.length + ' paradas';
+  $('#di-fuel').value = d.fuel ?? fuelCost(dd).toFixed(2); $('#di-fuel-s').textContent = `GPS: ${km(dd)} · ${(dd/1000*settings.cons/100).toFixed(1)} L`;
+  $('#di-toll').value = d.toll ?? (t.tollM ? tollCost(t.tollM).toFixed(2) : ''); $('#di-rest').value = d.rest || ''; $('#di-rest-v').value = d.restV || ''; $('#di-hotel').value = d.hotel || ''; $('#di-hotel-v').value = d.hotelV || ''; $('#di-other').value = d.other || ''; $('#di-note').value = d.note || ''; $('#di-r1').value = d.r1 || '–'; $('#di-r2').value = d.r2 || '–'; $('#di-r3').value = d.r3 || '–';
+  diaryTotal();
+}
+function diaryTotal(){ const v = id => parseFloat($(id).value) || 0; const tot = v('#di-fuel') + v('#di-toll') + v('#di-rest-v') + v('#di-hotel-v') + v('#di-other'); $('#di-total').textContent = '€ ' + tot.toFixed(2).replace('.', ','); return tot; }
+['#di-fuel','#di-toll','#di-rest-v','#di-hotel-v','#di-other'].forEach(s => $(s).addEventListener('input', diaryTotal));
+function collectDiary(){ const d = current.diary; const v = id => $(id).value; d.fuel = parseFloat(v('#di-fuel'))||0; d.toll = parseFloat(v('#di-toll'))||0; d.rest = v('#di-rest'); d.restV = parseFloat(v('#di-rest-v'))||0; d.hotel = v('#di-hotel'); d.hotelV = parseFloat(v('#di-hotel-v'))||0; d.other = parseFloat(v('#di-other'))||0; d.note = v('#di-note'); d.r1 = v('#di-r1'); d.r2 = v('#di-r2'); d.r3 = v('#di-r3'); d.total = diaryTotal(); }
+$('#btn-save-diary').addEventListener('click', () => { collectDiary(); const t = current; t.status = 'done'; const i = trips.findIndex(x => x.id === t.id); if(i >= 0) trips[i] = t; else trips.unshift(t); store.set('trips', trips); toast('Viagem guardada'); go('history'); });
+$('#btn-ficha').addEventListener('click', async () => { collectDiary(); const t = current, d = t.diary; const txt = `FICHA — ${t.origin.name} → ${t.dest.name} (${new Date(t.created).toLocaleDateString('pt-PT')})\nDistância: ${km(t.trackDistance || t.distance)} · ${mins(t.duration)}\n${settings.fuel}: ${eur(d.fuel)} · Portagens: ${eur(d.toll)}\nRestaurante: ${d.rest || '-'} · ${eur(d.restV)} · comida ${d.r1}/5 · atendimento ${d.r2}/5\nHotel: ${d.hotel || '-'} · ${eur(d.hotelV)} · ${d.r3}\nOutros: ${eur(d.other)}\nTOTAL: ${eur(d.total)}\nParadas: ${t.stops.map(s => s.name).join(', ')}\nNota: ${d.note || '-'}`; try{ await navigator.clipboard.writeText(txt); toast('Ficha copiada'); }catch(e){ alert(txt); } });
+
+/* ---------- history ---------- */
+function renderHistory(){
+  const y = new Date().getFullYear(); const yr = trips.filter(t => new Date(t.created).getFullYear() === y);
+  $('#h-km').textContent = Math.round(yr.reduce((s,t) => s + (t.trackDistance || t.distance || 0), 0)/1000).toLocaleString('pt-PT'); $('#h-n').textContent = yr.length; $('#h-eur').textContent = '€ ' + Math.round(yr.reduce((s,t) => s + ((t.diary||{}).total || 0), 0)).toLocaleString('pt-PT');
+  const list = [...(current && current.status !== 'done' ? [current] : []), ...trips];
+  $('#trips').innerHTML = list.map(t => `<button class="trip" data-id="${t.id}"><div class="thumb"><canvas width="84" height="84" data-thumb="${t.id}"></canvas></div><div class="grow"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:15px">${t.origin.name} → ${t.dest.name}</b><span class="badge ${t.status==='done'?'ok':''}">${t.status === 'done' ? 'Concluída' : t.status === 'driving' ? 'Em curso' : 'Planeada'}</span></div><span style="font-size:12px;color:var(--muted)">${new Date(t.created).toLocaleDateString('pt-PT', {day:'numeric', month:'short'})} · ${km(t.trackDistance || t.distance)}${(t.diary||{}).total ? ' · ' + eur(t.diary.total) : ''}</span><div style="display:flex;gap:6px;margin-top:4px"><span class="badge">${t.stops.length} paradas</span>${t.guide ? '<span class="badge">Guia IA</span>' : ''}${t.track && t.track.length ? '<span class="badge">GPS gravado</span>' : ''}</div></div></button>`).join('') || '<p class="hint">Ainda não há viagens. Planeie a primeira em "Nova rota".</p>';
+  $$('.trip').forEach(b => b.addEventListener('click', () => { const t = list.find(x => x.id == b.dataset.id); current = t; store.set('current', t); go(t.status === 'done' ? 'diary' : 'plan'); }));
+  $$('[data-thumb]').forEach(c => { const t = list.find(x => x.id == c.dataset.thumb); drawMini(c, t.route); });
+}
+function drawMini(c, route){ if(!route || !route.length) return; const ctx = c.getContext('2d'); const b = bounds(route); const pad = 10, w = c.width - pad*2, h = c.height - pad*2; const sx = w / Math.max(1e-6, b.maxLon - b.minLon), sy = h / Math.max(1e-6, b.maxLat - b.minLat), s = Math.min(sx, sy); ctx.clearRect(0,0,c.width,c.height); ctx.strokeStyle = '#0A5BD6'; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath(); route.forEach((p,i) => { const x = pad + (p[1]-b.minLon)*s + (w - (b.maxLon-b.minLon)*s)/2, y = pad + (b.maxLat-p[0])*s + (h - (b.maxLat-b.minLat)*s)/2; i ? ctx.lineTo(x,y) : ctx.moveTo(x,y); }); ctx.stroke(); }
+function bounds(r){ return { minLat: Math.min(...r.map(p=>p[0])), maxLat: Math.max(...r.map(p=>p[0])), minLon: Math.min(...r.map(p=>p[1])), maxLon: Math.max(...r.map(p=>p[1])) }; }
+
+/* ---------- settings ---------- */
+function renderSettings(){ $('#v-name').value = settings.name; $('#v-fuel').value = settings.fuel; $('#v-cons').value = settings.cons; $('#v-price').value = settings.price; $('#v-tollkm').value = settings.tollkm; $('#v-vv').classList.toggle('on', settings.vv !== false); $('#m-night').classList.toggle('on', settings.night !== false); $('#m-line').value = settings.line; $('#k-google').value = settings.gkey; $('#k-claude').value = settings.ckey; }
+$$('.toggle').forEach(b => b.addEventListener('click', () => b.classList.toggle('on')));
+$('#btn-save-settings').addEventListener('click', () => { settings.name = $('#v-name').value; settings.fuel = $('#v-fuel').value; settings.cons = parseFloat($('#v-cons').value) || 6.5; settings.price = parseFloat($('#v-price').value) || 1.72; settings.tollkm = parseFloat($('#v-tollkm').value) || 0.09; settings.vv = $('#v-vv').classList.contains('on'); settings.night = $('#m-night').classList.contains('on'); settings.line = $('#m-line').value; settings.gkey = $('#k-google').value.trim(); settings.ckey = $('#k-claude').value.trim(); store.set('settings', settings); toast('Guardado'); go('history'); });
+$('#btn-export-data').addEventListener('click', () => { const blob = new Blob([JSON.stringify({settings, trips, current}, null, 1)], {type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'lr-rota-backup.json'; a.click(); });
+$('#btn-wipe').addEventListener('click', () => { if(confirm('Apagar todas as viagens e definições deste telemóvel?')){ localStorage.clear(); location.reload(); } });
+
+/* ---------- video (canvas → MP4/WebM via MediaRecorder) ---------- */
+let vidDur = 12, vidStyle = 'dots', vidFmt = '169', carImg = new Image(); carImg.src = 'icons/car.png';
+$$('[data-dur]').forEach(b => b.addEventListener('click', () => { $$('[data-dur]').forEach(x => x.classList.remove('on')); b.classList.add('on'); vidDur = +b.dataset.dur; }));
+$$('[data-style]').forEach(b => b.addEventListener('click', () => { $$('[data-style]').forEach(x => x.classList.remove('on')); b.classList.add('on'); vidStyle = b.dataset.style; }));
+$$('[data-fmt]').forEach(b => b.addEventListener('click', () => { $$('[data-fmt]').forEach(x => x.classList.remove('on')); b.classList.add('on'); vidFmt = b.dataset.fmt; const c = $('#vid-canvas'); if(vidFmt === '916'){ c.width = 720; c.height = 1280; c.parentElement.style.aspectRatio = '9/16'; } else { c.width = 1280; c.height = 720; c.parentElement.style.aspectRatio = '16/9'; } drawFrame(c, 1); }));
+function lon2x(lon, z){ return (lon + 180) / 360 * Math.pow(2, z) * 256; }
+function lat2y(lat, z){ const r = lat*Math.PI/180; return (1 - Math.log(Math.tan(r) + 1/Math.cos(r))/Math.PI) / 2 * Math.pow(2, z) * 256; }
+const tileCache = {};
+function loadTile(z,x,y){ const k = `${z}/${x}/${y}`; if(tileCache[k]) return tileCache[k]; const im = new Image(); im.crossOrigin = 'anonymous'; im.src = `https://a.basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}@2x.png`; tileCache[k] = im; return im; }
+function viewFor(route, W, H, pad=0.15){ const b = bounds(route); let z = 18; while(z > 2){ const w = lon2x(b.maxLon,z) - lon2x(b.minLon,z), h = lat2y(b.minLat,z) - lat2y(b.maxLat,z); if(w < W*(1-2*pad) && h < H*(1-2*pad)) break; z--; } const cx = (lon2x(b.minLon,z) + lon2x(b.maxLon,z))/2, cy = (lat2y(b.minLat,z) + lat2y(b.maxLat,z))/2; return {z, ox: cx - W/2, oy: cy - H/2}; }
+function proj(p, v){ return [lon2x(p[1], v.z) - v.ox, lat2y(p[0], v.z) - v.oy]; }
+function drawFrame(c, prog, view){
+  const t = current; if(!t || !t.route){ const ctx = c.getContext('2d'); ctx.fillStyle = '#101522'; ctx.fillRect(0,0,c.width,c.height); ctx.fillStyle = '#fff'; ctx.font = '600 28px Inter'; ctx.fillText('Planeie uma rota primeiro', 40, 80); return; }
+  const ctx = c.getContext('2d'), W = c.width, H = c.height; const route = t.track.length > 20 ? t.track.map(p => [p.lat, p.lon]) : t.route;
+  const n = Math.max(2, Math.floor(route.length * prog)); const part = route.slice(0, n);
+  let v = view || viewFor(route, W, H); if(vidStyle === 'follow' && !view){ const vz = viewFor(route, W, H); const head = part.at(-1); const z = Math.min(vz.z + 2, 15); v = {z, ox: lon2x(head[1], z) - W/2, oy: lat2y(head[0], z) - H/2}; }
+  ctx.fillStyle = '#E9EEF5'; ctx.fillRect(0,0,W,H);
+  const tx0 = Math.floor(v.ox/256), ty0 = Math.floor(v.oy/256), tx1 = Math.floor((v.ox+W)/256), ty1 = Math.floor((v.oy+H)/256);
+  for(let x = tx0; x <= tx1; x++) for(let y = ty0; y <= ty1; y++){ const im = loadTile(v.z, x, y); if(im.complete && im.naturalWidth) ctx.drawImage(im, x*256 - v.ox, y*256 - v.oy, 256, 256); }
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  // full route faint
+  ctx.beginPath(); route.forEach((p,i) => { const [x,y] = proj(p, v); i ? ctx.lineTo(x,y) : ctx.moveTo(x,y); }); ctx.strokeStyle = 'rgba(10,91,214,.25)'; ctx.lineWidth = 6; ctx.stroke();
+  // progressed
+  ctx.beginPath(); part.forEach((p,i) => { const [x,y] = proj(p, v); i ? ctx.lineTo(x,y) : ctx.moveTo(x,y); });
+  ctx.strokeStyle = settings.line === 'neon' ? '#FF6A2A' : '#0A5BD6'; ctx.lineWidth = 9; if(vidStyle === 'dots') ctx.setLineDash([2, 16]); ctx.shadowColor = ctx.strokeStyle; ctx.shadowBlur = 18; ctx.stroke(); ctx.setLineDash([]); ctx.shadowBlur = 0;
+  // stops
+  (t.stops||[]).forEach((s,i) => { const [x,y] = proj([s.lat,s.lon], v); ctx.beginPath(); ctx.arc(x,y,14,0,7); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = '#0A5BD6'; ctx.stroke(); ctx.fillStyle = '#0A5BD6'; ctx.font = '800 14px Inter'; ctx.textAlign = 'center'; ctx.fillText(i+1, x, y+5); });
+  // start/end labels
+  const [sx, sy] = proj(route[0], v), [ex, ey] = proj(route.at(-1), v); ctx.textAlign = 'left'; label(ctx, t.origin.name, sx+16, sy); if(prog > .98) label(ctx, t.dest.name, ex+16, ey);
+  // car
+  const head = part.at(-1), prev = part[Math.max(0, n-4)]; const [hx, hy] = proj(head, v); const ang = Math.atan2(proj(head,v)[1]-proj(prev,v)[1], proj(head,v)[0]-proj(prev,v)[0]) + Math.PI/2;
+  ctx.save(); ctx.translate(hx, hy); ctx.rotate(ang); ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 4; if(carImg.complete) ctx.drawImage(carImg, -26, -46, 52, 92); ctx.restore();
+  // header + stats
+  ctx.fillStyle = '#0A5BD6'; rr(ctx, 32, 32, 300, 54, 27); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = '800 20px Inter'; ctx.fillText('LEANDRO NA ROTA', 58, 67);
+  ctx.fillStyle = '#0F172A'; ctx.font = '700 44px Caveat'; ctx.fillText(`${t.origin.name} → ${t.dest.name}`, 36, 130);
+  if($('#tg-stats').classList.contains('on')){ const dd = t.trackDistance || t.distance; const txt = `${km(dd * prog)} · ${eur(fuelCost(dd*prog))} ${settings.fuel.toLowerCase()}${t.tollM ? ' · ' + eur(tollCost(t.tollM*prog)) + ' portagens' : ''}`; ctx.font = '700 22px Inter'; const w = ctx.measureText(txt).width + 40; ctx.fillStyle = 'rgba(15,23,42,.82)'; rr(ctx, 32, H-86, w, 54, 14); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillText(txt, 52, H-50); }
+}
+function label(ctx, txt, x, y){ ctx.font = '700 20px Inter'; const w = ctx.measureText(txt).width + 24; ctx.fillStyle = 'rgba(255,255,255,.92)'; rr(ctx, x-12, y-18, w, 36, 10); ctx.fill(); ctx.fillStyle = '#0F172A'; ctx.fillText(txt, x, y+7); }
+function rr(ctx, x, y, w, h, r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+let anim = null;
+function playVideo(onEnd){ const c = $('#vid-canvas'); const t0 = performance.now(); cancelAnimationFrame(anim); const view = vidStyle === 'follow' ? null : viewFor(current.route, c.width, c.height); (function step(){ const p = Math.min(1, (performance.now() - t0) / (vidDur*1000)); const e = p < .5 ? 2*p*p : -1 + (4-2*p)*p; drawFrame(c, e, view); $('#vid-time').textContent = `00:${String(Math.floor(p*vidDur)).padStart(2,'0')} · 1080p`; if(p < 1) anim = requestAnimationFrame(step); else if(onEnd) setTimeout(onEnd, 600); })(); }
+$('#btn-preview').addEventListener('click', () => { if(!current || !current.route){ toast('Planeie uma rota primeiro'); return; } preloadTiles(); setTimeout(() => playVideo(), 700); });
+function preloadTiles(){ const c = $('#vid-canvas'); const v = viewFor(current.route, c.width, c.height); for(let x = Math.floor(v.ox/256); x <= Math.floor((v.ox+c.width)/256); x++) for(let y = Math.floor(v.oy/256); y <= Math.floor((v.oy+c.height)/256); y++) loadTile(v.z,x,y); }
+$('#btn-export').addEventListener('click', () => {
+  if(!current || !current.route){ toast('Planeie uma rota primeiro'); return; }
+  if(!('MediaRecorder' in window)){ toast('Este browser não grava vídeo. Grave o ecrã durante a pré-visualização.', 4000); return; }
+  const c = $('#vid-canvas'); preloadTiles(); const b = $('#btn-export'); b.disabled = true; b.innerHTML = '<span class="spin"></span> A gravar…';
+  setTimeout(() => { const stream = c.captureStream(30); const mime = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'].find(m => MediaRecorder.isTypeSupported(m)); const rec = new MediaRecorder(stream, {mimeType: mime, videoBitsPerSecond: 8e6}); const chunks = []; rec.ondataavailable = e => chunks.push(e.data); rec.onstop = () => { const blob = new Blob(chunks, {type: mime}); const ext = mime.includes('mp4') ? 'mp4' : 'webm'; const file = new File([blob], `lr-rota-${current.dest.name}.${ext}`, {type: mime}); if(navigator.canShare && navigator.canShare({files:[file]})) navigator.share({files:[file], title:'LR Rota'}).catch(()=>{}); else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click(); } b.disabled = false; b.textContent = 'Exportar MP4'; toast('Vídeo pronto — guarde no rolo'); }; rec.start(); playVideo(() => rec.stop()); }, 800);
+});
+
+/* ---------- cover ---------- */
+let coverPhoto = null, coverStyle = 'road';
+$$('[data-cs]').forEach(b => b.addEventListener('click', () => { $$('[data-cs]').forEach(x => x.classList.remove('on')); b.classList.add('on'); coverStyle = b.dataset.cs; drawCover(); }));
+$('#cv-photo').addEventListener('change', e => { const f = e.target.files[0]; if(!f) return; const im = new Image(); im.onload = () => { coverPhoto = im; drawCover(); }; im.src = URL.createObjectURL(f); });
+['#cv-title','#cv-subtitle','#cv-color'].forEach(s => $(s).addEventListener('input', drawCover)); $('#cv-stats').addEventListener('click', drawCover);
+function drawCover(){
+  const c = $('#cv-canvas'), ctx = c.getContext('2d'), W = c.width, H = c.height; const t = current;
+  const col = {gold:'#FFC24B', neon:'#FF6A2A', blue:'#2F7CFF', white:'#FFFFFF'}[$('#cv-color').value];
+  if(coverPhoto){ const s = Math.max(W/coverPhoto.width, H/coverPhoto.height); ctx.drawImage(coverPhoto, (W - coverPhoto.width*s)/2, (H - coverPhoto.height*s)/2, coverPhoto.width*s, coverPhoto.height*s); const g = ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'rgba(0,0,0,.35)'); g.addColorStop(.5,'rgba(0,0,0,0)'); g.addColorStop(1,'rgba(0,0,0,.55)'); ctx.fillStyle = g; ctx.fillRect(0,0,W,H); }
+  else if(coverStyle === 'mini'){ if(t && t.route){ const v = viewFor(t.route, W, H, .2); ctx.fillStyle = '#EFE6D6'; ctx.fillRect(0,0,W,H); for(let x = Math.floor(v.ox/256); x <= Math.floor((v.ox+W)/256); x++) for(let y = Math.floor(v.oy/256); y <= Math.floor((v.oy+H)/256); y++){ const im = loadTile(v.z,x,y); if(im.complete && im.naturalWidth) ctx.drawImage(im, x*256 - v.ox, y*256 - v.oy, 256, 256); else im.onload = drawCover; } ctx.fillStyle = 'rgba(120,90,40,.18)'; ctx.fillRect(0,0,W,H); } }
+  else { const g = ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#2A1A2F'); g.addColorStop(.45,'#8E3B33'); g.addColorStop(.78,'#E0803C'); g.addColorStop(1,'#F6C575'); ctx.fillStyle = g; ctx.fillRect(0,0,W,H); ctx.fillStyle = '#4C2E3E'; ctx.beginPath(); ctx.moveTo(0,360); [120,300,230,330,340,262,450,318,560,282,660,330,760,290,870,326,980,286,1090,324,1200,292,1280,320].forEach((v,i,a) => { if(i%2===0) ctx.lineTo(a[i], a[i+1]); }); ctx.lineTo(1280,400); ctx.lineTo(0,400); ctx.fill(); ctx.fillStyle = '#3A2622'; ctx.fillRect(0,400,W,H); ctx.fillStyle = '#1E1A1C'; ctx.beginPath(); ctx.moveTo(598,402); ctx.lineTo(682,402); ctx.lineTo(1280,720); ctx.lineTo(0,720); ctx.fill(); ctx.strokeStyle = 'rgba(217,195,168,.5)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(598,402); ctx.lineTo(0,720); ctx.moveTo(682,402); ctx.lineTo(1280,720); ctx.stroke(); }
+  // route drawn as glowing path (in perspective-ish S for road style, true map for mini)
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  let pts = [];
+  if(t && t.route && (coverStyle === 'mini' || coverStyle === 'collage')){ const v = viewFor(t.route, W, H, .2); pts = t.route.map(p => proj(p, v)); }
+  else { pts = [[150,690],[215,585],[380,548],[466,480],[580,452],[646,418]]; }
+  ctx.beginPath(); pts.forEach((p,i) => i ? ctx.lineTo(p[0],p[1]) : ctx.moveTo(p[0],p[1])); ctx.strokeStyle = col; ctx.lineWidth = 22; ctx.globalAlpha = .35; ctx.filter = 'blur(14px)'; ctx.stroke(); ctx.filter = 'none'; ctx.globalAlpha = 1; ctx.lineWidth = 8; ctx.shadowColor = col; ctx.shadowBlur = 24; ctx.stroke(); ctx.shadowBlur = 0;
+  const stops = t ? t.stops.slice(0,4) : []; const marks = coverStyle === 'road' ? pts.slice(1,-1) : stops.map(s => proj([s.lat,s.lon], viewFor(t.route, W, H, .2)));
+  marks.forEach((p,i) => { ctx.beginPath(); ctx.arc(p[0],p[1],8,0,7); ctx.fillStyle = '#FFF3CF'; ctx.shadowColor = col; ctx.shadowBlur = 16; ctx.fill(); ctx.shadowBlur = 0; if(stops[i]){ ctx.fillStyle = '#FFF6E2'; ctx.font = '700 20px Inter'; ctx.fillText(stops[i].name, p[0]+16, p[1]-6); ctx.font = '500 13px Inter'; ctx.fillStyle = '#F3D9A8'; ctx.fillText(stops[i].note || '', p[0]+16, p[1]+12); } });
+  if(coverStyle === 'mini' && carImg.complete){ const e = pts.at(-1) || [W/2,H/2]; ctx.save(); ctx.translate(e[0], e[1]+40); ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = 40; ctx.shadowOffsetY = 20; ctx.drawImage(carImg, -150, -270, 300, 540); ctx.restore(); }
+  // brand + title + card
+  ctx.fillStyle = '#0A5BD6'; rr(ctx, 44, 44, 236, 48, 24); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = '800 17px Inter'; ctx.fillText('LEANDRO NA ROTA', 70, 75);
+  const title = $('#cv-title').value || (t ? `${t.origin.name} → ${t.dest.name}` : 'A sua rota'); ctx.fillStyle = '#FFF6E2'; ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 12; ctx.font = '700 64px Caveat'; ctx.fillText(title, 44, 150); ctx.font = '600 20px Inter'; ctx.fillStyle = '#FFE1AE'; ctx.fillText($('#cv-subtitle').value || '', 46, 186); ctx.shadowBlur = 0;
+  if($('#cv-stats').classList.contains('on') && t){ ctx.fillStyle = 'rgba(18,12,15,.82)'; rr(ctx, 44, 540, 420, 136, 20); ctx.fill(); ctx.strokeStyle = col; ctx.globalAlpha = .6; ctx.lineWidth = 2; ctx.stroke(); ctx.globalAlpha = 1; ctx.fillStyle = '#FFF6E2'; ctx.font = '800 28px Inter'; ctx.fillText(`${mins(t.duration)}`, 66, 584); ctx.font = '500 20px Inter'; ctx.fillStyle = '#F3D9A8'; ctx.fillText(`(${km(t.distance)})`, 66 + ctx.measureText(mins(t.duration)).width + 36, 584); ctx.font = '600 16px Inter'; ctx.fillStyle = '#FFF6E2'; ctx.fillText(`${eur(fuelCost(t.distance))} ${settings.fuel.toLowerCase()}${t.tollM ? ' · ' + eur(tollCost(t.tollM)) + ' portagens' : ' · sem portagens'}`, 66, 622); ctx.fillStyle = '#F3D9A8'; ctx.font = '500 14px Inter'; ctx.fillText(`${t.stops.length} paradas${t.refs.length ? ' · pela ' + t.refs.join('/') : ''} · gravado pelo GPS`, 66, 650); }
+}
+$('#btn-cover-export').addEventListener('click', () => { drawCover(); $('#cv-canvas').toBlob(blob => { const file = new File([blob], `capa-${(current||{dest:{name:'rota'}}).dest.name}.png`, {type:'image/png'}); if(navigator.canShare && navigator.canShare({files:[file]})) navigator.share({files:[file]}).catch(()=>{}); else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click(); } }, 'image/png'); });
+
+/* ---------- screen hooks ---------- */
+function onShow(n){
+  if(n === 'home'){ const rec = store.get('recent', []); $('#recent').innerHTML = rec.map(r => `<div class="item" style="border:0;background:var(--soft);border-radius:12px;margin-bottom:8px;padding:12px 14px"><span style="flex:1;font-size:14px;font-weight:500">${r.o} → ${r.d}</span><span style="font-size:12px;color:var(--muted)">${r.mode === 'car' ? r.km + ' km' : 'voo'}</span></div>`).join('') || '<p class="hint">Sem viagens recentes.</p>'; if(pos && !$('#origin').value) reverseGeocode(pos.latitude, pos.longitude).then(nm => { if(nm){ $('#origin').value = nm; origin = {lat:pos.latitude, lon:pos.longitude, name: nm.split(',').pop().trim()}; } }); }
+  if(n === 'plan') renderPlan(); if(n === 'guide') renderGuide(); if(n === 'drive') startDrive(); if(n === 'diary') renderDiary(); if(n === 'history') renderHistory(); if(n === 'settings') renderSettings();
+  if(n === 'video'){ $('#vid-info').textContent = current && current.route ? `${mins(current.duration)} de viagem → ${vidDur} s de vídeo` : ''; if(current && current.route){ preloadTiles(); setTimeout(() => drawFrame($('#vid-canvas'), 1), 600); } else drawFrame($('#vid-canvas'), 1); }
+  if(n === 'cover'){ $('#cv-sub').textContent = current ? `${current.origin.name} → ${current.dest.name}` : 'Viagem'; setTimeout(drawCover, 300); }
+}
+// video screen → cover shortcut
+$('#s-video .topbar').insertAdjacentHTML('beforeend', '<button class="iconbtn tint" data-go="cover" aria-label="Capa"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 16l5-5 4 4 3-3 6 6"/><circle cx="16" cy="9" r="1.5"/></svg></button>');
+$$('#s-video [data-go]').forEach(b => b.addEventListener('click', () => go(b.dataset.go)));
+
+/* ---------- boot ---------- */
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+(function boot(){
+  const h = location.hash.replace('#','');
+  if(!store.get('gpsok') || !navigator.geolocation){ go('gps'); return; }
+  navigator.geolocation.getCurrentPosition(p => { pos = p.coords; }, () => {}, {enableHighAccuracy:true, maximumAge:30000, timeout:8000});
+  if(h && $('#s-'+h)) go(h); else go(current && current.status === 'driving' ? 'drive' : (trips.length ? 'history' : 'home'));
+})();
+</script>
+</body>
+</html>
