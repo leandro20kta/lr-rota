@@ -1,0 +1,9 @@
+total 5256
+drwxr-xr-x 2 runner runner    4096 Oct 25 13:17 .
+drwxr-xr-x 3 runner runner    4096 Oct 25 13:12 ..
+-rw-r--r-- 1 runner runner  747141 Oct 25 13:17 still_030.ov.png
+-rw-r--r-- 1 runner runner  908982 Oct 25 13:14 still_030.png
+-rw-r--r-- 1 runner runner  761324 Oct 25 13:17 still_055.ov.png
+-rw-r--r-- 1 runner runner  933321 Oct 25 13:15 still_055.png
+-rw-r--r-- 1 runner runner  921099 Oct 25 13:17 still_090.ov.png
+-rw-r--r-- 1 runner runner 1095604 Oct 25 13:17 still_090.png
