@@ -9,7 +9,7 @@ on:
       dur: { description: "duração do clip (s)", default: "5" }
       fps: { description: "fps", default: "24" }
   push:
-    paths: ["studio/**"]
+    paths: ["studio/**", ".github/workflows/studio.yml"]
 permissions:
   contents: write
 concurrency: { group: studio, cancel-in-progress: false }
