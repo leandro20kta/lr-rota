@@ -6,7 +6,7 @@ import json, math, os, sys, time
 import bpy
 from mathutils import Vector
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
-from rcs import materials as M, vehicle, camera, lighting
+from rcs import materials as M, vehicle, vehicle_rig, smoke, camera, lighting
 
 OUT = os.environ.get("OUTDIR", os.path.join(HERE, "out")); S = json.load(open(os.path.join(OUT, "scene.json"), encoding="utf-8"))
 W, H = int(os.environ.get("W", 1280)), int(os.environ.get("H", 720)); SAMPLES = int(os.environ.get("SAMPLES", 64))
@@ -58,10 +58,18 @@ def make_curve(name, radius, mat, z):
     sp = cd.splines.new("NURBS"); sp.points.add(len(route)-1); sp.order_u = 3; sp.use_endpoint_u = True
     for i, p in enumerate(route): sp.points[i].co = (p.x, p.y, z, 1.0)
     ob = bpy.data.objects.new(name, cd); bpy.context.collection.objects.link(ob); ob.data.materials.append(mat); ob.visible_shadow = False; return ob
-tube = make_curve("Rota", CAR_L*0.03, M.route_glow((1.0, 0.30, 0.04), 7.0), CAR_L*0.03*0.9 + 0.002)
-preview = make_curve("RotaPrevia", CAR_L*0.009, M.route_glow((1.0, 0.42, 0.12), 0.7), 0.004)
+tube = make_curve("Rota", CAR_L*0.03, M.route_glow((1.0, 0.26, 0.02), 3.2), CAR_L*0.03*0.9 + 0.002)
+preview = make_curve("RotaPrevia", CAR_L*0.009, M.route_glow((1.0, 0.35, 0.06), 0.45), 0.004)
 
-car, car_real = vehicle.load(CAR_L, os.path.join(HERE, "..", "models", "car.glb"))
+GLB = os.path.join(HERE, "..", "models", "car.glb")
+if os.path.exists(GLB):
+    car, car_real = vehicle.load(CAR_L, GLB); car = vehicle_rig.adopt(car, CAR_L)
+else:
+    car, car_real = vehicle_rig.build_estate(CAR_L), False; print("carro: carrinha ORIGINAL provisória (não é o BMW)")
+anim = vehicle_rig.Animator(car, fps=FPS); fumo = smoke.Exhaust(car, CAR_L, puffs_per_pipe=6, life_frames=20, strength=0.06)
+car_parts = [car] + list(car.children_recursive)
+def car_visible(v):
+    for o in car_parts: o.hide_render = not v
 sun, rim, spot = lighting.setup(sc, MAP_M); lighting.bloom(sc)
 rig = camera.Rig(sc, at, tangent, route, CAR_L, span)
 
@@ -74,8 +82,9 @@ for s_ in [dict(name=S["origin"]["name"], xy=S["route"][0]), *S.get("stops", [])
 def pose(p):
     draw, car_u, cp, ct = rig.pose(p)
     tube.data.bevel_factor_end = max(0.0005, car_u); preview.data.bevel_factor_end = max(0.0005, draw)
-    car.location = (cp.x, cp.y, 0.0); car.rotation_euler = (0, 0, math.atan2(ct.y, ct.x)); car.hide_render = p < .18
+    anim.step(cp, math.atan2(ct.y, ct.x)); car_visible(p >= .18)
     lighting.follow(sun, cp, CAR_L, spot, cp + ct*CAR_L*2)
+    if p >= .18: fumo.step(0)
 
 # ---------- render ----------
 os.makedirs(os.path.join(OUT, "frames"), exist_ok=True)
@@ -84,13 +93,14 @@ def render_to(path):
 stills = [float(x) for x in os.environ.get("STILL_P", "").split(",") if x.strip()]; frames = os.environ.get("FRAMES", "")
 if stills:
     for sp in stills:
-        rig.pos = None
+        rig.pos = None; anim.prev = None; anim.prev_heading = None; fumo.hist = []
         for k in range(60): pose(max(0, sp - (60-k)*0.004))
         pose(sp); render_to(os.path.join(OUT, "frames", f"still_{int(round(sp*100)):03d}.png"))
 else:
     if "-" in frames: a, b = [int(x) for x in frames.split("-")]; sel = set(range(a, b+1))
     elif frames: sel = set(int(x) for x in frames.split(","))
     else: sel = set(range(1, NF+1))
+    SH, NS = int(os.environ.get("SHARD", "0")), int(os.environ.get("NSHARDS", "1")); sel = {f for f in sel if (f-1) % NS == SH}
     rig.pos = None
     for f in range(1, NF+1):
         pose((f-1)/(NF-1))

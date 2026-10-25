@@ -1,0 +1,85 @@
+name: Rota Cinema Studio — demos MP4 (render paralelo)
+on:
+  workflow_dispatch:
+    inputs:
+      w: { description: "largura", default: "960" }
+      h: { description: "altura", default: "540" }
+      samples: { description: "amostras", default: "24" }
+      dur: { description: "segundos", default: "5" }
+      fps: { description: "fps", default: "24" }
+  push:
+    paths: ["studio/**", ".github/workflows/studio-demo.yml"]
+permissions:
+  contents: write
+concurrency: { group: studio-demo, cancel-in-progress: true }
+env:
+  W: ${{ github.event.inputs.w || '960' }}
+  H: ${{ github.event.inputs.h || '540' }}
+  SAMPLES: ${{ github.event.inputs.samples || '24' }}
+  DUR: ${{ github.event.inputs.dur || '5' }}
+  FPS: ${{ github.event.inputs.fps || '24' }}
+  NSHARDS: "8"
+jobs:
+  render:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[render demos]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        kind: [turn, drive]
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - run: sudo apt-get -qq update && sudo apt-get -qq install -y libegl1 libgl1 libxi6 libxrender1 libxkbcommon0 libsm6 libxxf86vm1 libxfixes3 libgomp1
+      - run: pip install bpy pillow playwright && python -m playwright install --with-deps chromium
+      - name: Mapa e rota (só para o clip sobre o mapa)
+        if: matrix.kind == 'drive'
+        run: python studio/build_assets.py
+      - name: Render (shard ${{ matrix.shard }} de 8)
+        env: { SHARD: "${{ matrix.shard }}" }
+        run: |
+          if [ "${{ matrix.kind }}" = "turn" ]; then python -c "import runpy; runpy.run_path('studio/turntable.py')"
+          else python -c "import runpy; runpy.run_path('studio/render_blender.py')"; fi
+          ls studio/out/frames | head
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frames-${{ matrix.kind }}-${{ matrix.shard }}
+          path: |
+            studio/out/frames/*.png
+            studio/out/scene.json
+          retention-days: 3
+  assemble:
+    needs: render
+    if: always() && needs.render.result != 'skipped'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - run: sudo apt-get -qq update && sudo apt-get -qq install -y ffmpeg && pip install pillow
+      - uses: actions/download-artifact@v4
+        with: { path: arts }
+      - name: Juntar frames → MP4
+        run: |
+          set -x
+          mkdir -p studio/out/frames turn
+          cp arts/frames-drive-*/frames/*.png studio/out/frames/ 2>/dev/null || cp arts/frames-drive-*/*.png studio/out/frames/ 2>/dev/null || true
+          cp arts/frames-turn-*/frames/*.png turn/ 2>/dev/null || cp arts/frames-turn-*/*.png turn/ 2>/dev/null || true
+          S=$(ls arts/frames-drive-*/scene.json arts/frames-drive-*/*/scene.json 2>/dev/null | head -1); [ -n "$S" ] && cp "$S" studio/out/scene.json
+          echo "drive: $(ls studio/out/frames/f*.png 2>/dev/null | wc -l) frames · turn: $(ls turn/t*.png 2>/dev/null | wc -l) frames"
+          [ -f studio/out/scene.json ] && python studio/overlay_frames.py
+          D="studio/renders/$(date -u +%Y%m%d-%H%M)-demos-${W}x${H}"; mkdir -p "$D"
+          ffmpeg -y -loglevel error -framerate "$FPS" -i turn/t%04d.png -c:v libx264 -pix_fmt yuv420p -crf 18 -preset slow "$D/volta_360.mp4" || echo "turn mp4 falhou"
+          ffmpeg -y -loglevel error -framerate "$FPS" -i studio/out/frames/f%04d.ov.png -c:v libx264 -pix_fmt yuv420p -crf 18 -preset slow "$D/conducao_mapa.mp4" || echo "drive mp4 falhou"
+          cp turn/t0001.png "$D/volta_frame1.png" 2>/dev/null || true; ls studio/out/frames/*.ov.png 2>/dev/null | sed -n '60p' | xargs -r -I{} cp {} "$D/conducao_frame60.png"
+          for f in "$D"/*.mp4; do ffprobe -v error -show_entries stream=width,height,nb_frames,r_frame_rate -show_entries format=duration -of compact "$f" >> "$D/probe.txt" 2>&1; done
+          echo "w=$W h=$H samples=$SAMPLES dur=$DUR fps=$FPS shards=$NSHARDS carro_glb=$(test -f models/car.glb && echo sim || echo nao)" > "$D/info.txt"
+          echo "D=$D" >> "$GITHUB_ENV"
+      - name: Publicar
+        run: |
+          git config user.name "rota-cinema-bot"; git config user.email "bot@users.noreply.github.com"
+          git add -f "$D"; git commit -m "Demos Studio: $D [skip ci]" || exit 0
+          for i in 1 2 3; do git pull --rebase --autostash -q origin main && git push origin HEAD:main && exit 0; sleep 8; done; exit 1
