@@ -1,0 +1,8 @@
+ M studio/rcs/__pycache__/camera.cpython-313.pyc
+ M studio/rcs/__pycache__/lighting.cpython-313.pyc
+ M studio/rcs/__pycache__/maps.cpython-313.pyc
+ M studio/rcs/__pycache__/materials.cpython-313.pyc
+ M studio/rcs/__pycache__/style_atlas.cpython-313.pyc
+ M studio/rcs/__pycache__/vehicle.cpython-313.pyc
+?? studio/rcs/__pycache__/routes.cpython-313.pyc
+?? studio/renders/20261025-1307-stills-1280x720/
