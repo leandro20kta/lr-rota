@@ -217,7 +217,7 @@ $('#res').addEventListener('change', e => { const w = +e.target.value; setSize(w
 $('#rec').addEventListener('click', () => {
   if(!('MediaRecorder' in window)){ status('Este browser não grava vídeo; grave o ecrã durante a reprodução.'); return; }
   const mime = ['video/mp4;codecs=avc1','video/mp4','video/webm;codecs=vp9','video/webm'].find(m => MediaRecorder.isTypeSupported(m));
-  const rec = new MediaRecorder(out.captureStream(30), {mimeType: mime, videoBitsPerSecond: W >= 1920 ? 24e6 : 10e6}); const chunks = []; rec.ondataavailable = e => chunks.push(e.data);
+  const rec = new MediaRecorder(out.captureStream(30), {mimeType: mime, videoBitsPerSecond: W >= 3840 ? 48e6 : W >= 1920 ? 20e6 : 10e6}); const chunks = []; rec.ondataavailable = e => chunks.push(e.data);
   rec.onstop = () => { const blob = new Blob(chunks, {type: mime}); const file = new File([blob], `lr-rota-cinema-${trip.dest.name}.${mime.includes('mp4')?'mp4':'webm'}`, {type: mime}); if(navigator.canShare && navigator.canShare({files:[file]})) navigator.share({files:[file], title:'LR Rota'}).catch(()=>{}); else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click(); } $('#rec').disabled = false; status('Vídeo pronto.'); };
   $('#rec').disabled = true; rec.start(); play(() => rec.stop(), true);
 });
