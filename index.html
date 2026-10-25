@@ -247,6 +247,7 @@ textarea.note{width:100%;resize:none;padding:10px 12px;border:1px solid #D5DBE5;
   <button class="fab" style="top:calc(var(--sat) + 150px);right:16px" id="btn-center" aria-label="Centrar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L4 20l8-4 8 4z"/></svg></button>
   <button class="fab" style="top:calc(var(--sat) + 206px);right:16px" id="btn-flag" aria-label="Marcar ponto"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4h12l-2 4 2 4H5"/></svg></button>
   <button class="fab" style="top:calc(var(--sat) + 262px);right:16px" id="btn-night">3D</button>
+  <button class="fab" style="top:calc(var(--sat) + 318px);right:16px;font-size:20px" id="btn-fuel" aria-label="Abastecer">⛽</button>
   <div class="float" style="left:16px;bottom:236px;flex-direction:column;gap:0;border-radius:14px;padding:8px 12px"><b id="dr-speed" style="font-size:22px;line-height:1">0</b><span style="font-size:10px;color:var(--muted)">km/h</span></div>
   <div class="sheet">
     <div class="handle"></div>
@@ -312,6 +313,7 @@ textarea.note{width:100%;resize:none;padding:10px 12px;border:1px solid #D5DBE5;
     <div style="height:14px"></div>
     <button class="btn accent" data-go="script" style="margin-bottom:10px">🎬 Roteiro do vídeo</button>
     <div class="row"><button class="btn ghost" id="btn-ficha">Copiar ficha</button><button class="btn" id="btn-save-diary">Guardar viagem</button></div>
+    <div class="row"><button class="btn ghost" id="btn-3d">🎬 Ver em Viagem 3D</button><button class="btn ghost" id="btn-export">⬇ Enviar para o PC</button></div>
   </div>
 </section>
 
@@ -720,6 +722,15 @@ function updateDriveStats(){
 $('#btn-center').addEventListener('click', () => { follow = true; if(carMarker) mapDrive.setView(carMarker.getLatLng(), 16); });
 $('#btn-night').addEventListener('click', () => { const dark = !!mapDrive._tiles._dark; mapDrive.removeLayer(mapDrive._tiles); mapDrive._tiles = tileLayer(!dark).addTo(mapDrive); });
 $('#btn-flag').addEventListener('click', () => { if(!pos) return; const name = prompt('Nome do ponto (ex.: Miradouro lindo)') || 'Ponto marcado'; current.stops.push({name, lat:pos.latitude, lon:pos.longitude, note:'Marcado na viagem', done:true}); store.set('current', current); toast('Ponto marcado'); });
+$('#btn-fuel').addEventListener('click', () => { if(!pos){ toast('Ainda sem GPS'); return; } const name = prompt('Posto (ex.: Repsol)', 'Repsol') || 'Abastecimento'; current.stops.push({name, lat: pos.latitude, lon: pos.longitude, note: 'Abastecimento', kind: 'fuel', pause: 4, done: true, t: Date.now()}); store.set('current', current); toast('⛽ Abastecimento marcado'); });
+// viagem → formato do "Viagem 3D" (trajeto real do GPS + paragens marcadas)
+function navTrip(t){ const gps = (t.track || []).length > 20; const route = gps ? t.track.map(p => [p.lat, p.lon]) : t.route;
+  const stops = (t.stops || []).filter(s => s.done || s.kind === 'fuel').map(s => ({name: s.name, sub: s.kind === 'fuel' ? 'Abastecimento' : (s.note || ''), kind: s.kind, pause: s.pause, lat: s.lat, lon: s.lon}));
+  return {gps, route, distance: t.trackDistance || t.distance, duration: t.startedAt && t.endedAt ? (t.endedAt - t.startedAt)/1000 : t.duration, date: t.created,
+    points: [{name: t.origin.name, sub: 'Partida', lat: route[0][0], lon: route[0][1]}, ...stops, {name: t.dest.name, sub: 'Chegada', lat: route.at(-1)[0], lon: route.at(-1)[1]}]}; }
+$('#btn-3d').addEventListener('click', () => { const t = current; if(!t) return; localStorage.setItem('lr-nav-trip', JSON.stringify(navTrip(t))); location.href = 'nav.html?look=app&map=atlas&dur=150'; });
+$('#btn-export').addEventListener('click', () => { const t = current; if(!t) return; const f = new File([JSON.stringify({lrNav: navTrip(t), trip: t})], `lr-rota-${(t.origin.name + '-' + t.dest.name).replace(/\W+/g, '-')}-${new Date(t.created).toISOString().slice(0, 10)}.json`, {type: 'application/json'});
+  if(navigator.canShare && navigator.canShare({files: [f]})) navigator.share({files: [f], title: 'Viagem LR Rota'}).catch(() => {}); else { const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name; a.click(); } });
 $('#btn-waze').addEventListener('click', () => { const next = current.stops.find(s => !s.done) || current.dest; location.href = `https://waze.com/ul?ll=${next.lat},${next.lon}&navigate=yes`; });
 $('#btn-finish').addEventListener('click', () => { if(!confirm('Terminar a viagem e passar ao vídeo e custos?')) return; const t = current; t.status = 'done'; t.endedAt = Date.now(); t.trackDistance = trackDist(t.track); if(watchId){ navigator.geolocation.clearWatch(watchId); watchId = null; } if(recTimer) clearInterval(recTimer); if(wakeLock){ wakeLock.release(); wakeLock = null; } store.set('current', t); go('diary'); });
 

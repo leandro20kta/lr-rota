@@ -40,7 +40,7 @@ body.recording #stage{width:1280px;height:720px;transform-origin:0 0}
   <div class="credit" id="credit">© OpenStreetMap · OpenMapTiles · OpenFreeMap</div>
   <div id="status"></div>
 </div>
-<div id="ctl"><button id="bPlay">▶ Ver viagem</button><button id="bRec" class="rec">● Gravar vídeo (MP4)</button><button id="bSave" hidden>⬇ Guardar vídeo</button></div>
+<div id="ctl"><button id="bOpen">📂 Abrir viagem</button><button id="bPlay">▶ Ver viagem</button><button id="bRec" class="rec">● Gravar vídeo (MP4)</button><button id="b4k" class="rec">⬇ Exportar 4K (DaVinci)</button><button id="bSave" hidden>⬇ Guardar vídeo</button><input type="file" id="fOpen" accept=".json,.gpx,application/json,application/gpx+xml" hidden></div>
 <canvas id="rec" width="1280" height="720" hidden></canvas>
 <script src="vendor/maplibre/maplibre-gl.js"></script>
 <script type="importmap">{"imports":{"three":"./vendor/three/build/three.module.js","three/addons/":"./vendor/three/jsm/"}}</script>
@@ -56,10 +56,17 @@ const DUR = +(Q.get('dur') || 75);            // segundos de vídeo para a viage
 
 /* ---------- viagem ---------- */
 let trip;
+function smoothTrack(pts){   // GPS real: tira o "tremido" (média móvel) e pontos repetidos
+  const out = []; for(let i = 0; i < pts.length; i++){ let la = 0, lo = 0, n = 0; for(let k = -3; k <= 3; k++){ const q = pts[i+k]; if(q){ la += q[0]; lo += q[1]; n++; } } const r = [la/n, lo/n]; if(!out.length || hav([out.at(-1)[1], out.at(-1)[0]], [r[1], r[0]]) > 6) out.push(r); } if(pts.length) out.push(pts.at(-1)); return out; }
+function fromGPX(txt){ const x = new DOMParser().parseFromString(txt, 'application/xml'); const pts = [...x.querySelectorAll('trkpt, rtept')].map(e => [+e.getAttribute('lat'), +e.getAttribute('lon')]); const wpt = [...x.querySelectorAll('wpt')].map(e => ({name: e.querySelector('name')?.textContent || 'Paragem', lat: +e.getAttribute('lat'), lon: +e.getAttribute('lon'), kind: /abastec|fuel|gas|repsol|galp|bp|cepsa|shell/i.test(e.textContent) ? 'fuel' : undefined}));
+  if(pts.length < 2) throw new Error('GPX sem trajeto'); const route = smoothTrack(pts); const nm = x.querySelector('trk > name, metadata > name')?.textContent || '';
+  return {gps: true, route, points: [{name: nm.split(/[→>-]/)[0]?.trim() || 'Partida', lat: route[0][0], lon: route[0][1]}, ...wpt, {name: nm.split(/[→>]/)[1]?.trim() || 'Chegada', lat: route.at(-1)[0], lon: route.at(-1)[1]}]}; }
+function fromJSON(o){ if(o.route && o.points) return o; if(o.lrNav) return o.lrNav; throw new Error('Ficheiro não reconhecido'); }
 if(PACK){ trip = await (await fetch(PACK + '/route.json')).json(); }
 else { try{ trip = JSON.parse(localStorage.getItem('lr-nav-trip')); }catch(e){} }
 if(!trip && !PACK){ location.replace(location.pathname + '?pack=studio/packs/pontedelima-vigo'); }
 if(!trip){ status('Sem viagem. Planeie uma rota na app.'); throw new Error('sem viagem'); }
+if(trip.gps && !trip.smoothed){ trip.route = smoothTrack(trip.route); trip.smoothed = true; }
 const line = trip.route.map(([la, lo]) => [lo, la]);
 const R = 6371008.8, rad = Math.PI/180;
 const hav = (a, b) => { const dLa = (b[1]-a[1])*rad, dLo = (b[0]-a[0])*rad, x = Math.sin(dLa/2)**2 + Math.cos(a[1]*rad)*Math.cos(b[1]*rad)*Math.sin(dLo/2)**2; return 2*R*Math.asin(Math.sqrt(x)); };
@@ -83,10 +90,10 @@ const headingAt = (d, look) => bearingOf(posAt(d - look*.3).p, posAt(d + look).p
 const TW = []; { const step = 50; for(let d = 0; d <= TOTAL + step; d += step){ const a = headingAt(d - 120, 60), b = headingAt(d + 120, 60); TW.push(Math.abs(((b - a + 540) % 360) - 180)); }
   for(let k = 0; k < 6; k++) for(let i = 1; i < TW.length - 1; i++) TW[i] = Math.max(TW[i]*.9, (TW[i-1] + TW[i] + TW[i+1])/3); }
 const twistAt = d => { const v = TW[Math.max(0, Math.min(TW.length-1, Math.round(d/50)))] || 0; return Math.max(0, Math.min(1, (v - 20)/70)); };
-const speedAt = d => { const s = stepAt(d); const nearPt = STOPS.some(p => Math.abs(p.d - d) < 2500); const base = nearPt ? (LOOK === 'app' ? .6 : .45) : isMotorway(s) ? (LOOK === 'app' ? 1.35 : 1.55) : .85; return LOOK === 'app' ? base*(1 - .6*twistAt(d)) : base; };
+const speedAt = d => { const s = stepAt(d); if(LOOK === 'app' && STOPS.some(p => p.kind === 'fuel' && Math.abs(p.d - d) < 700)) return .25; const nearPt = STOPS.some(p => Math.abs(p.d - d) < 2500); const base = nearPt ? (LOOK === 'app' ? .6 : .45) : isMotorway(s) ? (LOOK === 'app' ? 1.35 : 1.55) : .85; return LOOK === 'app' ? base*(1 - .6*twistAt(d)) : base; };
 // tempo de vídeo (s) → distância (m): integra 1/velocidade e acrescenta as pausas (ex.: abastecimento)
 const T = [0], D = [0]; { const NS = 2000, raw = [0]; for(let i=1;i<=NS;i++) raw.push(raw[i-1] + 1/speedAt(TOTAL*i/NS));
-  const pauses = STOPS.filter(p => p.pause).map(p => ({d: p.d, s: +p.pause})).sort((a, b) => a.d - b.d); const k = Math.max(5, DUR - pauses.reduce((a, b) => a + b.s, 0))/raw.at(-1); let extra = 0, pi = 0;
+  const pauses = STOPS.filter(p => p.pause || p.kind === 'fuel').map(p => ({d: p.d, s: Math.max(+p.pause || 0, p.kind === 'fuel' ? 4 : 0)})).sort((a, b) => a.d - b.d); const k = Math.max(5, DUR - pauses.reduce((a, b) => a + b.s, 0))/raw.at(-1); let extra = 0, pi = 0;
   for(let i=1;i<=NS;i++){ const d = TOTAL*i/NS; while(pi < pauses.length && pauses[pi].d <= d){ T.push(raw[i-1]*k + extra); D.push(pauses[pi].d); extra += pauses[pi].s; T.push(raw[i-1]*k + extra); D.push(pauses[pi].d); pi++; } T.push(raw[i]*k + extra); D.push(d); } }
 const distAtTime = u => { const t = u*T.at(-1); let lo = 0, hi = T.length-1; while(hi-lo > 1){ const m = (lo+hi) >> 1; T[m] <= t ? lo = m : hi = m; } const f = (t - T[lo])/((T[hi]-T[lo]) || 1); return D[lo] + (D[hi]-D[lo])*f; };
 
@@ -125,6 +132,7 @@ if(ATLAS){
   map.addLayer({id:'relief', type:'color-relief', source:'dem2', paint:{'color-relief-opacity': 1, 'color-relief-color': ['interpolate', ['linear'], ['elevation'], -50, '#9CC8C0', 0, '#A9CF9C', 60, '#BAD69C', 180, '#D7DDA0', 350, '#E8D6A0', 550, '#E6BE8A', 800, '#D9A374', 1100, '#C4875E', 1600, '#B07A5A']}}, 'hills');
   map.setPaintProperty('hills', 'hillshade-exaggeration', .75); map.setPaintProperty('road', 'line-width', ['interpolate',['exponential',1.6],['zoom'],10,['match',['get','class'],'motorway',1.6,'trunk',1.3,.5],17,['match',['get','class'],'motorway',16,'trunk',14,['primary','secondary'],12,7]]); map.setPaintProperty('road-case', 'line-width', ['interpolate',['exponential',1.6],['zoom'],10,['match',['get','class'],'motorway',2.4,'trunk',2,.9],17,['match',['get','class'],'motorway',20,'trunk',18,['primary','secondary'],15,9]]); map.setPaintProperty('water', 'fill-color', '#9CC8C0');
 }
+if(LOOK === 'app'){ map.setLayoutProperty('bld', 'visibility', 'none'); map.addLayer({id:'bld-flat', type:'fill', source:'omt', 'source-layer':'building', minzoom: 14, paint:{'fill-color': C.bld, 'fill-opacity': .55}}, 'road-case'); }
 map.setTerrain({source: 'dem', exaggeration: LOOK === 'app' ? 1.6 : 1.0});   // no estilo 'app' o relevo é acentuado para se ver subir e descer
 map.setSky(ATLAS ? {'sky-color': '#CFE3E0', 'horizon-color': '#EDE6D2', 'fog-color': '#E6DCC2', 'sky-horizon-blend': .5, 'horizon-fog-blend': .3, 'fog-ground-blend': .92} : LOOK === 'app' && MAPSTYLE === 'escuro' ? {'sky-color': '#0B1622', 'horizon-color': '#1F3247', 'fog-color': '#1C2733', 'sky-horizon-blend': .5, 'horizon-fog-blend': .5, 'fog-ground-blend': .6} : LOOK === 'app' && MAPSTYLE === 'vintage' ? {'sky-color': '#E9DCC0', 'horizon-color': '#F1E7D1', 'fog-color': '#E4D5B5', 'sky-horizon-blend': .5, 'horizon-fog-blend': .5, 'fog-ground-blend': .6} : LOOK === 'app' ? {'sky-color': '#8EC5F0', 'horizon-color': '#DCEEFB', 'fog-color': '#EEF2F4', 'sky-horizon-blend': .5, 'horizon-fog-blend': .5, 'fog-ground-blend': .6} : {'sky-color': '#16243A', 'horizon-color': '#2F4766', 'fog-color': '#2B3A55', 'sky-horizon-blend': .6, 'horizon-fog-blend': .4, 'fog-ground-blend': .55});
 // "balões" de rua e de terra (fundo esticável, como no GPS)
@@ -161,12 +169,12 @@ async function loadCarGLB(){
   const m = g.scene; const box = new THREE.Box3().setFromObject(m), sz = box.getSize(new THREE.Vector3()); m.scale.setScalar(4.8/Math.max(sz.x, sz.z)); box.setFromObject(m); m.position.y -= box.min.y;
   wheels = WHEELS.map(n => m.getObjectByName(n)).filter(Boolean); steerPiv = ['roda_FE_pivot', 'roda_FD_pivot'].map(n => m.getObjectByName(n)).filter(Boolean);
   m.traverse(o => { if(!o.isMesh) return; (Array.isArray(o.material) ? o.material : [o.material]).forEach(mt => {
-    if(/^(Paint|Coloured|GrelhaPreta)$/.test(mt.name)){ mt.color.set('#030304'); mt.metalness = .35; mt.roughness = .3; if('clearcoat' in mt){ mt.clearcoat = .7; mt.clearcoatRoughness = .12; } mt.envMapIntensity = .9; }
-    if(mt.name === 'GlassRed'){ mt.emissive.set('#FF1408'); mt.emissiveIntensity = 7; mt.color.set('#FF2010'); }
+    if(/^(Paint|Coloured|GrelhaPreta)$/.test(mt.name)){ mt.color.set('#000000'); mt.metalness = .08; mt.roughness = .24; if('clearcoat' in mt){ mt.clearcoat = 1; mt.clearcoatRoughness = .05; } mt.envMapIntensity = .85; }
+    if(mt.name === 'GlassRed'){ mt.emissive.set('#FF0000'); mt.emissiveIntensity = 1.8; mt.color.set('#FF0000'); mt.toneMapped = false; }   // sem tone mapping: vermelho puro, não alaranjado
     if(mt.name === 'GlassMtl'){ mt.color.set('#050608'); mt.envMapIntensity = 1.1; }
   }); });
   // brilho vermelho dos farolins (visível de cima) — atrás do carro (frente = +X)
-  box.setFromObject(m); const glow = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); const r = g.createRadialGradient(32,32,1,32,32,31); r.addColorStop(0,'rgba(255,60,40,1)'); r.addColorStop(.35,'rgba(255,20,10,.55)'); r.addColorStop(1,'rgba(255,0,0,0)'); g.fillStyle = r; g.fillRect(0,0,64,64); return new THREE.CanvasTexture(c); })();
+  box.setFromObject(m); const glow = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); const r = g.createRadialGradient(32,32,1,32,32,31); r.addColorStop(0,'rgba(255,0,0,1)'); r.addColorStop(.35,'rgba(255,0,0,.5)'); r.addColorStop(1,'rgba(255,0,0,0)'); g.fillStyle = r; g.fillRect(0,0,64,64); return new THREE.CanvasTexture(c); })();
   const zw = (box.max.z - box.min.z)/2*.72; [zw, -zw].forEach(z => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: glow, color: '#ffffff', transparent: true, blending: THREE.AdditiveBlending, depthWrite: false})); sp.position.set(box.min.x + .02, .95, z); sp.scale.set(1.1, 1.1, 1); m.add(sp); });
   return m;
 }
@@ -177,7 +185,7 @@ const carLayer = {
     this.camera = new THREE.Camera(); this.scene = new THREE.Scene();
     this.renderer = new THREE.WebGLRenderer({canvas: mp.getCanvas(), context: gl, antialias: true}); this.renderer.autoClear = false; this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     const pm = new THREE.PMREMGenerator(this.renderer); this.scene.environment = pm.fromScene(new RoomEnvironment(), .04).texture; this.scene.environmentIntensity = .4;
-    const sun = new THREE.DirectionalLight('#FFF6EC', 2.2); sun.position.set(-.5, 1, .6); this.scene.add(sun); this.scene.add(new THREE.HemisphereLight('#DDE8F5', '#3A3D42', .5));   // luz neutra: o preto fica preto
+    const sun = new THREE.DirectionalLight('#FFF6EC', 2.2); sun.position.set(-.5, 1, .6); this.scene.add(sun); this.scene.add(new THREE.HemisphereLight('#DDE8F5', '#3A3D42', .25));   // luz neutra: o preto fica preto
     try{ carModel = await loadCarGLB(); }catch(e){ console.warn('carro:', e); window.__carErr = String(e); const b = new THREE.Mesh(new THREE.BoxGeometry(4.6, 1.4, 1.9), new THREE.MeshStandardMaterial({color:'#111'})); b.position.y = .7; carModel = new THREE.Group(); carModel.add(b); }
     // sombra de contacto
     const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'); const gg = x.createRadialGradient(64,64,4,64,64,62); gg.addColorStop(0,'rgba(0,0,0,.75)'); gg.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle = gg; x.fillRect(0,0,128,128);
@@ -187,11 +195,12 @@ const carLayer = {
   render(gl, args){
     if(!this.ready) return;
     const el = map.queryTerrainElevation([carState.lng, carState.lat]); if(el != null) carState.alt = el;
-    const mc = maplibregl.MercatorCoordinate.fromLngLat([carState.lng, carState.lat], carState.alt), s = mc.meterInMercatorCoordinateUnits()*CAR_SCALE*Math.pow(2, 16.6 - map.getZoom());
+    const mc = maplibregl.MercatorCoordinate.fromLngLat([carState.lng, carState.lat], carState.alt), s = mc.meterInMercatorCoordinateUnits()*CAR_SCALE*Math.pow(2, (16.6 - map.getZoom())*(LOOK === 'app' ? .8 : 1));
     this.holder.rotation.set(0, carState.yaw, 0); wheels.forEach(w => w.rotation.z = -carState.dist/.34/CAR_SCALE*3); steerPiv.forEach(p => p.rotation.y = carState.steer || 0);
     const M = new THREE.Matrix4().makeTranslation(mc.x, mc.y, mc.z).scale(new THREE.Vector3(s, -s, s)).multiply(new THREE.Matrix4().makeRotationX(Math.PI/2));
     this.camera.projectionMatrix = new THREE.Matrix4().fromArray(args.defaultProjectionData.mainMatrix).multiply(M);
-    this.renderer.resetState(); this.renderer.render(this.scene, this.camera);
+    this.renderer.resetState(); gl.clear(gl.DEPTH_BUFFER_BIT);   // o carro desenha-se sempre por cima do mapa (não se enterra no relevo)
+    this.renderer.render(this.scene, this.camera);
   }
 };
 map.addLayer(carLayer);
@@ -215,11 +224,11 @@ function hud(d, u){
   if(pl){ $('#pT').textContent = pl; $('#pS').textContent = ps; $('#place').classList.add('on'); placeShown = pl === 'Bem-vindo a Espanha' ? 'ESP' : placeShown; } else $('#place').classList.remove('on');
 }
 const hudC = document.createElement('canvas'); hudC.id = 'hud'; hudC.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2'; if(LOOK === 'app'){ $('#stage').appendChild(hudC); document.querySelectorAll('.top,.bottom,.place,.credit').forEach(e => e.style.display = 'none'); }
-const DARK = LOOK === 'app' && MAPSTYLE === 'escuro';
+const DARK = LOOK === 'app' && MAPSTYLE === 'escuro'; let HUDS = Math.min(2, devicePixelRatio || 1);
 const TITLE = Q.get('title') || `${STOPS[0]?.name || ''} → ${STOPS.at(-1)?.name || ''}`;
 const GRAIN = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'); const id = g.createImageData(256, 256); for(let i = 0; i < id.data.length; i += 4){ const v = 120 + Math.random()*90; id.data[i] = v; id.data[i+1] = v*.96; id.data[i+2] = v*.88; id.data[i+3] = 255; } g.putImageData(id, 0, 0); return c; })();
 function drawAppHud(d, u){
-  const st = $('#stage'), W = Math.round(st.clientWidth), H = Math.round(st.clientHeight); if(hudC.width !== W || hudC.height !== H){ hudC.width = W; hudC.height = H; }
+  const st = $('#stage'), W = Math.round(st.clientWidth*HUDS), H = Math.round(st.clientHeight*HUDS); if(hudC.width !== W || hudC.height !== H){ hudC.width = W; hudC.height = H; }
   const x = hudC.getContext('2d'), k = W/1280; x.clearRect(0, 0, W, H);
   const rr = (X, Y, w, h, r, c) => { x.fillStyle = c; x.beginPath(); x.roundRect(X, Y, w, h, r); x.fill(); };
   if(ATLAS){ x.save(); x.globalAlpha = .13; x.globalCompositeOperation = 'multiply'; x.fillStyle = x.createPattern(GRAIN, 'repeat'); x.fillRect(0, 0, W, H); x.restore(); const v = x.createRadialGradient(W/2, H/2, H*.45, W/2, H/2, H*.95); v.addColorStop(0, 'rgba(60,40,20,0)'); v.addColorStop(1, 'rgba(60,40,20,.32)'); x.fillStyle = v; x.fillRect(0, 0, W, H); }
@@ -240,18 +249,19 @@ function drawAppHud(d, u){
   x.fillStyle = DARK ? '#FFFFFF' : '#1F2328'; x.font = `800 ${15*k}px Inter`; x.textAlign = 'right'; x.fillText(`${(d/1000).toFixed(0)} / ${(TOTAL/1000).toFixed(0)} km`, W - 30*k, 46*k); x.textAlign = 'left';
   x.fillStyle = DARK ? 'rgba(255,255,255,.6)' : 'rgba(0,0,0,.55)'; x.font = `600 ${10*k}px Inter`; x.textAlign = 'right'; x.fillText('© OpenStreetMap · OpenMapTiles · OpenFreeMap', W - 30*k, H - 76*k); x.textAlign = 'left';
 }
+const visLenCam = () => 4.8*CAR_SCALE*Math.pow(2, (16.6 - (appZoom ?? 13))*.8);
 function frame(u, first){
   const d = distAtTime(u); const {p} = posAt(d); const s = stepAt(d); const mw = isMotorway(s);
-  const head = headingAt(d, LOOK === 'app' ? 2500 - 1700*twistAt(d) : mw ? 420 : 160); if(camBear === null || first) camBear = head; let db = ((head - camBear + 540) % 360) - 180; camBear = (camBear + db*(first ? 1 : LOOK === 'app' ? .025 + .05*twistAt(d) : .12) + 360) % 360;
-  carState.lng = p[0]; carState.lat = p[1]; carState.dist = d; carState.alt = (map.queryTerrainElevation(p) || 0); const visLen = 4.8*CAR_SCALE*Math.pow(2, 16.6 - (LOOK === 'app' ? (appZoom ?? 12) : map.getZoom()));   // comprimento do carro "no mapa" (m)
+  const head = headingAt(d, LOOK === 'app' ? Math.max(120, visLenCam()*1.6) : mw ? 420 : 160); if(camBear === null || first) camBear = head; let db = ((head - camBear + 540) % 360) - 180; camBear = (camBear + db*(first ? 1 : LOOK === 'app' ? .06 + .06*twistAt(d) : .12) + 360) % 360;
+  carState.lng = p[0]; carState.lat = p[1]; carState.dist = d; carState.alt = (map.queryTerrainElevation(p) || 0); const visLen = 4.8*CAR_SCALE*Math.pow(2, (16.6 - (LOOK === 'app' ? (appZoom ?? 13) : map.getZoom()))*(LOOK === 'app' ? .8 : 1));   // comprimento do carro "no mapa" (m)
   const carHead = headingAt(d, LOOK === 'app' ? Math.max(25, visLen*.35) : 25); carState.yaw = (90 - carHead)*rad;
   { const h0 = headingAt(d, Math.max(15, visLen*.15)), h1 = headingAt(d + Math.max(30, visLen*.5), Math.max(15, visLen*.15)); const turn = ((h1 - h0 + 540) % 360) - 180; const target = Math.max(-.55, Math.min(.55, -turn*rad*1.4)); carState.steer = (carState.steer || 0) + (target - (carState.steer || 0))*.25; }
   if(LOOK === 'app'){
     // vista de cima inclinada, mais afastada; aproxima nas paragens
-    const near = STOPS.reduce((m, q) => Math.min(m, Math.abs(q.d - d)), 1e9), tw = Math.max(twistAt(d), twistAt(d + 400)*.8);
-    const zt = Math.min(14.8, (ATLAS ? 12.4 : 11.6) + 1.7*Math.max(0, 1 - near/4000) + 2.1*tw);
-    appZoom = appZoom === null || first ? zt : appZoom + (zt - appZoom)*.045;
-    map.jumpTo({center: p, zoom: appZoom, pitch: 50 + 8*tw, bearing: camBear, padding: {top: H0()*.12, bottom: 0, left: 0, right: 0}});
+    const near = STOPS.reduce((m, q) => Math.min(m, Math.abs(q.d - d)), 1e9), fuel = STOPS.filter(q => q.kind === 'fuel').reduce((m, q) => Math.min(m, Math.abs(q.d - d)), 1e9), tw = Math.max(twistAt(d), twistAt(d + 300)*.8);
+    let zt = (mw ? 12.9 : 13.6) + 2.0*tw + 2.4*Math.max(0, 1 - near/2500); if(fuel < 900) zt = Math.max(zt, 16.9 - fuel/900);
+    zt = Math.min(17.2, zt); appZoom = appZoom === null || first ? zt : appZoom + (zt - appZoom)*.05;
+    map.jumpTo({center: p, zoom: appZoom, pitch: 56 + 6*tw, bearing: camBear, padding: {top: H0()*.3, bottom: 0, left: 0, right: 0}});
     setProgress(d/TOTAL); drawAppHud(d, u); map.triggerRepaint(); return;
   }
   const z = mw ? 15.8 : 16.3; const near = (trip.points || []).some(q => hav([q.lon, q.lat], p) < 2500);
@@ -305,6 +315,37 @@ $('#bRec').onclick = () => {
     document.body.classList.remove('recording'); $('#stage').style.transform = ''; map.setPixelRatio(devicePixelRatio); map.resize(); $('#bSave').hidden = false; status(`Vídeo pronto (${(blob.size/1e6).toFixed(1)} MB). Toque em "Guardar vídeo".`); };
   rec.start(1000); run(rec);
 };
-$('#bSave').onclick = () => { if(!lastFile) return; if(navigator.canShare && navigator.canShare({files: [lastFile]})) navigator.share({files: [lastFile], title: 'LR Rota'}).catch(() => {}); else { const a = document.createElement('a'); a.href = URL.createObjectURL(lastFile); a.download = lastFile.name; a.click(); } };
+const MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+function saveFile(f){ if(MOBILE && navigator.canShare && navigator.canShare({files: [f]})) return navigator.share({files: [f], title: 'LR Rota'}).catch(() => {}); const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 60000); }
+$('#bSave').onclick = () => { if(lastFile) saveFile(lastFile); };
+// abrir uma viagem gravada (JSON da app no telemóvel, ou GPX)
+$('#bOpen').onclick = () => $('#fOpen').click();
+$('#fOpen').onchange = async e => { const f = e.target.files[0]; if(!f) return; try{ const txt = await f.text(); const t = /\.gpx$/i.test(f.name) || txt.trim().startsWith('<') ? fromGPX(txt) : fromJSON(JSON.parse(txt)); localStorage.setItem('lr-nav-trip', JSON.stringify(t)); location.href = location.pathname + `?look=${LOOK}&map=${MAPSTYLE}&dur=${DUR}`; }catch(err){ status('Não consegui abrir: ' + err.message); } };
+// exportação 4K imagem a imagem (WebCodecs): sem saltos, 30 fps exatos, alta qualidade para editar no DaVinci Resolve
+$('#b4k').onclick = () => export4k().catch(e => { status('Erro na exportação: ' + e.message); console.error(e); });
+async function export4k(){
+  if(!('VideoEncoder' in window)){ status('A exportação 4K precisa do Chrome ou Edge no computador.'); return; }
+  const { Muxer, ArrayBufferTarget, FileSystemWritableFileStreamTarget } = await import('./vendor/mp4-muxer/mp4-muxer.mjs');
+  const W = +(Q.get('w') || 3840), H = Math.round(W*9/16), FPS = +(Q.get('fps') || 30), BR = +(Q.get('br') || (W >= 3840 ? 40e6 : 16e6));
+  const cfg = {codec: W >= 3840 ? 'avc1.640034' : 'avc1.640028', width: W, height: H, bitrate: BR, framerate: FPS, latencyMode: 'quality', avc: {format: 'avc'}};
+  if(!(await VideoEncoder.isConfigSupported(cfg)).supported){ cfg.codec = 'avc1.640033'; if(!(await VideoEncoder.isConfigSupported(cfg)).supported){ status('Este computador não codifica 4K H.264. Experimente &w=2560.'); return; } }
+  let target, writable = null; const name = `lr-rota-${(STOPS[0]?.name || 'viagem').replace(/\W+/g, '-')}-${(STOPS.at(-1)?.name || '').replace(/\W+/g, '-')}-${W >= 3840 ? '4K' : W + 'p'}.mp4`;
+  if(window.showSaveFilePicker && !Q.get('mem')){ try{ const h = await showSaveFilePicker({suggestedName: name, types: [{description: 'Vídeo MP4', accept: {'video/mp4': ['.mp4']}}]}); writable = await h.createWritable(); target = new FileSystemWritableFileStreamTarget(writable); }catch(e){ if(e.name === 'AbortError') return; } }
+  if(!target) target = new ArrayBufferTarget();
+  const muxer = new Muxer({target, video: {codec: 'avc', width: W, height: H, frameRate: FPS}, fastStart: writable ? false : 'in-memory'});
+  const enc = new VideoEncoder({output: (c, m) => muxer.addVideoChunk(c, m), error: e => status('Erro do codificador: ' + e.message)}); enc.configure(cfg);
+  document.body.classList.add('recording'); const st = $('#stage'); st.style.width = W/2 + 'px'; st.style.height = H/2 + 'px'; st.style.transform = `scale(${Math.min(innerWidth/(W/2), innerHeight/(H/2))})`; HUDS = 2; map.setPixelRatio(2); map.resize();
+  rc.width = W; rc.height = H; const N = Math.round(DUR*FPS); camBear = null; appZoom = null; const raf = () => new Promise(r => requestAnimationFrame(r)); const t0 = performance.now();
+  for(let i = 0; i < N; i++){
+    frame(i/(N-1), i === 0); await raf(); const ts = performance.now(); while(!(map.isSourceLoaded('omt') && map.areTilesLoaded()) && performance.now() - ts < 6000) await raf(); await raf();
+    drawRec(); const vf = new VideoFrame(rc, {timestamp: Math.round(i*1e6/FPS), duration: Math.round(1e6/FPS)}); enc.encode(vf, {keyFrame: i % (FPS*2) === 0}); vf.close();
+    while(enc.encodeQueueSize > 6) await new Promise(r => setTimeout(r, 5));
+    if(i % 15 === 0){ const el = (performance.now() - t0)/1000, left = el/(i+1)*(N-i-1); status(`A exportar 4K… ${Math.round(i/N*100)}% · faltam ~${Math.ceil(left/60)} min`); }
+  }
+  await enc.flush(); muxer.finalize(); if(writable) await writable.close();
+  document.body.classList.remove('recording'); st.style.width = st.style.height = st.style.transform = ''; HUDS = Math.min(2, devicePixelRatio || 1); map.setPixelRatio(devicePixelRatio); map.resize();
+  if(!writable){ lastFile = new File([target.buffer], name, {type: 'video/mp4'}); $('#bSave').hidden = false; saveFile(lastFile); }
+  status(`Vídeo 4K pronto: ${name}` + (writable ? ' (guardado onde escolheu)' : ' — está em Transferências'));
+}
 if(Q.get('capture')) $('#ctl').style.display = 'none';
 </script></body></html>
