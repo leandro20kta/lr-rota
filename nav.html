@@ -54,7 +54,7 @@ const PACK = Q.get('pack');                  // pacote offline (ex.: studio/pack
 const CAR_SCALE = +(Q.get('carscale') || 11);
 // estilo 'app': o carro tem ~80 px na autoestrada (vista alta) e encolhe para caber na faixa quando a câmara desce às ruas
 const CAR_K = +(Q.get('carsize') || 1);
-const carScaleApp = z => 5.2*CAR_K*Math.pow(2, (17.5 - z)*1.1);  // carro ampliado para ser visível (tamanho real ficaria com poucos píxeis)
+const carScaleApp = z => 7.5*CAR_K*Math.pow(2, (17.5 - z)*1.1);  // carro ampliado para ser visível (tamanho real ficaria com poucos píxeis)
 const DUR = +(Q.get('dur') || 75);            // segundos de vídeo para a viagem inteira
 
 /* ---------- viagem ---------- */
