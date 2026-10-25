@@ -15,10 +15,15 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Caveat:wght@700&display=swap">
 <style>
-:root{--brand:#0A5BD6;--brand-dark:#08449F;--brand-tint:#EAF1FF;--ink:#0F172A;--muted:#5B6474;--line:#E5E9F0;--bg:#FFFFFF;--soft:#F7F9FC;--warn:#7A2E0B;--warn-bg:#FFF6F2;--ok:#145F2D;--ok-bg:#E8F5EC;--rec:#D9480F;--sat:env(safe-area-inset-top);--sab:env(safe-area-inset-bottom)}
+:root{--brand:#0A5BD6;--brand-dark:#08449F;--brand-tint:#EAF1FF;--accent:#FF6A2A;--accent-dark:#D9480F;--accent-tint:#FFF1EA;--ink:#0F172A;--muted:#5B6474;--line:#E5E9F0;--bg:#FFFFFF;--soft:#F7F9FC;--warn:#7A2E0B;--warn-bg:#FFF6F2;--ok:#145F2D;--ok-bg:#E8F5EC;--rec:#D9480F;--sat:env(safe-area-inset-top);--sab:env(safe-area-inset-bottom)}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased;overscroll-behavior:none}
 body{position:fixed;inset:0;overflow:hidden}
+#app{position:absolute;inset:0;overflow:hidden;background:var(--bg)}
+@media(min-width:600px){body{background:#E6EAF2}#app{left:50%;right:auto;width:430px;transform:translateX(-50%);box-shadow:0 0 0 1px rgba(15,23,42,.08),0 24px 64px rgba(15,23,42,.2)}}
+.ico{display:block;filter:drop-shadow(0 3px 4px rgba(15,23,42,.22))}
+.topbar .sub{color:var(--accent)}
+.btn.accent{background:linear-gradient(135deg,#FF8A3D,#F0561F);box-shadow:0 6px 18px rgba(240,86,31,.3)}
 button,input,select,textarea{font-family:inherit;font-size:inherit}
 button{cursor:pointer}
 a{color:var(--brand)}
@@ -62,7 +67,8 @@ a{color:var(--brand)}
 .modes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .mode{display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 8px;border-radius:14px;border:2px solid var(--line);background:#fff;color:var(--ink);font-size:13px;font-weight:700}
 .mode.on{border-color:var(--brand);background:var(--brand-tint)}
-.mode svg{color:var(--muted)}.mode.on svg{color:var(--brand)}
+.mode svg{filter:grayscale(1) opacity(.55)}.mode.on svg{filter:drop-shadow(0 4px 6px rgba(10,91,214,.3))}
+.tab svg{filter:grayscale(1) opacity(.5)}.tab.on svg{filter:drop-shadow(0 3px 4px rgba(10,91,214,.3))}
 .map{position:absolute;inset:0;background:#E9EEF5}
 .sheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:22px 22px 0 0;box-shadow:0 -6px 24px rgba(15,23,42,.14);padding:12px 20px calc(var(--sab) + 16px);display:flex;flex-direction:column;gap:12px;max-height:72%;overflow-y:auto}
 .handle{width:40px;height:4px;border-radius:2px;background:#D5DBE5;align-self:center}
@@ -106,6 +112,55 @@ textarea.note{width:100%;resize:none;padding:10px 12px;border:1px solid #D5DBE5;
 </style>
 </head>
 <body>
+<svg style="position:absolute;width:0;height:0" aria-hidden="true"><defs>
+<linearGradient id="gBlue" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4F8DF7"/><stop offset="1" stop-color="#0A4BB5"/></linearGradient>
+<linearGradient id="gBlue2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2F6FE3"/><stop offset="1" stop-color="#083A8C"/></linearGradient>
+<linearGradient id="gOrange" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFA05A"/><stop offset="1" stop-color="#E8521C"/></linearGradient>
+<linearGradient id="gDark" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3B4256"/><stop offset="1" stop-color="#111827"/></linearGradient>
+<linearGradient id="gGlass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#D6EEFF"/><stop offset="1" stop-color="#5BA8E8"/></linearGradient>
+<symbol id="icCar" viewBox="0 0 64 44">
+  <ellipse cx="32" cy="41" rx="27" ry="2.6" fill="rgba(0,0,0,.2)"/>
+  <path d="M16 21 L22 9 Q23 7 25 7 H42 Q44 7 45 9 L52 21 Z" fill="url(#gBlue2)"/>
+  <path d="M19 20 L24 11 H32 V20 Z" fill="url(#gGlass)"/><path d="M35 11 H42 L48 20 H35 Z" fill="url(#gGlass)"/>
+  <rect x="3" y="20" width="58" height="15" rx="5" fill="url(#gBlue)"/>
+  <rect x="8" y="22" width="48" height="2.2" rx="1.1" fill="#FFFFFF" opacity=".35"/>
+  <rect x="55" y="25" width="5" height="4" rx="1.2" fill="#FFE9A8"/><rect x="4" y="25" width="3.5" height="4" rx="1" fill="#FF4D4D"/>
+  <circle cx="17" cy="34" r="6.5" fill="#111827"/><circle cx="17" cy="34" r="2.8" fill="#9CA3AF"/>
+  <circle cx="47" cy="34" r="6.5" fill="#111827"/><circle cx="47" cy="34" r="2.8" fill="#9CA3AF"/>
+</symbol>
+<symbol id="icPlane" viewBox="0 0 64 64">
+  <ellipse cx="32" cy="60" rx="20" ry="2.4" fill="rgba(0,0,0,.18)"/>
+  <path d="M27 24 L4 38 L4 44 L27 37 Z" fill="url(#gBlue2)"/><path d="M37 24 L60 38 L60 44 L37 37 Z" fill="url(#gBlue2)"/>
+  <path d="M28 46 L17 54 L17 58 L28 53 Z" fill="url(#gBlue2)"/><path d="M36 46 L47 54 L47 58 L36 53 Z" fill="url(#gBlue2)"/>
+  <path d="M32 3 C37 3 38 10 38 17 V42 L36 56 H28 L26 42 V17 C26 10 27 3 32 3 Z" fill="url(#gBlue)"/>
+  <path d="M29 9 C30 6 34 6 35 9 L35 13 H29 Z" fill="url(#gGlass)"/>
+  <circle cx="32" cy="20" r="1.6" fill="#D6EEFF"/><circle cx="32" cy="26" r="1.6" fill="#D6EEFF"/><circle cx="32" cy="32" r="1.6" fill="#D6EEFF"/>
+  <rect x="28" y="17" width="2" height="24" rx="1" fill="#FFFFFF" opacity=".3"/>
+</symbol>
+<symbol id="icPin" viewBox="0 0 64 64">
+  <ellipse cx="32" cy="60" rx="12" ry="2.4" fill="rgba(0,0,0,.2)"/>
+  <path d="M32 4 C19 4 10 14 10 26 c0 15 22 32 22 32 s22-17 22-32 C54 14 45 4 32 4z" fill="url(#gBlue)"/>
+  <circle cx="32" cy="26" r="9" fill="#FFFFFF"/><circle cx="32" cy="26" r="4.5" fill="url(#gOrange)"/>
+  <path d="M20 12 C24 8 30 7 36 8" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" fill="none" opacity=".45"/>
+</symbol>
+<symbol id="icMap" viewBox="0 0 64 64">
+  <ellipse cx="32" cy="60" rx="24" ry="2.4" fill="rgba(0,0,0,.18)"/>
+  <path d="M6 14 L22 8 L42 14 L58 8 V50 L42 56 L22 50 L6 56 Z" fill="url(#gBlue)"/>
+  <path d="M22 8 V50 M42 14 V56" stroke="#083A8C" stroke-width="1.5" opacity=".5"/>
+  <path d="M12 44 C 20 30, 28 46, 36 32 S 48 18, 52 16" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" fill="none" opacity=".3"/>
+  <path d="M12 44 C 20 30, 28 46, 36 32 S 48 18, 52 16" stroke="url(#gOrange)" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+  <circle cx="12" cy="44" r="3.5" fill="#FFFFFF"/><circle cx="52" cy="16" r="4" fill="#FFFFFF"/><circle cx="52" cy="16" r="2" fill="#E8521C"/>
+</symbol>
+<symbol id="icVideo" viewBox="0 0 64 64">
+  <ellipse cx="32" cy="60" rx="24" ry="2.4" fill="rgba(0,0,0,.18)"/>
+  <rect x="8" y="24" width="48" height="32" rx="7" fill="url(#gBlue)"/>
+  <path d="M8 24 L11 12 L56 9 L55 24 Z" fill="url(#gDark)"/>
+  <path d="M18 12 L22 23 M30 11 L34 23 M42 10 L46 23" stroke="#FFFFFF" stroke-width="3" opacity=".85"/>
+  <path d="M27 32 L41 40 L27 48 Z" fill="#FFFFFF"/>
+  <rect x="12" y="27" width="40" height="2" rx="1" fill="#FFFFFF" opacity=".3"/>
+</symbol>
+</defs></svg>
+<div id="app">
 
 <!-- 1 · GPS obrigatório -->
 <section id="s-gps" class="screen">
@@ -134,9 +189,9 @@ textarea.note{width:100%;resize:none;padding:10px 12px;border:1px solid #D5DBE5;
     </div>
     <div class="label">Como vou chegar</div>
     <div class="modes">
-      <button class="mode on" data-mode="car"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M7 17V11l2-5h6l2 5v6"/><circle cx="8" cy="17" r="2"/><circle cx="16" cy="17" r="2"/></svg>Carro</button>
-      <button class="mode" data-mode="plane"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 16l20-8-6 10-4-3-4 5-1-6z"/></svg>Avião</button>
-      <button class="mode" data-mode="mixed"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h6l2-4h8M4 12l2 4h6l2-4"/></svg>Misto</button>
+      <button class="mode on" data-mode="car"><svg class="ico" width="52" height="36" viewBox="0 0 64 44"><use href="#icCar"/></svg>Carro</button>
+      <button class="mode" data-mode="plane"><svg class="ico" width="40" height="40" viewBox="0 0 64 64"><use href="#icPlane"/></svg>Avião</button>
+      <button class="mode" data-mode="mixed"><svg class="ico" width="56" height="40" viewBox="0 0 72 52"><use href="#icPlane" x="34" y="0" width="38" height="38"/><use href="#icCar" x="0" y="20" width="44" height="30"/></svg>Misto</button>
     </div>
     <p class="hint">Avião e misto: a rota de carro vai até ao aeroporto mais próximo; o voo é desenhado em arco no vídeo.</p>
     <div class="label">O que incluir no roteiro</div>
@@ -164,7 +219,7 @@ textarea.note{width:100%;resize:none;padding:10px 12px;border:1px solid #D5DBE5;
     <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:13px;font-weight:700">Paradas sugeridas</span><button class="pill" data-go="guide" style="background:transparent;color:var(--brand);padding:0">Ver guia do destino</button></div>
     <div id="stops"></div>
     <button class="btn sm ghost" id="btn-addstop">+ Adicionar parada</button>
-    <div class="row"><button class="btn ghost" data-go="video">Vídeo</button><button class="btn" id="btn-start"><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M6 4l14 8-14 8z"/></svg>Iniciar viagem</button></div>
+    <div class="row"><button class="btn ghost" data-go="video">Vídeo</button><button class="btn accent" id="btn-start"><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M6 4l14 8-14 8z"/></svg>Iniciar viagem</button></div>
   </div>
 </section>
 
@@ -178,7 +233,7 @@ textarea.note{width:100%;resize:none;padding:10px 12px;border:1px solid #D5DBE5;
     <div class="label">Onde dormir</div>
     <div class="card" id="guide-hotel"></div>
     <div style="height:14px"></div>
-    <div class="row"><button class="btn ghost" id="btn-regen">Gerar com IA</button><button class="btn" id="btn-start2">Iniciar viagem</button></div>
+    <div class="row"><button class="btn ghost" id="btn-regen">Gerar com IA</button><button class="btn accent" id="btn-start2">Iniciar viagem</button></div>
     <p class="hint">A IA precisa da chave Claude em Definições. Sem chave, o guia é montado a partir dos dados do mapa.</p>
   </div>
 </section>
@@ -206,15 +261,21 @@ textarea.note{width:100%;resize:none;padding:10px 12px;border:1px solid #D5DBE5;
   <div class="topbar"><button class="iconbtn" data-go="plan"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button><div class="grow"><span class="sub">Gerado do trajeto</span><h1>Vídeo da viagem</h1></div></div>
   <div class="scroll">
     <div class="preview"><canvas id="vid-canvas" width="1280" height="720"></canvas><span class="float" id="vid-time" style="right:10px;bottom:10px;background:rgba(15,23,42,.78);color:#fff;box-shadow:none;font-size:11px">00:00 · 1080p</span></div>
-    <div class="label">Linha do tempo <span style="font-weight:500;color:var(--muted);font-size:12px" id="vid-info"></span></div>
-    <div class="row"><button class="pill on" data-dur="12">12 s</button><button class="pill" data-dur="24">24 s</button><button class="pill" data-dur="40">40 s</button></div>
     <div class="label">Estilo</div>
-    <div class="row"><button class="pill on" data-style="dots">Pontilhado</button><button class="pill" data-style="solid">Linha sólida</button><button class="pill" data-style="follow">Câmera segue</button></div>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">
+      <button class="stylecard on" data-style="neon"><svg width="100%" height="44" viewBox="0 0 120 44" aria-hidden="true"><rect width="120" height="44" rx="6" fill="#EFE3CF"/><path d="M0 14 L120 10M0 30 L120 26M30 0 L26 44M72 0 L76 44" stroke="#D8C8AC" stroke-width="1.5"/><path d="M8 38 C 28 34, 32 10, 54 14 S 88 32, 110 8" stroke="#FF6A2A" stroke-width="5" fill="none" stroke-linecap="round"/><path d="M8 38 C 28 34, 32 10, 54 14 S 88 32, 110 8" stroke="#FFD9B8" stroke-width="1.5" fill="none" stroke-linecap="round"/><rect x="50" y="16" width="16" height="9" rx="3" fill="#15171C"/></svg>Miniatura 3D no mapa</button>
+      <button class="stylecard" data-style="photos"><svg width="100%" height="44" viewBox="0 0 120 44" aria-hidden="true"><rect width="40" height="44" fill="#9FB4C7"/><rect x="40" width="40" height="44" fill="#C7B49F"/><rect x="80" width="40" height="44" fill="#9FC7B0"/><path d="M8 34 C 30 34, 30 10, 60 10 S 90 34, 112 34" stroke="#FFFFFF" stroke-width="2.5" fill="none"/><circle cx="8" cy="34" r="3" fill="#FFFFFF"/><circle cx="60" cy="10" r="3" fill="#FFFFFF"/><circle cx="112" cy="34" r="3" fill="#FFFFFF"/></svg>Colagem com fotos</button>
+      <button class="stylecard" data-style="dots"><svg width="100%" height="44" viewBox="0 0 120 44" aria-hidden="true"><rect width="120" height="44" rx="6" fill="#EEF3FA"/><path d="M0 16 L120 12M0 32 L120 28M34 0 L30 44M80 0 L84 44" stroke="#DCE4EF" stroke-width="1.5"/><path d="M10 36 C 34 30, 44 14, 108 8" stroke="#0A5BD6" stroke-width="3.5" fill="none" stroke-dasharray="2 6" stroke-linecap="round"/></svg>Pontilhado clássico</button>
+      <button class="stylecard" data-style="follow"><svg width="100%" height="44" viewBox="0 0 120 44" aria-hidden="true"><rect width="120" height="44" rx="6" fill="#1A2030"/><path d="M0 16 L120 12M0 32 L120 28M34 0 L30 44M80 0 L84 44" stroke="#2C3650" stroke-width="2"/><path d="M10 36 C 34 30, 44 14, 108 8" stroke="#2F7CFF" stroke-width="5" fill="none" stroke-linecap="round"/><circle cx="60" cy="18" r="14" fill="#2F7CFF" opacity=".25"/><rect x="54" y="12" width="12" height="7" rx="2" fill="#F4F6FA"/></svg>Câmera segue (noite)</button>
+    </div>
+    <div class="card" id="photos-card" style="margin-top:10px;display:none"><div class="item"><div class="grow"><span class="t">Fotos das paradas</span><span class="s" id="photos-count">Escolha 2 a 5 fotos, na ordem da viagem</span></div><label class="pill" style="cursor:pointer;background:var(--accent);color:#fff">Escolher<input type="file" id="vid-photos" accept="image/*" multiple hidden></label></div></div>
+    <div class="label">Duração <span style="font-weight:500;color:var(--muted);font-size:12px" id="vid-info"></span></div>
+    <div class="row"><button class="pill on" data-dur="12">12 s</button><button class="pill" data-dur="24">24 s</button><button class="pill" data-dur="40">40 s</button></div>
     <div class="label">Formato</div>
     <div class="row"><button class="pill on" data-fmt="169">16:9 YouTube</button><button class="pill" data-fmt="916">9:16 Shorts</button></div>
     <div class="card" style="margin-top:14px"><div class="item"><div class="grow"><span class="t">Mostrar km, gasóleo e portagens</span></div><button class="toggle on" id="tg-stats"></button></div></div>
     <div style="height:14px"></div>
-    <div class="row"><button class="btn ghost" id="btn-preview">▶ Pré-visualizar</button><button class="btn" id="btn-export">Exportar MP4</button></div>
+    <div class="row"><button class="btn ghost" id="btn-preview">▶ Pré-visualizar</button><button class="btn accent" id="btn-export">Exportar MP4</button></div>
     <p class="hint" id="vid-note">Exporta pelo próprio telemóvel (sem servidor). Viagens longas aceleram sozinhas.</p>
   </div>
 </section>
@@ -273,7 +334,7 @@ textarea.note{width:100%;resize:none;padding:10px 12px;border:1px solid #D5DBE5;
     <div class="label">Mapa</div>
     <div class="card">
       <div class="item"><div class="grow"><span class="t">Modo noite automático</span><span class="s">Escuro após o pôr do sol</span></div><button class="toggle on" id="m-night"></button></div>
-      <div class="item"><div class="grow"><span class="t">Linha da rota</span></div><select id="m-line"><option value="blue">Azul</option><option value="neon">Neon</option></select></div>
+      <div class="item"><div class="grow"><span class="t">Linha da rota</span></div><select id="m-line"><option value="neon">Neon laranja</option><option value="blue">Azul</option></select></div>
       <div class="item"><div class="grow"><span class="t">Chave Google Maps</span><span class="s">Opcional · sem chave usa OpenStreetMap</span></div><input type="password" id="k-google" placeholder="AIza…"></div>
     </div>
     <div class="label">Inteligência artificial</div>
@@ -303,11 +364,12 @@ textarea.note{width:100%;resize:none;padding:10px 12px;border:1px solid #D5DBE5;
       <div class="item"><div class="grow"><span class="t">Cor da linha</span></div><select id="cv-color"><option value="gold">Dourada</option><option value="neon">Neon</option><option value="blue">Azul</option><option value="white">Branca</option></select></div>
     </div>
     <div style="height:14px"></div>
-    <button class="btn" id="btn-cover-export">Guardar capa 1280×720</button>
+    <button class="btn accent" id="btn-cover-export">Guardar capa 1280×720</button>
   </div>
 </section>
 
 <div class="toast" id="toast"></div>
+</div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script>
@@ -317,7 +379,7 @@ const store = {
   get(k, d){ try{ const v = localStorage.getItem('lr.'+k); return v==null? d : JSON.parse(v);}catch(e){return d;} },
   set(k, v){ localStorage.setItem('lr.'+k, JSON.stringify(v)); }
 };
-const settings = Object.assign({name:'', fuel:'Gasóleo', cons:6.5, price:1.72, vv:true, tollkm:0.09, night:true, line:'blue', gkey:'', ckey:''}, store.get('settings', {}));
+const settings = Object.assign({name:'', fuel:'Gasóleo', cons:6.5, price:1.72, vv:true, tollkm:0.09, night:true, line:'neon', gkey:'', ckey:''}, store.get('settings', {}));
 let trips = store.get('trips', []);
 let current = store.get('current', null);   // trip being planned / driven
 let pos = null;                               // last GPS fix
@@ -325,7 +387,7 @@ const eur = n => '€' + (Math.round(n*100)/100).toFixed(2).replace('.', ',');
 const km = m => (m/1000 < 10 ? (m/1000).toFixed(1) : Math.round(m/1000)).toString().replace('.', ',') + ' km';
 const mins = s => { const m = Math.round(s/60); return m < 60 ? m + ' min' : Math.floor(m/60) + ' h ' + String(m%60).padStart(2,'0'); };
 function toast(t, ms=2200){ const e = $('#toast'); e.textContent = t; e.classList.add('show'); clearTimeout(e._t); e._t = setTimeout(()=> e.classList.remove('show'), ms); }
-function go(name){ $$('.screen').forEach(s => s.classList.remove('active')); $('#s-'+name).classList.add('active'); location.hash = name; onShow(name); window.scrollTo(0,0); }
+function go(name){ $$('.screen').forEach(s => s.classList.remove('active')); $('#s-'+name).classList.add('active'); $$('.tab').forEach(b => b.classList.toggle('on', b.dataset.go === name)); location.hash = name; onShow(name); window.scrollTo(0,0); }
 $$('[data-go]').forEach(b => b.addEventListener('click', () => go(b.dataset.go)));
 function isNight(){ const h = new Date().getHours(); return settings.night && (h >= 19 || h < 7); }
 const TILES = { light: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', dark: 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png' };
@@ -335,10 +397,10 @@ function lineStyle(){ return settings.line === 'neon' ? {color:'#FF6A2A', weight
 
 /* ---------- tabs ---------- */
 $$('[data-tabs]').forEach(n => { n.innerHTML = `
-  <button class="tab" data-go="home"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>Nova rota</button>
-  <button class="tab" data-go="history"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16M8 15V9M12 15V7M16 15v-4"/></svg>Viagens</button>
-  <button class="tab" data-go="video"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3"/></svg>Vídeo</button>
-  <button class="tab" data-go="settings"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M7 17V11l2-5h6l2 5v6"/><circle cx="8" cy="17" r="2"/><circle cx="16" cy="17" r="2"/></svg>Veículo</button>`;
+  <button class="tab" data-go="home"><svg class="ico" width="30" height="30" viewBox="0 0 64 64"><use href="#icPin"/></svg>Nova rota</button>
+  <button class="tab" data-go="history"><svg class="ico" width="30" height="30" viewBox="0 0 64 64"><use href="#icMap"/></svg>Viagens</button>
+  <button class="tab" data-go="video"><svg class="ico" width="30" height="30" viewBox="0 0 64 64"><use href="#icVideo"/></svg>Vídeo</button>
+  <button class="tab" data-go="settings"><svg class="ico" width="36" height="30" viewBox="0 0 64 44"><use href="#icCar"/></svg>Veículo</button>`;
   n.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => go(b.dataset.go)));
 });
 
@@ -549,48 +611,89 @@ $('#btn-export-data').addEventListener('click', () => { const blob = new Blob([J
 $('#btn-wipe').addEventListener('click', () => { if(confirm('Apagar todas as viagens e definições deste telemóvel?')){ localStorage.clear(); location.reload(); } });
 
 /* ---------- video (canvas → MP4/WebM via MediaRecorder) ---------- */
-let vidDur = 12, vidStyle = 'dots', vidFmt = '169', carImg = new Image(); carImg.src = 'icons/car.png';
-$$('[data-dur]').forEach(b => b.addEventListener('click', () => { $$('[data-dur]').forEach(x => x.classList.remove('on')); b.classList.add('on'); vidDur = +b.dataset.dur; }));
-$$('[data-style]').forEach(b => b.addEventListener('click', () => { $$('[data-style]').forEach(x => x.classList.remove('on')); b.classList.add('on'); vidStyle = b.dataset.style; }));
+let vidDur = 12, vidStyle = 'neon', vidFmt = '169', vidPhotos = [], carImg = new Image(); carImg.src = 'icons/car.png';
+$$('[data-dur]').forEach(b => b.addEventListener('click', () => { $$('[data-dur]').forEach(x => x.classList.remove('on')); b.classList.add('on'); vidDur = +b.dataset.dur; $('#vid-info').textContent = current && current.route ? `${mins(current.duration)} de viagem → ${vidDur} s de vídeo` : ''; }));
+$$('[data-style]').forEach(b => b.addEventListener('click', () => { $$('[data-style]').forEach(x => x.classList.remove('on')); b.classList.add('on'); vidStyle = b.dataset.style; $('#photos-card').style.display = vidStyle === 'photos' ? '' : 'none'; drawFrame($('#vid-canvas'), 1); }));
 $$('[data-fmt]').forEach(b => b.addEventListener('click', () => { $$('[data-fmt]').forEach(x => x.classList.remove('on')); b.classList.add('on'); vidFmt = b.dataset.fmt; const c = $('#vid-canvas'); if(vidFmt === '916'){ c.width = 720; c.height = 1280; c.parentElement.style.aspectRatio = '9/16'; } else { c.width = 1280; c.height = 720; c.parentElement.style.aspectRatio = '16/9'; } drawFrame(c, 1); }));
+$('#vid-photos').addEventListener('change', e => { const files = [...e.target.files].slice(0,5); vidPhotos = []; let left = files.length; $('#photos-count').textContent = `${files.length} fotos`; files.forEach((f,i) => { const im = new Image(); im.onload = () => { vidPhotos[i] = im; if(--left === 0) drawFrame($('#vid-canvas'), 1); }; im.src = URL.createObjectURL(f); }); });
 function lon2x(lon, z){ return (lon + 180) / 360 * Math.pow(2, z) * 256; }
 function lat2y(lat, z){ const r = lat*Math.PI/180; return (1 - Math.log(Math.tan(r) + 1/Math.cos(r))/Math.PI) / 2 * Math.pow(2, z) * 256; }
 const tileCache = {};
-function loadTile(z,x,y){ const k = `${z}/${x}/${y}`; if(tileCache[k]) return tileCache[k]; const im = new Image(); im.crossOrigin = 'anonymous'; im.src = `https://a.basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}@2x.png`; tileCache[k] = im; return im; }
+function loadTile(z,x,y,dark){ const k = `${dark?'d':'l'}${z}/${x}/${y}`; if(tileCache[k]) return tileCache[k]; const im = new Image(); im.crossOrigin = 'anonymous'; im.src = `https://a.basemaps.cartocdn.com/rastertiles/${dark ? 'dark_all' : 'voyager'}/${z}/${x}/${y}@2x.png`; tileCache[k] = im; return im; }
 function viewFor(route, W, H, pad=0.15){ const b = bounds(route); let z = 18; while(z > 2){ const w = lon2x(b.maxLon,z) - lon2x(b.minLon,z), h = lat2y(b.minLat,z) - lat2y(b.maxLat,z); if(w < W*(1-2*pad) && h < H*(1-2*pad)) break; z--; } const cx = (lon2x(b.minLon,z) + lon2x(b.maxLon,z))/2, cy = (lat2y(b.minLat,z) + lat2y(b.maxLat,z))/2; return {z, ox: cx - W/2, oy: cy - H/2}; }
 function proj(p, v){ return [lon2x(p[1], v.z) - v.ox, lat2y(p[0], v.z) - v.oy]; }
+function drawTiles(ctx, v, W, H, dark){ ctx.fillStyle = dark ? '#1A2030' : '#E9EEF5'; ctx.fillRect(0,0,W,H); const tx0 = Math.floor(v.ox/256), ty0 = Math.floor(v.oy/256), tx1 = Math.floor((v.ox+W)/256), ty1 = Math.floor((v.oy+H)/256); for(let x = tx0; x <= tx1; x++) for(let y = ty0; y <= ty1; y++){ const im = loadTile(v.z, x, y, dark); if(im.complete && im.naturalWidth) ctx.drawImage(im, x*256 - v.ox, y*256 - v.oy, 256, 256); } }
+function paperLook(ctx, W, H){ ctx.fillStyle = 'rgba(241,222,188,.34)'; ctx.fillRect(0,0,W,H); const g = ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*.35, W/2,H/2, Math.max(W,H)*.75); g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1,'rgba(60,40,20,.45)'); ctx.fillStyle = g; ctx.fillRect(0,0,W,H); }
+function drawCar(ctx, x, y, ang, w){ const h = w * 1.75; ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.save(); ctx.globalAlpha = .45; ctx.filter = 'blur(6px)'; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(w*.12, h*.18, w*.5, h*.5, 0, 0, 7); ctx.fill(); ctx.restore(); if(carImg.complete) ctx.drawImage(carImg, -w/2, -h/2, w, h); ctx.restore(); }
+function neonPath(ctx, pts, color, core){ ctx.lineCap = 'round'; ctx.lineJoin = 'round'; const trace = () => { ctx.beginPath(); pts.forEach((p,i) => i ? ctx.lineTo(p[0],p[1]) : ctx.moveTo(p[0],p[1])); }; trace(); ctx.strokeStyle = color; ctx.lineWidth = 30; ctx.globalAlpha = .28; ctx.shadowColor = color; ctx.shadowBlur = 36; ctx.stroke(); ctx.globalAlpha = 1; trace(); ctx.lineWidth = 12; ctx.shadowBlur = 18; ctx.stroke(); ctx.shadowBlur = 0; trace(); ctx.strokeStyle = core; ctx.lineWidth = 4; ctx.stroke(); }
+function stopIndexes(t, route){ if(t._si && t._si.n === route.length) return t._si.list; const list = t.stops.map(s => { let bi = 0, bd = 1e18; for(let i=0;i<route.length;i+=Math.max(1,Math.floor(route.length/1500))){ const d = (route[i][0]-s.lat)**2 + (route[i][1]-s.lon)**2; if(d < bd){ bd = d; bi = i; } } return bi; }); t._si = {n: route.length, list}; return list; }
+function hand(ctx, txt, x, y, size, color){ ctx.font = `700 ${size}px Caveat`; ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 2; ctx.fillStyle = color; ctx.fillText(txt, x, y); ctx.shadowBlur = 0; ctx.shadowOffsetY = 0; }
 function drawFrame(c, prog, view){
-  const t = current; if(!t || !t.route){ const ctx = c.getContext('2d'); ctx.fillStyle = '#101522'; ctx.fillRect(0,0,c.width,c.height); ctx.fillStyle = '#fff'; ctx.font = '600 28px Inter'; ctx.fillText('Planeie uma rota primeiro', 40, 80); return; }
-  const ctx = c.getContext('2d'), W = c.width, H = c.height; const route = t.track.length > 20 ? t.track.map(p => [p.lat, p.lon]) : t.route;
+  const t = current; const ctx = c.getContext('2d'), W = c.width, H = c.height;
+  if(!t || !t.route){ ctx.fillStyle = '#101522'; ctx.fillRect(0,0,W,H); ctx.fillStyle = '#fff'; ctx.font = '600 28px Inter'; ctx.textAlign = 'left'; ctx.fillText('Planeie uma rota primeiro', 40, 80); return; }
+  if(vidStyle === 'photos'){ drawPhotos(ctx, W, H, prog, t); return; }
+  const route = t.track.length > 20 ? t.track.map(p => [p.lat, p.lon]) : t.route;
   const n = Math.max(2, Math.floor(route.length * prog)); const part = route.slice(0, n);
-  let v = view || viewFor(route, W, H); if(vidStyle === 'follow' && !view){ const vz = viewFor(route, W, H); const head = part.at(-1); const z = Math.min(vz.z + 2, 15); v = {z, ox: lon2x(head[1], z) - W/2, oy: lat2y(head[0], z) - H/2}; }
-  ctx.fillStyle = '#E9EEF5'; ctx.fillRect(0,0,W,H);
-  const tx0 = Math.floor(v.ox/256), ty0 = Math.floor(v.oy/256), tx1 = Math.floor((v.ox+W)/256), ty1 = Math.floor((v.oy+H)/256);
-  for(let x = tx0; x <= tx1; x++) for(let y = ty0; y <= ty1; y++){ const im = loadTile(v.z, x, y); if(im.complete && im.naturalWidth) ctx.drawImage(im, x*256 - v.ox, y*256 - v.oy, 256, 256); }
-  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const dark = vidStyle === 'follow', neon = vidStyle === 'neon';
+  let v = view || viewFor(route, W, H, neon ? .2 : .15);
+  if(vidStyle === 'follow' && !view){ const vz = viewFor(route, W, H); const head = part.at(-1); const z = Math.min(vz.z + 2, 15); v = {z, ox: lon2x(head[1], z) - W/2, oy: lat2y(head[0], z) - H/2}; }
+  drawTiles(ctx, v, W, H, dark); if(neon) paperLook(ctx, W, H);
+  ctx.textAlign = 'left'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const all = route.map(p => proj(p, v)), done = part.map(p => proj(p, v));
+  const col = settings.line === 'blue' ? '#2F7CFF' : '#FF6A2A';
   // full route faint
-  ctx.beginPath(); route.forEach((p,i) => { const [x,y] = proj(p, v); i ? ctx.lineTo(x,y) : ctx.moveTo(x,y); }); ctx.strokeStyle = 'rgba(10,91,214,.25)'; ctx.lineWidth = 6; ctx.stroke();
-  // progressed
-  ctx.beginPath(); part.forEach((p,i) => { const [x,y] = proj(p, v); i ? ctx.lineTo(x,y) : ctx.moveTo(x,y); });
-  ctx.strokeStyle = settings.line === 'neon' ? '#FF6A2A' : '#0A5BD6'; ctx.lineWidth = 9; if(vidStyle === 'dots') ctx.setLineDash([2, 16]); ctx.shadowColor = ctx.strokeStyle; ctx.shadowBlur = 18; ctx.stroke(); ctx.setLineDash([]); ctx.shadowBlur = 0;
-  // stops
-  (t.stops||[]).forEach((s,i) => { const [x,y] = proj([s.lat,s.lon], v); ctx.beginPath(); ctx.arc(x,y,14,0,7); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = '#0A5BD6'; ctx.stroke(); ctx.fillStyle = '#0A5BD6'; ctx.font = '800 14px Inter'; ctx.textAlign = 'center'; ctx.fillText(i+1, x, y+5); });
-  // start/end labels
-  const [sx, sy] = proj(route[0], v), [ex, ey] = proj(route.at(-1), v); ctx.textAlign = 'left'; label(ctx, t.origin.name, sx+16, sy); if(prog > .98) label(ctx, t.dest.name, ex+16, ey);
+  ctx.beginPath(); all.forEach((p,i) => i ? ctx.lineTo(p[0],p[1]) : ctx.moveTo(p[0],p[1])); ctx.strokeStyle = col; ctx.globalAlpha = .22; ctx.lineWidth = 6; ctx.stroke(); ctx.globalAlpha = 1;
+  if(neon) neonPath(ctx, done, col, '#FFE7CC');
+  else { ctx.beginPath(); done.forEach((p,i) => i ? ctx.lineTo(p[0],p[1]) : ctx.moveTo(p[0],p[1])); ctx.strokeStyle = col; ctx.lineWidth = 9; if(vidStyle === 'dots') ctx.setLineDash([2, 16]); ctx.shadowColor = col; ctx.shadowBlur = 18; ctx.stroke(); ctx.setLineDash([]); ctx.shadowBlur = 0; }
+  // stops: dot + handwritten label once reached
+  const si = stopIndexes(t, route);
+  (t.stops||[]).forEach((s,i) => { const [x,y] = proj([s.lat,s.lon], v); const reached = si[i] <= n; ctx.beginPath(); ctx.arc(x,y, neon ? 11 : 14, 0, 7); ctx.fillStyle = reached ? '#FFFFFF' : 'rgba(255,255,255,.5)'; ctx.shadowColor = col; ctx.shadowBlur = reached ? 16 : 0; ctx.fill(); ctx.shadowBlur = 0; if(neon){ if(reached){ ctx.beginPath(); ctx.arc(x,y,5,0,7); ctx.fillStyle = col; ctx.fill(); hand(ctx, s.name, x+18, y-10, 40, '#FFFFFF'); } } else { ctx.lineWidth = 4; ctx.strokeStyle = col; ctx.stroke(); ctx.fillStyle = col; ctx.font = '800 14px Inter'; ctx.textAlign = 'center'; ctx.fillText(i+1, x, y+5); ctx.textAlign = 'left'; } });
+  // origin / destination
+  const [sx, sy] = all[0], [ex, ey] = all.at(-1);
+  if(neon){ ctx.beginPath(); ctx.arc(sx,sy,10,0,7); ctx.fillStyle = '#FFFFFF'; ctx.fill(); hand(ctx, t.origin.name, sx+18, sy+14, 42, '#FFFFFF'); if(prog > .97){ ctx.beginPath(); ctx.arc(ex,ey,22,0,7); ctx.fillStyle = col; ctx.globalAlpha = .3; ctx.fill(); ctx.globalAlpha = 1; ctx.beginPath(); ctx.arc(ex,ey,10,0,7); ctx.fillStyle = '#FFFFFF'; ctx.fill(); hand(ctx, t.dest.name, ex+18, ey-12, 48, '#FFFFFF'); } }
+  else { label(ctx, t.origin.name, sx+16, sy); if(prog > .98) label(ctx, t.dest.name, ex+16, ey); }
   // car
-  const head = part.at(-1), prev = part[Math.max(0, n-4)]; const [hx, hy] = proj(head, v); const ang = Math.atan2(proj(head,v)[1]-proj(prev,v)[1], proj(head,v)[0]-proj(prev,v)[0]) + Math.PI/2;
-  ctx.save(); ctx.translate(hx, hy); ctx.rotate(ang); ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 4; if(carImg.complete) ctx.drawImage(carImg, -26, -46, 52, 92); ctx.restore();
+  const head = done.at(-1), prev = done[Math.max(0, done.length-5)]; const ang = Math.atan2(head[1]-prev[1], head[0]-prev[0]) + Math.PI/2;
+  if(neon){ ctx.beginPath(); ctx.arc(head[0], head[1], 40, 0, 7); const g = ctx.createRadialGradient(head[0],head[1],0,head[0],head[1],40); g.addColorStop(0, col); g.addColorStop(1, 'rgba(255,106,42,0)'); ctx.fillStyle = g; ctx.globalAlpha = .6 + .3*Math.sin(prog*60); ctx.fill(); ctx.globalAlpha = 1; }
+  drawCar(ctx, head[0], head[1], ang, neon ? Math.round(W*0.075) : Math.round(W*0.04));
   // header + stats
   ctx.fillStyle = '#0A5BD6'; rr(ctx, 32, 32, 300, 54, 27); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = '800 20px Inter'; ctx.fillText('LEANDRO NA ROTA', 58, 67);
-  ctx.fillStyle = '#0F172A'; ctx.font = '700 44px Caveat'; ctx.fillText(`${t.origin.name} → ${t.dest.name}`, 36, 130);
-  if($('#tg-stats').classList.contains('on')){ const dd = t.trackDistance || t.distance; const txt = `${km(dd * prog)} · ${eur(fuelCost(dd*prog))} ${settings.fuel.toLowerCase()}${t.tollM ? ' · ' + eur(tollCost(t.tollM*prog)) + ' portagens' : ''}`; ctx.font = '700 22px Inter'; const w = ctx.measureText(txt).width + 40; ctx.fillStyle = 'rgba(15,23,42,.82)'; rr(ctx, 32, H-86, w, 54, 14); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillText(txt, 52, H-50); }
+  hand(ctx, `${t.origin.name} → ${t.dest.name}`, 36, 136, 52, dark || neon ? '#FFFFFF' : '#0F172A');
+  if($('#tg-stats').classList.contains('on')){ const dd = t.trackDistance || t.distance; const txt = `${km(dd * prog)} · ${eur(fuelCost(dd*prog))} ${settings.fuel.toLowerCase()}${t.tollM ? ' · ' + eur(tollCost(t.tollM*prog)) + ' portagens' : ''}`; ctx.font = '700 22px Inter'; const w = ctx.measureText(txt).width + 40; ctx.fillStyle = 'rgba(15,23,42,.82)'; rr(ctx, 32, H-86, w, 54, 14); ctx.fill(); ctx.strokeStyle = col; ctx.globalAlpha = .7; ctx.lineWidth = 2; ctx.stroke(); ctx.globalAlpha = 1; ctx.fillStyle = '#fff'; ctx.fillText(txt, 52, H-50); }
+}
+function catmull(pts, seg=24){ const out = []; for(let i=0;i<pts.length-1;i++){ const p0 = pts[Math.max(0,i-1)], p1 = pts[i], p2 = pts[i+1], p3 = pts[Math.min(pts.length-1,i+2)]; for(let j=0;j<seg;j++){ const s = j/seg, s2 = s*s, s3 = s2*s; out.push([0.5*((2*p1[0]) + (-p0[0]+p2[0])*s + (2*p0[0]-5*p1[0]+4*p2[0]-p3[0])*s2 + (-p0[0]+3*p1[0]-3*p2[0]+p3[0])*s3), 0.5*((2*p1[1]) + (-p0[1]+p2[1])*s + (2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*s2 + (-p0[1]+3*p1[1]-3*p2[1]+p3[1])*s3)]); } } out.push(pts.at(-1)); return out; }
+function drawPhotos(ctx, W, H, prog, t){
+  const vertical = H > W; const names = [t.origin.name, ...t.stops.map(s => s.name), t.dest.name];
+  const nPanels = Math.max(2, Math.min(5, vidPhotos.length || Math.min(names.length, 4)));
+  const picked = []; for(let i=0;i<nPanels;i++) picked.push(names[Math.round(i*(names.length-1)/(nPanels-1))]);
+  const hues = ['#5C7FA6','#A68A5C','#5CA67A','#8A5CA6','#A65C5C'];
+  const centers = [];
+  for(let i=0;i<nPanels;i++){
+    const x = vertical ? 0 : i*W/nPanels, y = vertical ? i*H/nPanels : 0, w = vertical ? W : W/nPanels, h = vertical ? H/nPanels : H;
+    const im = vidPhotos[i % Math.max(1, vidPhotos.length)];
+    if(im){ const s = Math.max(w/im.width, h/im.height); ctx.save(); ctx.beginPath(); ctx.rect(x,y,w,h); ctx.clip(); ctx.drawImage(im, x + (w - im.width*s)/2, y + (h - im.height*s)/2, im.width*s, im.height*s); ctx.restore(); }
+    else { const g = ctx.createLinearGradient(x,y,x+w,y+h); g.addColorStop(0, hues[i%5]); g.addColorStop(1, '#1F2937'); ctx.fillStyle = g; ctx.fillRect(x,y,w,h); }
+    const g2 = ctx.createLinearGradient(0,y,0,y+h); g2.addColorStop(0,'rgba(0,0,0,.25)'); g2.addColorStop(.5,'rgba(0,0,0,0)'); g2.addColorStop(1,'rgba(0,0,0,.35)'); ctx.fillStyle = g2; ctx.fillRect(x,y,w,h);
+    ctx.fillStyle = '#FFFFFF'; if(vertical){ if(i) ctx.fillRect(0, y-2, W, 4); } else { if(i) ctx.fillRect(x-2, 0, 4, H); }
+    centers.push(vertical ? [i%2 ? W*0.7 : W*0.3, y + h*0.55] : [x + w*0.5, i%2 ? H*0.3 : H*0.68]);
+  }
+  const curve = catmull(centers); const n = Math.max(2, Math.floor(curve.length * prog)); const done = curve.slice(0, n);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = 10;
+  ctx.beginPath(); curve.forEach((p,i) => i ? ctx.lineTo(p[0],p[1]) : ctx.moveTo(p[0],p[1])); ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 5; ctx.stroke();
+  ctx.beginPath(); done.forEach((p,i) => i ? ctx.lineTo(p[0],p[1]) : ctx.moveTo(p[0],p[1])); ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 7; ctx.stroke(); ctx.shadowBlur = 0;
+  ctx.textAlign = 'left';
+  centers.forEach((cpt,i) => { const idx = i*24; const reached = idx <= n; ctx.beginPath(); ctx.arc(cpt[0], cpt[1], 12, 0, 7); ctx.fillStyle = reached ? '#FFFFFF' : 'rgba(255,255,255,.4)'; ctx.fill(); if(reached){ const size = vertical ? 64 : 48; ctx.font = `700 ${size}px Caveat`; const tw = ctx.measureText(picked[i]).width; const left = vertical ? (i%2 ? cpt[0] - tw - 24 : cpt[0] + 24) : Math.min(W - tw - 16, Math.max(16, cpt[0] - tw/2)); hand(ctx, picked[i], left, vertical ? cpt[1] + size*0.35 : cpt[1] + (i%2 ? -24 : size + 8), size, '#FFFFFF'); } });
+  const head = done.at(-1), prev = done[Math.max(0, done.length-4)]; const ang = Math.atan2(head[1]-prev[1], head[0]-prev[0]) + Math.PI/2;
+  drawCar(ctx, head[0], head[1], ang, Math.round(Math.min(W,H)*0.07));
+  ctx.fillStyle = '#0A5BD6'; rr(ctx, 32, 32, 300, 54, 27); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = '800 20px Inter'; ctx.fillText('LEANDRO NA ROTA', 58, 67);
+  hand(ctx, `${t.origin.name} → ${t.dest.name}`, 36, vertical ? 150 : 136, vertical ? 60 : 52, '#FFFFFF');
 }
 function label(ctx, txt, x, y){ ctx.font = '700 20px Inter'; const w = ctx.measureText(txt).width + 24; ctx.fillStyle = 'rgba(255,255,255,.92)'; rr(ctx, x-12, y-18, w, 36, 10); ctx.fill(); ctx.fillStyle = '#0F172A'; ctx.fillText(txt, x, y+7); }
 function rr(ctx, x, y, w, h, r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
 let anim = null;
-function playVideo(onEnd){ const c = $('#vid-canvas'); const t0 = performance.now(); cancelAnimationFrame(anim); const view = vidStyle === 'follow' ? null : viewFor(current.route, c.width, c.height); (function step(){ const p = Math.min(1, (performance.now() - t0) / (vidDur*1000)); const e = p < .5 ? 2*p*p : -1 + (4-2*p)*p; drawFrame(c, e, view); $('#vid-time').textContent = `00:${String(Math.floor(p*vidDur)).padStart(2,'0')} · 1080p`; if(p < 1) anim = requestAnimationFrame(step); else if(onEnd) setTimeout(onEnd, 600); })(); }
+function playVideo(onEnd){ const c = $('#vid-canvas'); const t0 = performance.now(); cancelAnimationFrame(anim); const view = vidStyle === 'follow' ? null : viewFor(current.route, c.width, c.height, vidStyle === 'neon' ? .2 : .15); (function step(){ const p = Math.min(1, (performance.now() - t0) / (vidDur*1000)); const e = p < .5 ? 2*p*p : -1 + (4-2*p)*p; drawFrame(c, e, view); $('#vid-time').textContent = `00:${String(Math.floor(p*vidDur)).padStart(2,'0')} · 1080p`; if(p < 1) anim = requestAnimationFrame(step); else if(onEnd) setTimeout(onEnd, 800); })(); }
 $('#btn-preview').addEventListener('click', () => { if(!current || !current.route){ toast('Planeie uma rota primeiro'); return; } preloadTiles(); setTimeout(() => playVideo(), 700); });
-function preloadTiles(){ const c = $('#vid-canvas'); const v = viewFor(current.route, c.width, c.height); for(let x = Math.floor(v.ox/256); x <= Math.floor((v.ox+c.width)/256); x++) for(let y = Math.floor(v.oy/256); y <= Math.floor((v.oy+c.height)/256); y++) loadTile(v.z,x,y); }
+function preloadTiles(){ const c = $('#vid-canvas'); const dark = vidStyle === 'follow'; const v = viewFor(current.route, c.width, c.height, .2); for(let x = Math.floor(v.ox/256); x <= Math.floor((v.ox+c.width)/256); x++) for(let y = Math.floor(v.oy/256); y <= Math.floor((v.oy+c.height)/256); y++) loadTile(v.z,x,y,dark); }
 $('#btn-export').addEventListener('click', () => {
   if(!current || !current.route){ toast('Planeie uma rota primeiro'); return; }
   if(!('MediaRecorder' in window)){ toast('Este browser não grava vídeo. Grave o ecrã durante a pré-visualização.', 4000); return; }
