@@ -76,7 +76,7 @@ async function buildMap(route){
   for(let x = Math.floor(ox/256); x <= Math.floor((ox+TEX)/256); x++) for(let y = Math.floor(oy/256); y <= Math.floor((oy+TEX)/256); y++) jobs.push(loadImg(`https://tile.openstreetmap.org/${z}/${x}/${y}.png`).then(im => { if(im) ctx.drawImage(im, x*256-ox, y*256-oy, 256, 256); }));
   status('A carregar o mapa real…'); await Promise.all(jobs);
   // paper look: warm multiply, grain, vignette
-  ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = '#E2D2B4'; ctx.fillRect(0,0,TEX,TEX);
+  ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = '#D9C8A6'; ctx.fillRect(0,0,TEX,TEX);
   ctx.globalCompositeOperation = 'overlay'; ctx.fillStyle = 'rgba(255,214,160,.18)'; ctx.fillRect(0,0,TEX,TEX);
   ctx.globalCompositeOperation = 'source-over';
   const g = ctx.createRadialGradient(TEX/2,TEX/2,TEX*.3,TEX/2,TEX/2,TEX*.75); g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1,'rgba(30,20,10,.55)'); ctx.fillStyle = g; ctx.fillRect(0,0,TEX,TEX);
@@ -85,7 +85,7 @@ async function buildMap(route){
   const toWorld = p => new THREE.Vector3(lon2x(p[1],z)-ox-TEX/2, 0, lat2y(p[0],z)-oy-TEX/2);
   return { canvas: c, noise, toWorld, z, ox, oy };
 }
-function paperTile(im){ const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d'); x.drawImage(im,0,0); x.globalCompositeOperation = 'multiply'; x.fillStyle = '#E2D2B4'; x.fillRect(0,0,256,256); x.globalCompositeOperation = 'overlay'; x.fillStyle = 'rgba(255,214,160,.18)'; x.fillRect(0,0,256,256); return c; }
+function paperTile(im){ const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d'); x.drawImage(im,0,0); x.globalCompositeOperation = 'multiply'; x.fillStyle = '#D9C8A6'; x.fillRect(0,0,256,256); x.globalCompositeOperation = 'overlay'; x.fillStyle = 'rgba(255,214,160,.24)'; x.fillRect(0,0,256,256); return c; }
 async function buildDetail(routePts, m, bump){
   const zd = m.z + 2, F = 4, S = 256/F; const want = new Map();
   for(let i=0;i<routePts.length;i+=3){ const p = routePts[i]; const tx = Math.floor((p.x + m.ox + TEX/2)*F/256), ty = Math.floor((p.z + m.oy + TEX/2)*F/256); for(let dx=-4;dx<=4;dx++) for(let dy=-4;dy<=4;dy++){ if(dx*dx+dy*dy > 20) continue; want.set(`${tx+dx},${ty+dy}`, [tx+dx, ty+dy]); } }
@@ -102,7 +102,7 @@ renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadow
 const scene = new THREE.Scene(); scene.background = new THREE.Color('#0E2430'); scene.fog = new THREE.Fog('#0E2430', TEX*0.9, TEX*2.2);
 const camera = new THREE.PerspectiveCamera(38, 16/9, 2, TEX*4);
 const pmrem = new THREE.PMREMGenerator(renderer); scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-const sun = new THREE.DirectionalLight('#FFD9A8', 1.5); sun.castShadow = true; sun.shadow.mapSize.set(2048,2048); sun.shadow.bias = -0.0005; scene.add(sun); scene.add(sun.target);
+const sun = new THREE.DirectionalLight('#FFD9A8', 1.75); sun.castShadow = true; sun.shadow.mapSize.set(2048,2048); sun.shadow.bias = -0.0005; scene.add(sun); scene.add(sun.target);
 scene.add(new THREE.HemisphereLight('#7FB7D6', '#2A1E14', 0.35));
 const rim = new THREE.DirectionalLight('#2FA3C9', 0.7); rim.position.set(-TEX, TEX*.6, -TEX*.4); scene.add(rim);
 let composer, bokeh, bloom;
@@ -111,22 +111,31 @@ function setSize(w, h){ W = w; H = h; out.width = w; out.height = h; renderer.se
 /* car: procedural coupé with clearcoat paint (swap for a .glb of the real car later) */
 function buildCar(L){
   const g = new THREE.Group(); const s = L/4.6;
-  const paint = new THREE.MeshPhysicalMaterial({color:'#0A0B0E', metalness:.5, roughness:.32, clearcoat:1, clearcoatRoughness:.08, envMapIntensity:1.0});
-  const glass = new THREE.MeshPhysicalMaterial({color:'#0E1620', metalness:.25, roughness:.1, envMapIntensity:.9, transparent:true, opacity:.96});
-  const prof = new THREE.Shape(); [[-2.3,.38],[-2.3,.9],[-1.95,1.02],[-1.05,1.06],[-.35,1.44],[.68,1.44],[1.4,1.06],[2.25,.9],[2.3,.5],[2.3,.38]].forEach((p,i) => i ? prof.lineTo(p[0],p[1]) : prof.moveTo(p[0],p[1])); prof.closePath();
-  const body = new THREE.Mesh(new THREE.ExtrudeGeometry(prof, {depth:1.84, bevelEnabled:true, bevelThickness:.09, bevelSize:.09, bevelSegments:4, curveSegments:12}), paint); body.position.z = -.92; body.castShadow = true; g.add(body);
-  const cab = new THREE.Shape(); [[-1.0,1.05],[-.38,1.41],[.66,1.41],[1.3,1.05]].forEach((p,i) => i ? cab.lineTo(p[0],p[1]) : cab.moveTo(p[0],p[1])); cab.closePath();
-  const cabin = new THREE.Mesh(new THREE.ExtrudeGeometry(cab, {depth:1.64, bevelEnabled:true, bevelThickness:.03, bevelSize:.03, bevelSegments:2}), glass); cabin.position.set(0,.025,-.82); g.add(cabin);
-  const roofBar = new THREE.Mesh(new THREE.BoxGeometry(.9,.03,1.66), paint); roofBar.position.set(.15,1.46,0); g.add(roofBar);
-  const tyre = new THREE.MeshStandardMaterial({color:'#0A0A0A', roughness:.95}); const rimM = new THREE.MeshStandardMaterial({color:'#C9CED8', metalness:.9, roughness:.25});
-  [[1.45,.9],[1.45,-.9],[-1.45,.9],[-1.45,-.9]].forEach(([x,z]) => { const t = new THREE.Mesh(new THREE.CylinderGeometry(.37,.37,.26,28), tyre); t.rotation.x = Math.PI/2; t.position.set(x,.37,z); t.castShadow = true; g.add(t); const r = new THREE.Mesh(new THREE.CylinderGeometry(.24,.24,.28,16), rimM); r.rotation.x = Math.PI/2; r.position.set(x,.37,z + (z>0?.01:-.01)); g.add(r); });
-  const head = new THREE.MeshStandardMaterial({color:'#FFF6DD', emissive:'#FFE2A8', emissiveIntensity:2.2}); const tail = new THREE.MeshStandardMaterial({color:'#5A0A0A', emissive:'#FF2A1A', emissiveIntensity:3});
-  [.62,-.62].forEach(z => { const h = new THREE.Mesh(new THREE.BoxGeometry(.06,.14,.42), head); h.position.set(2.31,.78,z); g.add(h); const t = new THREE.Mesh(new THREE.BoxGeometry(.06,.1,.5), tail); t.position.set(-2.31,.8,z); g.add(t); });
-  [1.0,-1.0].forEach(z => { const m = new THREE.Mesh(new THREE.BoxGeometry(.22,.1,.16), paint); m.position.set(.95,1.12,z); g.add(m); });
-  const grille = new THREE.Mesh(new THREE.BoxGeometry(.05,.2,.7), new THREE.MeshStandardMaterial({color:'#15171C', metalness:.8, roughness:.4})); grille.position.set(2.31,.6,0); g.add(grille);
+  const paint = new THREE.MeshPhysicalMaterial({color:'#07080B', metalness:.45, roughness:.28, clearcoat:1, clearcoatRoughness:.07, envMapIntensity:1.1});
+  const trim = new THREE.MeshStandardMaterial({color:'#0C0D10', metalness:.6, roughness:.5});
+  const glass = new THREE.MeshPhysicalMaterial({color:'#0B1119', metalness:.3, roughness:.08, envMapIntensity:1.0, transparent:true, opacity:.97});
+  // body: coupé side profile with wheel arches, extruded across the width with soft bevels
+  const prof = new THREE.Shape();
+  prof.moveTo(-2.25,.46); prof.lineTo(-2.32,.66); prof.lineTo(-2.28,.96); prof.quadraticCurveTo(-2.0,1.03,-1.5,1.04); prof.quadraticCurveTo(-1.0,1.07,-.55,1.40); prof.lineTo(.5,1.42); prof.quadraticCurveTo(1.0,1.28,1.42,1.0); prof.quadraticCurveTo(1.95,.95,2.3,.8); prof.lineTo(2.34,.5); prof.lineTo(2.3,.46);
+  prof.lineTo(1.96,.46); prof.absarc(1.45,.46,.51,0,Math.PI,false); prof.lineTo(-.94,.46); prof.absarc(-1.45,.46,.51,0,Math.PI,false); prof.lineTo(-2.25,.46);
+  const body = new THREE.Mesh(new THREE.ExtrudeGeometry(prof, {depth:1.74, bevelEnabled:true, bevelThickness:.14, bevelSize:.11, bevelSegments:6, curveSegments:16}), paint); body.position.z = -.87; body.castShadow = true; g.add(body);
+  // glasshouse
+  const cab = new THREE.Shape(); cab.moveTo(-1.3,1.0); cab.quadraticCurveTo(-.95,1.03,-.5,1.36); cab.lineTo(.48,1.38); cab.quadraticCurveTo(.95,1.25,1.33,.98); cab.closePath();
+  const cabin = new THREE.Mesh(new THREE.ExtrudeGeometry(cab, {depth:1.6, bevelEnabled:true, bevelThickness:.05, bevelSize:.04, bevelSegments:3, curveSegments:16}), glass); cabin.position.set(0,.03,-.8); g.add(cabin);
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(.92,.035,1.46), paint); roof.position.set(0,1.435,0); g.add(roof);
+  // sills, mirrors, splitter, diffuser
+  [[.9,1.02],[.9,-1.02]].forEach(([x,z]) => { const m = new THREE.Mesh(new THREE.BoxGeometry(.2,.09,.14), paint); m.position.set(x,1.08,z); g.add(m); });
+  const splitter = new THREE.Mesh(new THREE.BoxGeometry(.18,.06,1.82), trim); splitter.position.set(2.3,.42,0); g.add(splitter);
+  const diffuser = new THREE.Mesh(new THREE.BoxGeometry(.2,.1,1.7), trim); diffuser.position.set(-2.26,.44,0); g.add(diffuser);
+  const grille = new THREE.Mesh(new THREE.BoxGeometry(.06,.24,.78), trim); grille.position.set(2.34,.66,0); g.add(grille);
+  // wheels: tyre + rim + hub, slightly outboard of the body
+  const tyre = new THREE.MeshStandardMaterial({color:'#070707', roughness:.92}); const rimM = new THREE.MeshStandardMaterial({color:'#D6DAE2', metalness:.95, roughness:.22}); const hub = new THREE.MeshStandardMaterial({color:'#2A2D33', metalness:.8, roughness:.4});
+  [[1.45,.97],[1.45,-.97],[-1.45,.97],[-1.45,-.97]].forEach(([x,z]) => { const t = new THREE.Mesh(new THREE.CylinderGeometry(.42,.42,.3,36), tyre); t.rotation.x = Math.PI/2; t.position.set(x,.42,z); t.castShadow = true; g.add(t); const r = new THREE.Mesh(new THREE.CylinderGeometry(.29,.29,.32,24), rimM); r.rotation.x = Math.PI/2; r.position.set(x,.42,z); g.add(r); for(let i=0;i<5;i++){ const sp = new THREE.Mesh(new THREE.BoxGeometry(.07,.48,.05), hub); sp.position.set(x,.42,z + (z>0?.17:-.17)); sp.rotation.z = i*Math.PI*2/5; g.add(sp); } const h = new THREE.Mesh(new THREE.CylinderGeometry(.08,.08,.36,12), hub); h.rotation.x = Math.PI/2; h.position.set(x,.42,z); g.add(h); });
+  // lights
+  const head = new THREE.MeshStandardMaterial({color:'#EAF2FF', emissive:'#DCE9FF', emissiveIntensity:1.1}); const tail = new THREE.MeshStandardMaterial({color:'#3A0606', emissive:'#FF1E12', emissiveIntensity:2.4});
+  [.6,-.6].forEach(z => { const h = new THREE.Mesh(new THREE.BoxGeometry(.05,.1,.5), head); h.position.set(2.33,.82,z); g.add(h); const t = new THREE.Mesh(new THREE.BoxGeometry(.05,.08,.62), tail); t.position.set(-2.31,.86,z); g.add(t); });
   g.scale.setScalar(s); return g;
 }
-
 let trip, map, carL, curve, tube, halo, car, contact, pts = [], labels = [], total = 0, stopsU = [];
 async function setup(){
   await Promise.all(['700 56px Caveat','700 118px Caveat','800 20px Inter','700 22px Inter'].map(f => document.fonts.load(f).catch(()=>{})));
@@ -149,7 +158,7 @@ async function setup(){
   car = buildCar(carL); car.visible = false; scene.add(car);
   const sc = document.createElement('canvas'); sc.width = sc.height = 256; const sx = sc.getContext('2d'); const sg = sx.createRadialGradient(128,128,10,128,128,120); sg.addColorStop(0,'rgba(0,0,0,.55)'); sg.addColorStop(.5,'rgba(0,0,0,.25)'); sg.addColorStop(1,'rgba(0,0,0,0)'); sx.fillStyle = sg; sx.fillRect(0,0,256,256);
   contact = new THREE.Mesh(new THREE.PlaneGeometry(carL*1.5, carL*0.8), new THREE.MeshBasicMaterial({map: new THREE.CanvasTexture(sc), transparent: true, depthWrite: false})); contact.rotation.x = -Math.PI/2; contact.position.y = 1.0; contact.visible = false; scene.add(contact);
-  const mk = (name, p, big) => { const c = document.createElement('canvas'); c.width = 1024; c.height = 256; const x = c.getContext('2d'); x.font = `700 ${big?118:96}px Caveat`; x.textAlign = 'center'; x.shadowColor = 'rgba(0,0,0,.7)'; x.shadowBlur = 18; x.shadowOffsetY = 4; x.fillStyle = '#FFFFFF'; x.fillText(name, 512, 165); const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: new THREE.CanvasTexture(c), transparent: true, depthTest: false})); sp.scale.set(carL*1.5, carL*0.375, 1); sp.position.copy(p).add(new THREE.Vector3(carL*0.55, carL*0.42, -carL*0.05)); sp.material.opacity = 0; scene.add(sp); const dot = new THREE.Mesh(new THREE.SphereGeometry(carL*0.07, 16, 16), new THREE.MeshStandardMaterial({color:'#fff', emissive:'#fff', emissiveIntensity:.8})); dot.position.copy(p); dot.visible = false; scene.add(dot); return {sp, dot}; };
+  const mk = (name, p, big) => { const c = document.createElement('canvas'); c.width = 1024; c.height = 256; const x = c.getContext('2d'); x.font = `700 ${big?118:96}px Caveat`; x.textAlign = 'center'; x.shadowColor = 'rgba(0,0,0,.7)'; x.shadowBlur = 18; x.shadowOffsetY = 4; x.fillStyle = '#FFFFFF'; x.fillText(name, 512, 165); const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: new THREE.CanvasTexture(c), transparent: true, depthTest: false})); sp.scale.set(carL*1.5, carL*0.375, 1); sp.position.copy(p).add(new THREE.Vector3(carL*0.8, carL*0.5, carL*0.25)); sp.material.opacity = 0; scene.add(sp); const dot = new THREE.Mesh(new THREE.SphereGeometry(carL*0.045, 16, 16), new THREE.MeshStandardMaterial({color:'#fff', emissive:'#fff', emissiveIntensity:.25})); dot.position.copy(p); dot.visible = false; scene.add(dot); return {sp, dot}; };
   labels = [{...mk(trip.origin.name, pts[0], false), u: 0}, ...(trip.stops||[]).map(s => { const p = map.toWorld([s.lat, s.lon]); let bu = 0, bd = 1e18; for(let i=0;i<pts.length;i+=4){ const d = pts[i].distanceToSquared(p); if(d<bd){ bd=d; bu=i/(pts.length-1); } } return {...mk(s.name, curve.getPointAt(Math.min(1,bu)), false), u: bu}; }), {...mk(trip.dest.name, pts.at(-1), true), u: 1}];
   stopsU = labels.map(l => l.u);
   setSize(W, H); status('Pronto. Toque em Reproduzir.'); drawFrame(0.36); overlay(0.36, false);
@@ -168,7 +177,7 @@ function drawFrame(p){
   const idxT = tube.geometry.index.count, idxH = halo.geometry.index.count;
   tube.geometry.setDrawRange(0, Math.floor(idxT*draw)); halo.geometry.setDrawRange(0, Math.floor(idxH*draw));
   const cu = Math.max(0.0005, Math.min(.9995, carU)); const cp = curve.getPointAt(cu), ct = curve.getTangentAt(cu);
-  car.visible = p > .2; car.position.copy(cp); car.position.y = 1.4; car.rotation.y = Math.atan2(-ct.z, ct.x); contact.visible = car.visible; contact.position.set(cp.x, 1.0, cp.z); contact.rotation.z = car.rotation.y;
+  car.visible = p > .2; car.position.copy(cp); car.position.y = 0.6; car.rotation.y = Math.atan2(-ct.z, ct.x); contact.visible = car.visible; contact.position.set(cp.x, 1.0, cp.z); contact.rotation.z = car.rotation.y;
   car.rotation.z = THREE.MathUtils.clamp(-ct.clone().cross(curve.getTangentAt(Math.min(.9995,cu+.002))).y*18, -.08, .08);
   labels.forEach(l => { const on = l.u <= carU + .01 || (l.u === 0 && p > .05) || (l.u === 1 && p > .9); l.sp.material.opacity += ((on?1:0) - l.sp.material.opacity)*.12; l.dot.visible = on; });
   sun.position.copy(cp).add(new THREE.Vector3(carL*4, carL*6, carL*2.5)); sun.target.position.copy(cp); const sc = sun.shadow.camera; const r = carL*3; sc.left = -r; sc.right = r; sc.top = r; sc.bottom = -r; sc.near = 10; sc.far = carL*20; sc.updateProjectionMatrix();
