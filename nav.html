@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="pt"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Viagem 3D — LR Rota</title>
+<link rel="stylesheet" href="vendor/maplibre/maplibre-gl.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800&display=swap">
+<style>
+:root{--ui:#101317;--ui2:#1B2027;--blue:#2E8BFF;--txt:#fff;--mut:#A9B3C1}
+html,body{margin:0;height:100%;background:#0B0F14;font-family:Inter,system-ui,sans-serif;color:var(--txt);overflow:hidden}
+#stage{position:absolute;inset:0}
+#map{position:absolute;inset:0}
+.top{position:absolute;left:0;right:0;top:0;background:var(--ui);padding:14px 22px 16px;display:flex;gap:18px;align-items:center;box-shadow:0 6px 30px rgba(0,0,0,.5);z-index:3}
+.top svg{width:56px;height:56px;flex:none}
+.top .d{font-weight:800;font-size:38px;line-height:1}
+.top .n{font-weight:700;font-size:26px;color:#C9D1DC;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.shield{display:inline-block;background:#1D58C9;color:#fff;font-weight:800;border-radius:7px;padding:2px 9px;margin-right:8px;font-size:22px;vertical-align:2px;border:2px solid #fff}
+.shield.es{background:#1F6FD6}
+.bottom{position:absolute;left:0;right:0;bottom:0;background:var(--ui);padding:12px 26px 16px;display:flex;gap:44px;align-items:flex-end;z-index:3}
+.bottom b{display:block;font-size:34px;font-weight:800;line-height:1}
+.bottom span{color:var(--mut);font-size:15px;font-weight:700}
+.brand{margin-left:auto;background:#0A5BD6;border-radius:999px;padding:9px 18px;font-weight:800;font-size:16px;letter-spacing:.3px}
+.place{position:absolute;left:50%;top:21%;transform:translate(-50%,-8px);text-align:center;opacity:0;transition:opacity .5s,transform .5s;z-index:2;pointer-events:none;text-shadow:0 3px 16px rgba(0,0,0,.65)}
+.place.on{opacity:1;transform:translate(-50%,0)}
+.place .t{font-size:56px;font-weight:800;letter-spacing:-.5px}
+.place .s{font-size:20px;font-weight:700;color:#DCE6F2;margin-top:2px}
+.credit{position:absolute;right:10px;bottom:84px;font-size:11px;color:rgba(255,255,255,.65);z-index:3}
+#status{position:absolute;left:12px;top:110px;z-index:4;font-size:13px;color:#cfd8e3}
+</style></head><body>
+<div id="stage">
+  <div id="map"></div>
+  <div class="top"><svg viewBox="0 0 56 56" id="arrow"><path d="M14 46V30c0-6 4-10 10-10h14" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round"/><path d="M33 10l11 10-11 10" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div style="min-width:0"><div class="d" id="tDist">—</div><div class="n" id="tName">—</div></div></div>
+  <div class="place" id="place"><div class="t" id="pT"></div><div class="s" id="pS"></div></div>
+  <div class="bottom"><div><b id="bEta">--:--</b><span>chegada</span></div><div><b id="bMin">--</b><span>min</span></div><div><b id="bKm">--</b><span>km</span></div><div class="brand">LEANDRO NA ROTA</div></div>
+  <div class="credit">© OpenStreetMap · OpenMapTiles · OpenFreeMap</div>
+  <div id="status"></div>
+</div>
+<script src="vendor/maplibre/maplibre-gl.js"></script>
+<script type="importmap">{"imports":{"three":"./vendor/three/build/three.module.js","three/addons/":"./vendor/three/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+const Q = new URLSearchParams(location.search), $ = s => document.querySelector(s), status = t => $('#status').textContent = t || '';
+const PACK = Q.get('pack');                  // pacote offline (ex.: studio/packs/pontedelima-vigo) — senão usa a rede
+const CAR_SCALE = +(Q.get('carscale') || 11);  // carro ampliado para ser visível (tamanho real ficaria com poucos píxeis)
+const DUR = +(Q.get('dur') || 75);            // segundos de vídeo para a viagem inteira
+
+/* ---------- viagem ---------- */
+let trip;
+if(PACK){ trip = await (await fetch(PACK + '/route.json')).json(); }
+else { try{ trip = JSON.parse(localStorage.getItem('lr-nav-trip')); }catch(e){} }
+if(!trip){ status('Sem viagem. Planeie uma rota na app.'); throw new Error('sem viagem'); }
+const line = trip.route.map(([la, lo]) => [lo, la]);
+const R = 6371008.8, rad = Math.PI/180;
+const hav = (a, b) => { const dLa = (b[1]-a[1])*rad, dLo = (b[0]-a[0])*rad, x = Math.sin(dLa/2)**2 + Math.cos(a[1]*rad)*Math.cos(b[1]*rad)*Math.sin(dLo/2)**2; return 2*R*Math.asin(Math.sqrt(x)); };
+const cum = [0]; for(let i=1;i<line.length;i++) cum.push(cum[i-1] + hav(line[i-1], line[i])); const TOTAL = cum.at(-1);
+// classe de estrada por troço (autoestrada mais rápida no vídeo, vilas mais devagar)
+const steps = (trip.steps || []).map(s => ({...s})); { let acc = 0; steps.forEach(s => { s.d0 = acc; acc += s.dist; s.d1 = acc; }); }
+const isMotorway = s => /^(A|AP|AG|IP|IC|E)[\s-]?\d/i.test((s.ref || '').split(';')[0]) || /auto(estrada|v[ií]a|pista)/i.test(s.name || '');
+const isSpain = s => /^(A|AP|AG|N|PO|EP|VG|OU|LU|AC)-\d/.test((s.ref || '').split(';')[0]) || /^(Autovía|Rúa |Estrada de Clara)/.test(s.name || '');   // estradas espanholas usam hífen (A-55, AP-9)
+const ES0 = (() => { const st = steps.find(s => isSpain(s)); return st ? st.d0 : null; })();
+const stepAt = d => steps.find(s => d >= s.d0 && d < s.d1) || steps.at(-1) || {name:'', ref:''};
+const speedAt = d => { const s = stepAt(d); const nearPt = (trip.points || []).some(p => hav([p.lon, p.lat], posAt(d).p) < 2500); return nearPt ? .45 : isMotorway(s) ? 1.55 : .8; };
+// tempo de vídeo → distância (integra 1/velocidade)
+const TT = [0]; const NSAMP = 2000; for(let i=1;i<=NSAMP;i++){ const d = TOTAL*i/NSAMP; TT.push(TT[i-1] + 1/speedAt(d)); }
+const distAtTime = u => { const t = u*TT.at(-1); let i = TT.findIndex(v => v >= t); if(i <= 0) return 0; const f = (t - TT[i-1])/(TT[i]-TT[i-1]); return TOTAL*(i-1+f)/NSAMP; };
+function posAt(d){ d = Math.max(0, Math.min(TOTAL-.01, d)); let lo = 0, hi = cum.length-1; while(hi-lo > 1){ const m = (lo+hi) >> 1; cum[m] <= d ? lo = m : hi = m; } const f = (d-cum[lo])/((cum[hi]-cum[lo]) || 1); return {p: [line[lo][0] + (line[hi][0]-line[lo][0])*f, line[lo][1] + (line[hi][1]-line[lo][1])*f], i: lo}; }
+const bearingOf = (a, b) => { const y = Math.sin((b[0]-a[0])*rad)*Math.cos(b[1]*rad), x = Math.cos(a[1]*rad)*Math.sin(b[1]*rad) - Math.sin(a[1]*rad)*Math.cos(b[1]*rad)*Math.cos((b[0]-a[0])*rad); return (Math.atan2(y, x)/rad + 360) % 360; };
+const headingAt = (d, look) => bearingOf(posAt(d - look*.3).p, posAt(d + look).p);
+
+/* ---------- mapa (estilo navegação escuro, edifícios 3D, relevo) ---------- */
+const base = PACK ? new URL(PACK + '/', location.href).href : null;
+const omt = PACK ? {type: 'vector', tiles: [base + 'tiles/{z}/{x}/{y}.pbf'], maxzoom: 14, minzoom: 0} : {type: 'vector', url: 'https://tiles.openfreemap.org/planet'};
+const dem = PACK ? {type: 'raster-dem', tiles: [base + 'dem/{z}/{x}/{y}.png'], encoding: 'terrarium', tileSize: 256, minzoom: 8, maxzoom: 12} : {type: 'raster-dem', tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'], encoding: 'terrarium', tileSize: 256, maxzoom: 12};
+const glyphs = PACK ? base + 'glyphs/{fontstack}/{range}.pbf' : 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf';
+const C = {bg:'#3A4A63', water:'#22405F', park:'#2F5A4A', wood:'#335C49', res:'#405170', road:'#5B6C86', roadHi:'#8C9AB0', mway:'#97A6BD', bld:'#55678A', label:'#E8EEF6'};
+const style = {version: 8, glyphs, sources: {omt, dem},
+  layers: [
+    {id:'bg', type:'background', paint:{'background-color': C.bg}},
+    {id:'landuse', type:'fill', source:'omt', 'source-layer':'landuse', paint:{'fill-color': ['match', ['get','class'], ['residential','suburb','neighbourhood'], C.res, C.bg], 'fill-opacity': .7}},
+    {id:'landcover', type:'fill', source:'omt', 'source-layer':'landcover', paint:{'fill-color': ['match', ['get','class'], 'wood', C.wood, 'grass', C.park, 'farmland', '#3F5560', C.park], 'fill-opacity': .75}},
+    {id:'park', type:'fill', source:'omt', 'source-layer':'park', paint:{'fill-color': C.park, 'fill-opacity': .8}},
+    {id:'hills', type:'hillshade', source:'dem', paint:{'hillshade-shadow-color':'#16202F', 'hillshade-highlight-color':'#6F87A8', 'hillshade-accent-color':'#22304A', 'hillshade-exaggeration': .55, 'hillshade-illumination-direction': 315}},
+    {id:'water', type:'fill', source:'omt', 'source-layer':'water', paint:{'fill-color': C.water}},
+    {id:'river', type:'line', source:'omt', 'source-layer':'waterway', paint:{'line-color': C.water, 'line-width': ['interpolate',['linear'],['zoom'],10,1,16,6]}},
+    {id:'road-case', type:'line', source:'omt', 'source-layer':'transportation', filter:['in',['get','class'],['literal',['motorway','trunk','primary','secondary','tertiary','minor','service']]], layout:{'line-cap':'round','line-join':'round'}, paint:{'line-color':'#26324A', 'line-width': ['interpolate',['exponential',1.6],['zoom'],10,['match',['get','class'],'motorway',3,'trunk',2.6,1],17,['match',['get','class'],'motorway',36,'trunk',30,['primary','secondary'],24,14]]}},
+    {id:'road', type:'line', source:'omt', 'source-layer':'transportation', filter:['in',['get','class'],['literal',['motorway','trunk','primary','secondary','tertiary','minor','service']]], layout:{'line-cap':'round','line-join':'round'}, paint:{'line-color': ['match',['get','class'],'motorway',C.mway,['trunk','primary'],C.roadHi,C.road], 'line-width': ['interpolate',['exponential',1.6],['zoom'],10,['match',['get','class'],'motorway',2,'trunk',1.6,.5],17,['match',['get','class'],'motorway',30,'trunk',24,['primary','secondary'],19,10]]}},
+    {id:'bld', type:'fill-extrusion', source:'omt', 'source-layer':'building', minzoom: 13, paint:{'fill-extrusion-color': C.bld, 'fill-extrusion-height': ['coalesce',['get','render_height'],8], 'fill-extrusion-base': ['coalesce',['get','render_min_height'],0], 'fill-extrusion-opacity': .92, 'fill-extrusion-vertical-gradient': true}},
+  ]};
+const map = new maplibregl.Map({container: 'map', style, center: line[0], zoom: 15.5, pitch: 62, bearing: 0, interactive: !Q.get('capture'), attributionControl: false, canvasContextAttributes: {antialias: true, preserveDrawingBuffer: true}, maxPitch: 80, fadeDuration: 0});
+await new Promise(r => map.on('load', r));
+map.setTerrain({source: 'dem', exaggeration: 1.0});
+map.setSky({'sky-color': '#16243A', 'horizon-color': '#2F4766', 'fog-color': '#2B3A55', 'sky-horizon-blend': .6, 'horizon-fog-blend': .4, 'fog-ground-blend': .55});
+// "balões" de rua e de terra (fundo esticável, como no GPS)
+function pill(id, fill, stroke){ const W = 48, H = 40, c = document.createElement('canvas'); c.width = W*2; c.height = (H+10)*2; const x = c.getContext('2d'); x.scale(2,2); x.fillStyle = fill; x.strokeStyle = stroke; x.lineWidth = 2;
+  x.beginPath(); x.roundRect(1, 1, W-2, H-2, 10); x.fill(); if(stroke) x.stroke(); x.beginPath(); x.moveTo(W/2-7, H-2); x.lineTo(W/2, H+8); x.lineTo(W/2+7, H-2); x.fill();
+  map.addImage(id, x.getImageData(0, 0, c.width, c.height), {pixelRatio: 2, stretchX: [[24, 72]], stretchY: [[24, 56]], content: [20, 14, 76, 66]}); }
+pill('pill-grey', 'rgba(92,100,112,.94)'); pill('pill-blue', '#2E7BF6', '#ffffff');
+map.addLayer({id:'street-names', type:'symbol', source:'omt', 'source-layer':'transportation_name', minzoom: 14.5, filter:['all',['has','name'],['!=',['get','class'],'motorway']], layout:{'symbol-placement':'point', 'symbol-sort-key': 1, 'text-field':['get','name'], 'text-font':['Noto Sans Bold'], 'text-size': 15, 'icon-image':'pill-grey', 'icon-text-fit':'both', 'icon-text-fit-padding':[4,8,4,8], 'icon-anchor':'bottom', 'text-anchor':'bottom', 'text-offset':[0,-.9], 'symbol-spacing': 400, 'text-max-width': 14}, paint:{'text-color':'#fff'}});
+map.addLayer({id:'road-ref', type:'symbol', source:'omt', 'source-layer':'transportation_name', filter:['all',['has','ref'],['in',['get','class'],['literal',['motorway','trunk']]]], layout:{'symbol-placement':'line', 'symbol-spacing': 900, 'text-field':['get','ref'], 'text-font':['Noto Sans Bold'], 'text-size': 13, 'text-rotation-alignment':'viewport', 'icon-image':'pill-blue', 'icon-text-fit':'both', 'icon-text-fit-padding':[2,6,2,6], 'icon-rotation-alignment':'viewport'}, paint:{'text-color':'#fff'}});
+map.addLayer({id:'places', type:'symbol', source:'omt', 'source-layer':'place', filter:['in',['get','class'],['literal',['city','town','village','suburb']]], layout:{'text-field':['get','name'], 'text-font':['Noto Sans Bold'], 'text-size':['match',['get','class'],'city',22,'town',19,15], 'text-transform':'uppercase', 'text-letter-spacing':.06}, paint:{'text-color': C.label, 'text-halo-color':'#1B2638', 'text-halo-width': 2}});
+// rota: percorrida (azul-claro) e por percorrer (azul forte com contorno)
+map.addSource('route', {type:'geojson', data:{type:'Feature', geometry:{type:'LineString', coordinates: line}}, lineMetrics: true});
+map.addLayer({id:'route-case', type:'line', source:'route', layout:{'line-cap':'round','line-join':'round'}, paint:{'line-color':'#0B3D91', 'line-width':['interpolate',['exponential',1.5],['zoom'],10,6,17,30]}}, 'street-names');
+map.addLayer({id:'route', type:'line', source:'route', layout:{'line-cap':'round','line-join':'round'}, paint:{'line-width':['interpolate',['exponential',1.5],['zoom'],10,4,17,22], 'line-gradient':['step',['line-progress'],'#7FA9D8',0,'#2E8BFF']}}, 'street-names');
+const setProgress = f => map.setPaintProperty('route', 'line-gradient', ['step', ['line-progress'], '#7FA9D8', Math.max(1e-6, Math.min(.99999, f)), '#2E8BFF']);
+
+/* ---------- carro 3D (camada three.js dentro do mapa) ---------- */
+const WHEELS = ['roda_FE','roda_FD','roda_TE','roda_TD'];
+let carModel = null, wheels = [];
+async function loadCarGLB(){
+  const url = Q.get('car'); let buf = null;
+  if(!url){ buf = await new Promise(res => { const r = indexedDB.open('lr-rota', 1); r.onupgradeneeded = () => r.result.createObjectStore('files'); r.onsuccess = () => { const q = r.result.transaction('files').objectStore('files').get('car'); q.onsuccess = () => res(q.result || null); q.onerror = () => res(null); }; r.onerror = () => res(null); }); }
+  const L = new GLTFLoader(); const g = buf ? await L.parseAsync(buf, '') : await L.loadAsync(url || 'models/car.glb');
+  const m = g.scene; const box = new THREE.Box3().setFromObject(m), sz = box.getSize(new THREE.Vector3()); m.scale.setScalar(4.8/Math.max(sz.x, sz.z)); box.setFromObject(m); m.position.y -= box.min.y;
+  wheels = WHEELS.map(n => m.getObjectByName(n)).filter(Boolean); return m;
+}
+const carState = {lng: line[0][0], lat: line[0][1], alt: 0, yaw: 0, dist: 0};
+const carLayer = {
+  id: 'car3d', type: 'custom', renderingMode: '3d',
+  async onAdd(mp, gl){
+    this.camera = new THREE.Camera(); this.scene = new THREE.Scene();
+    this.renderer = new THREE.WebGLRenderer({canvas: mp.getCanvas(), context: gl, antialias: true}); this.renderer.autoClear = false; this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    const pm = new THREE.PMREMGenerator(this.renderer); this.scene.environment = pm.fromScene(new RoomEnvironment(), .04).texture; this.scene.environmentIntensity = .45;
+    const sun = new THREE.DirectionalLight('#FFE2C0', 2.4); sun.position.set(-.5, 1, .6); this.scene.add(sun); this.scene.add(new THREE.HemisphereLight('#9FC3FF', '#2A2F3A', .55));
+    try{ carModel = await loadCarGLB(); }catch(e){ console.warn('carro:', e); window.__carErr = String(e); const b = new THREE.Mesh(new THREE.BoxGeometry(4.6, 1.4, 1.9), new THREE.MeshStandardMaterial({color:'#111'})); b.position.y = .7; carModel = new THREE.Group(); carModel.add(b); }
+    // sombra de contacto
+    const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'); const gg = x.createRadialGradient(64,64,4,64,64,62); gg.addColorStop(0,'rgba(0,0,0,.75)'); gg.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle = gg; x.fillRect(0,0,128,128);
+    const sh = new THREE.Mesh(new THREE.PlaneGeometry(5.8, 2.8), new THREE.MeshBasicMaterial({map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false})); sh.rotation.x = -Math.PI/2; sh.position.y = .05;
+    this.holder = new THREE.Group(); this.holder.add(carModel, sh); this.scene.add(this.holder); this.ready = true; mp.triggerRepaint();
+  },
+  render(gl, args){
+    if(!this.ready) return;
+    const el = map.queryTerrainElevation([carState.lng, carState.lat]); if(el != null) carState.alt = el;
+    const mc = maplibregl.MercatorCoordinate.fromLngLat([carState.lng, carState.lat], carState.alt), s = mc.meterInMercatorCoordinateUnits()*CAR_SCALE*Math.pow(2, 16.6 - map.getZoom());
+    this.holder.rotation.set(0, carState.yaw, 0); wheels.forEach(w => w.rotation.z = -carState.dist/.34/CAR_SCALE*3);
+    const M = new THREE.Matrix4().makeTranslation(mc.x, mc.y, mc.z).scale(new THREE.Vector3(s, -s, s)).multiply(new THREE.Matrix4().makeRotationX(Math.PI/2));
+    this.camera.projectionMatrix = new THREE.Matrix4().fromArray(args.defaultProjectionData.mainMatrix).multiply(M);
+    this.renderer.resetState(); this.renderer.render(this.scene, this.camera);
+  }
+};
+map.addLayer(carLayer);
+
+/* ---------- condução: câmara de navegação a seguir o carro ---------- */
+const H0 = () => $('#stage').clientHeight;
+let camBear = null, placeShown = ''; const START = new Date(); START.setHours(10, 0, 0, 0);
+const ARROWS = {right: 'M14 46V30c0-6 4-10 10-10h14|M33 10l11 10-11 10', left: 'M42 46V30c0-6-4-10-10-10H18|M23 10L12 20l11 10', straight: 'M28 48V12|M17 22l11-11 11 11'};
+function setArrow(mod){ const k = /left/.test(mod) ? 'left' : /right/.test(mod) ? 'right' : 'straight'; const [a, b] = ARROWS[k].split('|'); $('#arrow').innerHTML = `<path d="${a}" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round"/><path d="${b}" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>`; }
+const fmtKm = m => m >= 1000 ? (m/1000).toFixed(m >= 10000 ? 0 : 1).replace('.', ',') + ' km' : Math.round(m/10)*10 + ' m';
+function hud(d, u){
+  const s = stepAt(d), idx = steps.indexOf(s); const next = steps[idx+1] || s; const toNext = Math.max(0, s.d1 - d);
+  const ref = (next.ref || s.ref || '').split(';')[0]; const nm = next.name || s.name || '';
+  setArrow(next.mod || ''); $('#tDist').textContent = fmtKm(toNext); $('#tName').innerHTML = (ref ? `<span class="shield ${/-/.test(ref)?'es':''}">${ref}</span>` : '') + (nm || (ref ? '' : 'Siga em frente'));
+  const left = TOTAL - d, secLeft = (trip.duration || TOTAL/22) * left/TOTAL; const eta = new Date(START.getTime() + (trip.duration || TOTAL/22)*1000);   // saída às 10:00 (só ilustrativo)
+  $('#bEta').textContent = eta.toTimeString().slice(0,5); $('#bMin').textContent = Math.round(secLeft/60); $('#bKm').textContent = (left/1000).toFixed(left > 10000 ? 0 : 1).replace('.', ',');
+  // nome da localidade ao passar
+  let pl = '', ps = '';
+  (trip.points || []).forEach((p, k) => { const dd = hav([p.lon, p.lat], posAt(d).p); if(dd < (k === 0 || k === trip.points.length-1 ? 1800 : 1500)) { pl = p.name; ps = /Espa|Spain|Pontevedra|Galicia/i.test(p.display || '') || k >= 2 ? 'Galiza · Espanha' : 'Portugal'; } });
+  if(!pl && ES0 !== null && d >= ES0 && d < ES0 + 3000) { pl = 'Bem-vindo a Espanha'; ps = 'Galiza · Espanha'; }
+  if(pl){ $('#pT').textContent = pl; $('#pS').textContent = ps; $('#place').classList.add('on'); placeShown = pl === 'Bem-vindo a Espanha' ? 'ESP' : placeShown; } else $('#place').classList.remove('on');
+}
+function frame(u, first){
+  const d = distAtTime(u); const {p} = posAt(d); const s = stepAt(d); const mw = isMotorway(s);
+  const head = headingAt(d, mw ? 420 : 160); if(camBear === null || first) camBear = head; let db = ((head - camBear + 540) % 360) - 180; camBear = (camBear + db*(first ? 1 : .12) + 360) % 360;
+  carState.lng = p[0]; carState.lat = p[1]; carState.dist = d; carState.alt = (map.queryTerrainElevation(p) || 0); const carHead = headingAt(d, 25); carState.yaw = (90 - carHead)*rad;
+  const z = mw ? 15.8 : 16.3; const near = (trip.points || []).some(q => hav([q.lon, q.lat], p) < 2500);
+  map.jumpTo({center: p, zoom: near ? 16.6 : z, pitch: near ? 60 : 66, bearing: camBear, padding: {top: H0()*.42, bottom: 0, left: 0, right: 0}});
+  setProgress(d/TOTAL); hud(d, u); map.triggerRepaint();
+}
+const uOfKm = km => { let lo = 0, hi = 1; for(let k=0;k<40;k++){ const m = (lo+hi)/2; distAtTime(m) < km*1000 ? lo = m : hi = m; } return (lo+hi)/2; };
+window.__nav = {frame, uOfKm, map, TOTAL, ready: () => carLayer.ready && map.loaded() && map.areTilesLoaded(), trip, dbg: () => ({ready: carLayer.ready, car: carState, model: !!carModel, wheels: wheels.length, err: window.__carErr || null})};
+frame(0, true);
+if(!Q.get('capture')){ let t0 = null; const loop = t => { if(t0 === null) t0 = t; const u = Math.min(1, (t - t0)/1000/DUR); frame(u); if(u < 1) requestAnimationFrame(loop); }; setTimeout(() => requestAnimationFrame(loop), 1200); }
+</script></body></html>
