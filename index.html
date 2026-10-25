@@ -390,9 +390,9 @@ function toast(t, ms=2200){ const e = $('#toast'); e.textContent = t; e.classLis
 function go(name){ $$('.screen').forEach(s => s.classList.remove('active')); $('#s-'+name).classList.add('active'); $$('.tab').forEach(b => b.classList.toggle('on', b.dataset.go === name)); location.hash = name; onShow(name); window.scrollTo(0,0); }
 $$('[data-go]').forEach(b => b.addEventListener('click', () => go(b.dataset.go)));
 function isNight(){ const h = new Date().getHours(); return settings.night && (h >= 19 || h < 7); }
-const TILES = { light: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', dark: 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png' };
-const ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>';
-function tileLayer(dark){ return L.tileLayer(dark ? TILES.dark : TILES.light, {attribution: ATTR, maxZoom: 19}); }
+const TILES = { light: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', dark: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png' };
+const ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+function tileLayer(dark){ const l = L.tileLayer(TILES.light, {attribution: ATTR, maxZoom: 19}); l._dark = !!dark; l.on('add', () => { const el = l.getContainer(); if(el) el.style.filter = dark ? 'invert(1) hue-rotate(195deg) brightness(.9) contrast(.9) saturate(.7)' : ''; }); return l; }
 function lineStyle(){ return settings.line === 'neon' ? {color:'#FF6A2A', weight:7, opacity:.95} : {color:'#2F7CFF', weight:7, opacity:.95}; }
 
 /* ---------- tabs ---------- */
@@ -440,7 +440,7 @@ async function route(a, b, vias=[]) {
   const j = await r.json(); if(j.code !== 'Ok') throw new Error('Rota não encontrada');
   const rt = j.routes[0];
   let tollM = 0; const refs = new Set();
-  rt.legs.forEach(l => l.steps.forEach(s => { const ref = (s.ref || '').split(';')[0]; if(/^(A\d|AP-?\d|A-\d|E\d)/i.test(ref)){ tollM += s.distance; refs.add(ref); } }));
+  rt.legs.forEach(l => l.steps.forEach(s => { const ref = (s.ref || '').split(';')[0].trim(); const isMotorway = /^(A ?\d|AP-?\d|A-\d|E ?\d)/i.test(ref) || /autoestrada|autopista|autovía|autoroute/i.test(s.name || ''); if(isMotorway){ tollM += s.distance; refs.add(ref || 'AE'); } }));
   return { coords: rt.geometry.coordinates.map(c => [c[1], c[0]]), distance: rt.distance, duration: rt.duration, tollM, refs: [...refs] };
 }
 async function nearestAirport(p){ const r = await fetch(`https://overpass-api.de/api/interpreter`, {method:'POST', body:`[out:json][timeout:20];node(around:120000,${p.lat},${p.lon})[aeroway=aerodrome][iata];out 5;`}); const j = await r.json(); const el = (j.elements||[]).sort((a,b)=> dist(p.lat,p.lon,a.lat,a.lon) - dist(p.lat,p.lon,b.lat,b.lon))[0]; return el ? {lat:el.lat, lon:el.lon, name:(el.tags.name||'Aeroporto') + ' (' + el.tags.iata + ')'} : null; }
@@ -571,7 +571,7 @@ function updateDriveStats(){
   if(dn < 120 && next !== t.dest && !next.done){ next.done = true; toast('Chegou: ' + next.name, 4000); if(navigator.vibrate) navigator.vibrate(200); }
 }
 $('#btn-center').addEventListener('click', () => { follow = true; if(carMarker) mapDrive.setView(carMarker.getLatLng(), 16); });
-$('#btn-night').addEventListener('click', () => { const dark = mapDrive._tiles._url === TILES.dark; mapDrive.removeLayer(mapDrive._tiles); mapDrive._tiles = tileLayer(!dark).addTo(mapDrive); });
+$('#btn-night').addEventListener('click', () => { const dark = !!mapDrive._tiles._dark; mapDrive.removeLayer(mapDrive._tiles); mapDrive._tiles = tileLayer(!dark).addTo(mapDrive); });
 $('#btn-flag').addEventListener('click', () => { if(!pos) return; const name = prompt('Nome do ponto (ex.: Miradouro lindo)') || 'Ponto marcado'; current.stops.push({name, lat:pos.latitude, lon:pos.longitude, note:'Marcado na viagem', done:true}); store.set('current', current); toast('Ponto marcado'); });
 $('#btn-waze').addEventListener('click', () => { const next = current.stops.find(s => !s.done) || current.dest; location.href = `https://waze.com/ul?ll=${next.lat},${next.lon}&navigate=yes`; });
 $('#btn-finish').addEventListener('click', () => { if(!confirm('Terminar a viagem e passar ao vídeo e custos?')) return; const t = current; t.status = 'done'; t.endedAt = Date.now(); t.trackDistance = trackDist(t.track); if(watchId){ navigator.geolocation.clearWatch(watchId); watchId = null; } if(recTimer) clearInterval(recTimer); if(wakeLock){ wakeLock.release(); wakeLock = null; } store.set('current', t); go('diary'); });
@@ -619,10 +619,10 @@ $('#vid-photos').addEventListener('change', e => { const files = [...e.target.fi
 function lon2x(lon, z){ return (lon + 180) / 360 * Math.pow(2, z) * 256; }
 function lat2y(lat, z){ const r = lat*Math.PI/180; return (1 - Math.log(Math.tan(r) + 1/Math.cos(r))/Math.PI) / 2 * Math.pow(2, z) * 256; }
 const tileCache = {};
-function loadTile(z,x,y,dark){ const k = `${dark?'d':'l'}${z}/${x}/${y}`; if(tileCache[k]) return tileCache[k]; const im = new Image(); im.crossOrigin = 'anonymous'; im.src = `https://a.basemaps.cartocdn.com/rastertiles/${dark ? 'dark_all' : 'voyager'}/${z}/${x}/${y}@2x.png`; tileCache[k] = im; return im; }
+function loadTile(z,x,y,dark){ const k = `${dark?'d':'l'}${z}/${x}/${y}`; if(tileCache[k]) return tileCache[k]; const im = new Image(); im.crossOrigin = 'anonymous'; im.src = `https://tile.openstreetmap.org/${z}/${x}/${y}.png`; tileCache[k] = im; return im; }
 function viewFor(route, W, H, pad=0.15){ const b = bounds(route); let z = 18; while(z > 2){ const w = lon2x(b.maxLon,z) - lon2x(b.minLon,z), h = lat2y(b.minLat,z) - lat2y(b.maxLat,z); if(w < W*(1-2*pad) && h < H*(1-2*pad)) break; z--; } const cx = (lon2x(b.minLon,z) + lon2x(b.maxLon,z))/2, cy = (lat2y(b.minLat,z) + lat2y(b.maxLat,z))/2; return {z, ox: cx - W/2, oy: cy - H/2}; }
 function proj(p, v){ return [lon2x(p[1], v.z) - v.ox, lat2y(p[0], v.z) - v.oy]; }
-function drawTiles(ctx, v, W, H, dark){ ctx.fillStyle = dark ? '#1A2030' : '#E9EEF5'; ctx.fillRect(0,0,W,H); const tx0 = Math.floor(v.ox/256), ty0 = Math.floor(v.oy/256), tx1 = Math.floor((v.ox+W)/256), ty1 = Math.floor((v.oy+H)/256); for(let x = tx0; x <= tx1; x++) for(let y = ty0; y <= ty1; y++){ const im = loadTile(v.z, x, y, dark); if(im.complete && im.naturalWidth) ctx.drawImage(im, x*256 - v.ox, y*256 - v.oy, 256, 256); } }
+function drawTiles(ctx, v, W, H, dark){ ctx.fillStyle = dark ? '#1A2030' : '#E9EEF5'; ctx.fillRect(0,0,W,H); if(dark) ctx.filter = 'invert(1) hue-rotate(195deg) brightness(.9) contrast(.9) saturate(.7)'; const tx0 = Math.floor(v.ox/256), ty0 = Math.floor(v.oy/256), tx1 = Math.floor((v.ox+W)/256), ty1 = Math.floor((v.oy+H)/256); for(let x = tx0; x <= tx1; x++) for(let y = ty0; y <= ty1; y++){ const im = loadTile(v.z, x, y, dark); if(im.complete && im.naturalWidth) ctx.drawImage(im, x*256 - v.ox, y*256 - v.oy, 256, 256); } ctx.filter = 'none'; }
 function paperLook(ctx, W, H){ ctx.fillStyle = 'rgba(241,222,188,.34)'; ctx.fillRect(0,0,W,H); const g = ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*.35, W/2,H/2, Math.max(W,H)*.75); g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1,'rgba(60,40,20,.45)'); ctx.fillStyle = g; ctx.fillRect(0,0,W,H); }
 function drawCar(ctx, x, y, ang, w){ const h = w * 1.75; ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.save(); ctx.globalAlpha = .45; ctx.filter = 'blur(6px)'; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(w*.12, h*.18, w*.5, h*.5, 0, 0, 7); ctx.fill(); ctx.restore(); if(carImg.complete) ctx.drawImage(carImg, -w/2, -h/2, w, h); ctx.restore(); }
 function neonPath(ctx, pts, color, core){ ctx.lineCap = 'round'; ctx.lineJoin = 'round'; const trace = () => { ctx.beginPath(); pts.forEach((p,i) => i ? ctx.lineTo(p[0],p[1]) : ctx.moveTo(p[0],p[1])); }; trace(); ctx.strokeStyle = color; ctx.lineWidth = 30; ctx.globalAlpha = .28; ctx.shadowColor = color; ctx.shadowBlur = 36; ctx.stroke(); ctx.globalAlpha = 1; trace(); ctx.lineWidth = 12; ctx.shadowBlur = 18; ctx.stroke(); ctx.shadowBlur = 0; trace(); ctx.strokeStyle = core; ctx.lineWidth = 4; ctx.stroke(); }
