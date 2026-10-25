@@ -345,7 +345,7 @@ async function export4k(){
   document.body.classList.add('recording'); const st = $('#stage'); st.style.width = W/2 + 'px'; st.style.height = H/2 + 'px'; st.style.transform = `scale(${Math.min(innerWidth/(W/2), innerHeight/(H/2))})`; HUDS = 2; map.setPixelRatio(2); map.resize();
   rc.width = W; rc.height = H; const N = Math.round(DUR*FPS); camBear = null; appZoom = null; const raf = () => new Promise(r => requestAnimationFrame(r)); const t0 = performance.now();
   for(let i = 0; i < N; i++){
-    frame(i/(N-1), i === 0); await raf(); const ts = performance.now(); while(!(map.isSourceLoaded('omt') && map.areTilesLoaded()) && performance.now() - ts < 6000) await raf(); await raf();
+    frame(i/(N-1), i === 0); await raf(); const ts = performance.now(); while(!(map.isSourceLoaded('omt') && map.isSourceLoaded('dem')) && performance.now() - ts < 2500) await raf(); await raf();   // espera ruas e relevo (máx. 2,5 s por imagem)
     drawRec(); const vf = new VideoFrame(rc, {timestamp: Math.round(i*1e6/FPS), duration: Math.round(1e6/FPS)}); enc.encode(vf, {keyFrame: i % (FPS*2) === 0}); vf.close();
     while(enc.encodeQueueSize > 6) await new Promise(r => setTimeout(r, 5));
     if(i % 15 === 0){ const el = (performance.now() - t0)/1000, left = el/(i+1)*(N-i-1); status(`A exportar 4K… ${Math.round(i/N*100)}% · faltam ~${Math.ceil(left/60)} min`); }
