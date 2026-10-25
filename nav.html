@@ -37,7 +37,7 @@ body.recording #stage{width:1280px;height:720px;transform-origin:0 0}
     <div style="min-width:0"><div class="d" id="tDist">—</div><div class="n" id="tName">—</div></div></div>
   <div class="place" id="place"><div class="t" id="pT"></div><div class="s" id="pS"></div></div>
   <div class="bottom"><div><b id="bEta">--:--</b><span>chegada</span></div><div><b id="bMin">--</b><span>min</span></div><div><b id="bKm">--</b><span>km</span></div><div class="brand">LEANDRO NA ROTA</div></div>
-  <div class="credit">© OpenStreetMap · OpenMapTiles · OpenFreeMap</div>
+  <div class="credit" id="credit">© OpenStreetMap · OpenMapTiles · OpenFreeMap</div>
   <div id="status"></div>
 </div>
 <div id="ctl"><button id="bPlay">▶ Ver viagem</button><button id="bRec" class="rec">● Gravar vídeo (MP4)</button><button id="bSave" hidden>⬇ Guardar vídeo</button></div>
@@ -51,7 +51,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 const Q = new URLSearchParams(location.search), $ = s => document.querySelector(s), status = t => $('#status').textContent = t || '';
 const PACK = Q.get('pack');                  // pacote offline (ex.: studio/packs/pontedelima-vigo) — senão usa a rede
-const CAR_SCALE = +(Q.get('carscale') || 11);  // carro ampliado para ser visível (tamanho real ficaria com poucos píxeis)
+const CAR_SCALE = +(Q.get('carscale') || (Q.get('look') === 'app' ? 13 : 11));  // carro ampliado para ser visível (tamanho real ficaria com poucos píxeis)
 const DUR = +(Q.get('dur') || 75);            // segundos de vídeo para a viagem inteira
 
 /* ---------- viagem ---------- */
@@ -73,10 +73,15 @@ const ES0 = (() => {   // fronteira: a meio entre o último ponto em Portugal e 
   const iES = P.findIndex(p => p.country === 'ES'); if(iES > 0 && P[iES-1].country === 'PT') return (kOf(P[iES-1]) + kOf(P[iES]))/2;
   const st = steps.find(s => isSpain(s)); return st ? st.d0 : null; })();
 const stepAt = d => steps.find(s => d >= s.d0 && d < s.d1) || steps.at(-1) || {name:'', ref:''};
-const speedAt = d => { const s = stepAt(d); const nearPt = (trip.points || []).some(p => hav([p.lon, p.lat], posAt(d).p) < 2500); return nearPt ? .45 : isMotorway(s) ? 1.55 : .8; };
-// tempo de vídeo → distância (integra 1/velocidade)
-const TT = [0]; const NSAMP = 2000; for(let i=1;i<=NSAMP;i++){ const d = TOTAL*i/NSAMP; TT.push(TT[i-1] + 1/speedAt(d)); }
-const distAtTime = u => { const t = u*TT.at(-1); let i = TT.findIndex(v => v >= t); if(i <= 0) return 0; const f = (t - TT[i-1])/(TT[i]-TT[i-1]); return TOTAL*(i-1+f)/NSAMP; };
+const LOOK = Q.get('look') || 'gps';   // 'gps' (navegação) | 'app' (mapa claro, vista de cima, como as apps de animação de viagens)
+const dOfPoint = p => { let bi = 0, bd = 1e18; line.forEach((q, i) => { const dd = hav(q, [p.lon, p.lat]); if(dd < bd){ bd = dd; bi = i; } }); return cum[bi]; };
+const STOPS = (trip.points || []).map(p => ({...p, d: dOfPoint(p)}));
+const speedAt = d => { const s = stepAt(d); const nearPt = STOPS.some(p => Math.abs(p.d - d) < 2500); return nearPt ? (LOOK === 'app' ? .6 : .45) : isMotorway(s) ? (LOOK === 'app' ? 1.35 : 1.55) : .85; };
+// tempo de vídeo (s) → distância (m): integra 1/velocidade e acrescenta as pausas (ex.: abastecimento)
+const T = [0], D = [0]; { const NS = 2000, raw = [0]; for(let i=1;i<=NS;i++) raw.push(raw[i-1] + 1/speedAt(TOTAL*i/NS));
+  const pauses = STOPS.filter(p => p.pause).map(p => ({d: p.d, s: +p.pause})).sort((a, b) => a.d - b.d); const k = Math.max(5, DUR - pauses.reduce((a, b) => a + b.s, 0))/raw.at(-1); let extra = 0, pi = 0;
+  for(let i=1;i<=NS;i++){ const d = TOTAL*i/NS; while(pi < pauses.length && pauses[pi].d <= d){ T.push(raw[i-1]*k + extra); D.push(pauses[pi].d); extra += pauses[pi].s; T.push(raw[i-1]*k + extra); D.push(pauses[pi].d); pi++; } T.push(raw[i]*k + extra); D.push(d); } }
+const distAtTime = u => { const t = u*T.at(-1); let lo = 0, hi = T.length-1; while(hi-lo > 1){ const m = (lo+hi) >> 1; T[m] <= t ? lo = m : hi = m; } const f = (t - T[lo])/((T[hi]-T[lo]) || 1); return D[lo] + (D[hi]-D[lo])*f; };
 function posAt(d){ d = Math.max(0, Math.min(TOTAL-.01, d)); let lo = 0, hi = cum.length-1; while(hi-lo > 1){ const m = (lo+hi) >> 1; cum[m] <= d ? lo = m : hi = m; } const f = (d-cum[lo])/((cum[hi]-cum[lo]) || 1); return {p: [line[lo][0] + (line[hi][0]-line[lo][0])*f, line[lo][1] + (line[hi][1]-line[lo][1])*f], i: lo}; }
 const bearingOf = (a, b) => { const y = Math.sin((b[0]-a[0])*rad)*Math.cos(b[1]*rad), x = Math.cos(a[1]*rad)*Math.sin(b[1]*rad) - Math.sin(a[1]*rad)*Math.cos(b[1]*rad)*Math.cos((b[0]-a[0])*rad); return (Math.atan2(y, x)/rad + 360) % 360; };
 const headingAt = (d, look) => bearingOf(posAt(d - look*.3).p, posAt(d + look).p);
@@ -87,37 +92,47 @@ const omt = PACK ? {type: 'vector', tiles: [base + 'tiles/{z}/{x}/{y}.pbf'], max
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);   // pacote offline completo só em testes locais; online a altitude vem da AWS
 const dem = PACK && LOCAL ? {type: 'raster-dem', tiles: [base + 'dem/{z}/{x}/{y}.png'], encoding: 'terrarium', tileSize: 256, minzoom: 8, maxzoom: 12} : {type: 'raster-dem', tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'], encoding: 'terrarium', tileSize: 256, maxzoom: 12};
 const glyphs = PACK ? base + 'glyphs/{fontstack}/{range}.pbf' : 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf';
-const C = {bg:'#3A4A63', water:'#22405F', park:'#2F5A4A', wood:'#335C49', res:'#405170', road:'#5B6C86', roadHi:'#8C9AB0', mway:'#97A6BD', bld:'#55678A', label:'#E8EEF6'};
+const C = LOOK === 'app'
+  ? {bg:'#F1EEE8', water:'#9FCDF0', park:'#CBE6C1', wood:'#BADBA8', farm:'#EDE8D8', res:'#E9E4DD', road:'#FFFFFF', roadHi:'#FFFFFF', mway:'#F6C25B', case:'#CFC9C0', bld:'#DCD6CE', label:'#3C4043', halo:'#FFFFFF', hsS:'#A99F8F', hsH:'#FFFFFF', hsA:'#D8D0C3'}
+  : {bg:'#3A4A63', water:'#22405F', park:'#2F5A4A', wood:'#335C49', farm:'#3F5560', res:'#405170', road:'#5B6C86', roadHi:'#8C9AB0', mway:'#97A6BD', case:'#26324A', bld:'#55678A', label:'#E8EEF6', halo:'#1B2638', hsS:'#16202F', hsH:'#6F87A8', hsA:'#22304A'};
 const style = {version: 8, glyphs, sources: {omt, dem},
   layers: [
     {id:'bg', type:'background', paint:{'background-color': C.bg}},
     {id:'landuse', type:'fill', source:'omt', 'source-layer':'landuse', paint:{'fill-color': ['match', ['get','class'], ['residential','suburb','neighbourhood'], C.res, C.bg], 'fill-opacity': .7}},
-    {id:'landcover', type:'fill', source:'omt', 'source-layer':'landcover', paint:{'fill-color': ['match', ['get','class'], 'wood', C.wood, 'grass', C.park, 'farmland', '#3F5560', C.park], 'fill-opacity': .75}},
+    {id:'landcover', type:'fill', source:'omt', 'source-layer':'landcover', paint:{'fill-color': ['match', ['get','class'], 'wood', C.wood, 'grass', C.park, 'farmland', C.farm, C.park], 'fill-opacity': .75}},
     {id:'park', type:'fill', source:'omt', 'source-layer':'park', paint:{'fill-color': C.park, 'fill-opacity': .8}},
-    {id:'hills', type:'hillshade', source:'dem', paint:{'hillshade-shadow-color':'#16202F', 'hillshade-highlight-color':'#6F87A8', 'hillshade-accent-color':'#22304A', 'hillshade-exaggeration': .55, 'hillshade-illumination-direction': 315}},
+    {id:'hills', type:'hillshade', source:'dem', paint:{'hillshade-shadow-color': C.hsS, 'hillshade-highlight-color': C.hsH, 'hillshade-accent-color': C.hsA, 'hillshade-exaggeration': LOOK === 'app' ? .45 : .55, 'hillshade-illumination-direction': 315}},
     {id:'water', type:'fill', source:'omt', 'source-layer':'water', paint:{'fill-color': C.water}},
     {id:'river', type:'line', source:'omt', 'source-layer':'waterway', paint:{'line-color': C.water, 'line-width': ['interpolate',['linear'],['zoom'],10,1,16,6]}},
-    {id:'road-case', type:'line', source:'omt', 'source-layer':'transportation', filter:['in',['get','class'],['literal',['motorway','trunk','primary','secondary','tertiary','minor','service']]], layout:{'line-cap':'round','line-join':'round'}, paint:{'line-color':'#26324A', 'line-width': ['interpolate',['exponential',1.6],['zoom'],10,['match',['get','class'],'motorway',3,'trunk',2.6,1],17,['match',['get','class'],'motorway',36,'trunk',30,['primary','secondary'],24,14]]}},
+    {id:'road-case', type:'line', source:'omt', 'source-layer':'transportation', filter:['in',['get','class'],['literal',['motorway','trunk','primary','secondary','tertiary','minor','service']]], layout:{'line-cap':'round','line-join':'round'}, paint:{'line-color': C.case, 'line-width': ['interpolate',['exponential',1.6],['zoom'],10,['match',['get','class'],'motorway',3,'trunk',2.6,1],17,['match',['get','class'],'motorway',36,'trunk',30,['primary','secondary'],24,14]]}},
     {id:'road', type:'line', source:'omt', 'source-layer':'transportation', filter:['in',['get','class'],['literal',['motorway','trunk','primary','secondary','tertiary','minor','service']]], layout:{'line-cap':'round','line-join':'round'}, paint:{'line-color': ['match',['get','class'],'motorway',C.mway,['trunk','primary'],C.roadHi,C.road], 'line-width': ['interpolate',['exponential',1.6],['zoom'],10,['match',['get','class'],'motorway',2,'trunk',1.6,.5],17,['match',['get','class'],'motorway',30,'trunk',24,['primary','secondary'],19,10]]}},
-    {id:'bld', type:'fill-extrusion', source:'omt', 'source-layer':'building', minzoom: 13, paint:{'fill-extrusion-color': C.bld, 'fill-extrusion-height': ['coalesce',['get','render_height'],8], 'fill-extrusion-base': ['coalesce',['get','render_min_height'],0], 'fill-extrusion-opacity': .92, 'fill-extrusion-vertical-gradient': true}},
+    {id:'bld', type:'fill-extrusion', source:'omt', 'source-layer':'building', minzoom: 13, paint:{'fill-extrusion-color': C.bld, 'fill-extrusion-height-transition': {duration: 0}, 'fill-extrusion-height': ['coalesce',['get','render_height'],8], 'fill-extrusion-base': ['coalesce',['get','render_min_height'],0], 'fill-extrusion-opacity': .92, 'fill-extrusion-vertical-gradient': true}},
   ]};
 const map = new maplibregl.Map({container: 'map', style, center: line[0], zoom: 15.5, pitch: 62, bearing: 0, interactive: !Q.get('capture'), attributionControl: false, canvasContextAttributes: {antialias: true, preserveDrawingBuffer: true}, maxPitch: 80, fadeDuration: 0});
 await new Promise(r => map.on('load', r));
 map.setTerrain({source: 'dem', exaggeration: 1.0});
-map.setSky({'sky-color': '#16243A', 'horizon-color': '#2F4766', 'fog-color': '#2B3A55', 'sky-horizon-blend': .6, 'horizon-fog-blend': .4, 'fog-ground-blend': .55});
+map.setSky(LOOK === 'app' ? {'sky-color': '#8EC5F0', 'horizon-color': '#DCEEFB', 'fog-color': '#EEF2F4', 'sky-horizon-blend': .5, 'horizon-fog-blend': .5, 'fog-ground-blend': .6} : {'sky-color': '#16243A', 'horizon-color': '#2F4766', 'fog-color': '#2B3A55', 'sky-horizon-blend': .6, 'horizon-fog-blend': .4, 'fog-ground-blend': .55});
 // "balões" de rua e de terra (fundo esticável, como no GPS)
 function pill(id, fill, stroke){ const W = 48, H = 40, c = document.createElement('canvas'); c.width = W*2; c.height = (H+10)*2; const x = c.getContext('2d'); x.scale(2,2); x.fillStyle = fill; x.strokeStyle = stroke; x.lineWidth = 2;
   x.beginPath(); x.roundRect(1, 1, W-2, H-2, 10); x.fill(); if(stroke) x.stroke(); x.beginPath(); x.moveTo(W/2-7, H-2); x.lineTo(W/2, H+8); x.lineTo(W/2+7, H-2); x.fill();
   map.addImage(id, x.getImageData(0, 0, c.width, c.height), {pixelRatio: 2, stretchX: [[24, 72]], stretchY: [[24, 56]], content: [20, 14, 76, 66]}); }
 pill('pill-grey', 'rgba(92,100,112,.94)'); pill('pill-blue', '#2E7BF6', '#ffffff');
-map.addLayer({id:'street-names', type:'symbol', source:'omt', 'source-layer':'transportation_name', minzoom: 14.5, filter:['all',['has','name'],['!=',['get','class'],'motorway']], layout:{'symbol-placement':'point', 'symbol-sort-key': 1, 'text-field':['get','name'], 'text-font':['Noto Sans Bold'], 'text-size': 15, 'icon-image':'pill-grey', 'icon-text-fit':'both', 'icon-text-fit-padding':[4,8,4,8], 'icon-anchor':'bottom', 'text-anchor':'bottom', 'text-offset':[0,-.9], 'symbol-spacing': 400, 'text-max-width': 14}, paint:{'text-color':'#fff'}});
+if(LOOK === 'gps') map.addLayer({id:'street-names', type:'symbol', source:'omt', 'source-layer':'transportation_name', minzoom: 14.5, filter:['all',['has','name'],['!=',['get','class'],'motorway']], layout:{'symbol-placement':'point', 'symbol-sort-key': 1, 'text-field':['get','name'], 'text-font':['Noto Sans Bold'], 'text-size': 15, 'icon-image':'pill-grey', 'icon-text-fit':'both', 'icon-text-fit-padding':[4,8,4,8], 'icon-anchor':'bottom', 'text-anchor':'bottom', 'text-offset':[0,-.9], 'symbol-spacing': 400, 'text-max-width': 14}, paint:{'text-color':'#fff'}});
 map.addLayer({id:'road-ref', type:'symbol', source:'omt', 'source-layer':'transportation_name', filter:['all',['has','ref'],['in',['get','class'],['literal',['motorway','trunk']]]], layout:{'symbol-placement':'line', 'symbol-spacing': 900, 'text-field':['get','ref'], 'text-font':['Noto Sans Bold'], 'text-size': 13, 'text-rotation-alignment':'viewport', 'icon-image':'pill-blue', 'icon-text-fit':'both', 'icon-text-fit-padding':[2,6,2,6], 'icon-rotation-alignment':'viewport'}, paint:{'text-color':'#fff'}});
-map.addLayer({id:'places', type:'symbol', source:'omt', 'source-layer':'place', filter:['in',['get','class'],['literal',['city','town','village','suburb']]], layout:{'text-field':['get','name'], 'text-font':['Noto Sans Bold'], 'text-size':['match',['get','class'],'city',22,'town',19,15], 'text-transform':'uppercase', 'text-letter-spacing':.06}, paint:{'text-color': C.label, 'text-halo-color':'#1B2638', 'text-halo-width': 2}});
+map.addLayer({id:'places', type:'symbol', source:'omt', 'source-layer':'place', filter:['in',['get','class'],['literal',['city','town','village','suburb']]], layout:{'text-field':['get','name'], 'text-font':['Noto Sans Bold'], 'text-size':['match',['get','class'],'city',22,'town',19,15], 'text-transform': LOOK === 'app' ? 'none' : 'uppercase', 'text-letter-spacing':.06}, paint:{'text-color': C.label, 'text-halo-color': C.halo, 'text-halo-width': 2}});
 // rota: percorrida (azul-claro) e por percorrer (azul forte com contorno)
 map.addSource('route', {type:'geojson', data:{type:'Feature', geometry:{type:'LineString', coordinates: line}}, lineMetrics: true});
-map.addLayer({id:'route-case', type:'line', source:'route', layout:{'line-cap':'round','line-join':'round'}, paint:{'line-color':'#0B3D91', 'line-width':['interpolate',['exponential',1.5],['zoom'],10,6,17,30]}}, 'street-names');
-map.addLayer({id:'route', type:'line', source:'route', layout:{'line-cap':'round','line-join':'round'}, paint:{'line-width':['interpolate',['exponential',1.5],['zoom'],10,4,17,22], 'line-gradient':['step',['line-progress'],'#7FA9D8',0,'#2E8BFF']}}, 'street-names');
-const setProgress = f => map.setPaintProperty('route', 'line-gradient', ['step', ['line-progress'], '#7FA9D8', Math.max(1e-6, Math.min(.99999, f)), '#2E8BFF']);
+const BEFORE = LOOK === 'gps' ? 'street-names' : 'places';
+const RC = LOOK === 'app' ? {done: '#E53935', todo: 'rgba(229,57,53,0)', caseDone: '#FFFFFF', caseTodo: 'rgba(255,255,255,0)', ghost: true} : {done: '#7FA9D8', todo: '#2E8BFF', caseDone: '#0B3D91', caseTodo: '#0B3D91'};
+if(RC.ghost) map.addLayer({id:'route-ghost', type:'line', source:'route', layout:{'line-cap':'round','line-join':'round'}, paint:{'line-color':'#E53935', 'line-opacity': .35, 'line-dasharray': [1.2, 1.6], 'line-width':['interpolate',['linear'],['zoom'],9,2,16,6]}}, BEFORE);
+map.addLayer({id:'route-case', type:'line', source:'route', layout:{'line-cap':'round','line-join':'round'}, paint:{'line-width':['interpolate',['exponential',1.5],['zoom'],9, LOOK === 'app' ? 9 : 6,17,30], 'line-gradient':['step',['line-progress'],RC.caseDone,0,RC.caseTodo]}}, BEFORE);
+map.addLayer({id:'route', type:'line', source:'route', layout:{'line-cap':'round','line-join':'round'}, paint:{'line-width':['interpolate',['exponential',1.5],['zoom'],9, LOOK === 'app' ? 5.5 : 4,17,22], 'line-gradient':['step',['line-progress'],RC.done,0,RC.todo]}}, BEFORE);
+const setProgress = f => { const x = Math.max(1e-6, Math.min(.99999, f)); map.setPaintProperty('route', 'line-gradient', ['step', ['line-progress'], RC.done, x, RC.todo]); map.setPaintProperty('route-case', 'line-gradient', ['step', ['line-progress'], RC.caseDone, x, RC.caseTodo]); };
+// marcadores das paragens (desenhados no mapa, entram no vídeo)
+function pinImg(id, color, glyph){ const c = document.createElement('canvas'); c.width = 96; c.height = 120; const x = c.getContext('2d'); x.fillStyle = color; x.strokeStyle = '#fff'; x.lineWidth = 6; x.beginPath(); x.arc(48, 44, 38, Math.PI*.85, Math.PI*.15); x.lineTo(48, 114); x.closePath(); x.fill(); x.stroke(); x.fillStyle = '#fff'; x.font = '44px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(glyph, 48, 46); map.addImage(id, x.getImageData(0, 0, 96, 120), {pixelRatio: 2}); }
+pinImg('pin-stop', '#E53935', '●'); pinImg('pin-fuel', '#F57C00', '⛽'); pinImg('pin-end', '#2E7D32', '⚑');
+map.addSource('stops', {type:'geojson', data:{type:'FeatureCollection', features: STOPS.map((p, i) => ({type:'Feature', properties:{name: p.name, icon: p.kind === 'fuel' ? 'pin-fuel' : i === STOPS.length-1 ? 'pin-end' : 'pin-stop'}, geometry:{type:'Point', coordinates:[p.lon, p.lat]}}))}});
+if(LOOK === 'app') map.addLayer({id:'stops', type:'symbol', source:'stops', layout:{'icon-image':['get','icon'], 'icon-anchor':'bottom', 'icon-allow-overlap': true, 'text-field':['get','name'], 'text-font':['Noto Sans Bold'], 'text-size': 15, 'text-anchor':'top', 'text-offset':[0,.3], 'text-allow-overlap': true}, paint:{'text-color':'#1F2328', 'text-halo-color':'#fff', 'text-halo-width': 2.2}});
 
 /* ---------- carro 3D (camada three.js dentro do mapa) ---------- */
 const WHEELS = ['roda_FE','roda_FD','roda_TE','roda_TD'];
@@ -136,7 +151,7 @@ const carLayer = {
     this.camera = new THREE.Camera(); this.scene = new THREE.Scene();
     this.renderer = new THREE.WebGLRenderer({canvas: mp.getCanvas(), context: gl, antialias: true}); this.renderer.autoClear = false; this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     const pm = new THREE.PMREMGenerator(this.renderer); this.scene.environment = pm.fromScene(new RoomEnvironment(), .04).texture; this.scene.environmentIntensity = .45;
-    const sun = new THREE.DirectionalLight('#FFE2C0', 2.4); sun.position.set(-.5, 1, .6); this.scene.add(sun); this.scene.add(new THREE.HemisphereLight('#9FC3FF', '#2A2F3A', .55));
+    const sun = new THREE.DirectionalLight('#FFF6EC', 2.2); sun.position.set(-.5, 1, .6); this.scene.add(sun); this.scene.add(new THREE.HemisphereLight('#DDE8F5', '#3A3D42', .5));   // luz neutra: o preto fica preto
     try{ carModel = await loadCarGLB(); }catch(e){ console.warn('carro:', e); window.__carErr = String(e); const b = new THREE.Mesh(new THREE.BoxGeometry(4.6, 1.4, 1.9), new THREE.MeshStandardMaterial({color:'#111'})); b.position.y = .7; carModel = new THREE.Group(); carModel.add(b); }
     // sombra de contacto
     const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'); const gg = x.createRadialGradient(64,64,4,64,64,62); gg.addColorStop(0,'rgba(0,0,0,.75)'); gg.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle = gg; x.fillRect(0,0,128,128);
@@ -157,7 +172,7 @@ map.addLayer(carLayer);
 
 /* ---------- condução: câmara de navegação a seguir o carro ---------- */
 const H0 = () => $('#stage').clientHeight;
-let camBear = null, placeShown = ''; const START = new Date(); START.setHours(10, 0, 0, 0);
+let camBear = null, appZoom = null, placeShown = ''; const START = new Date(); START.setHours(10, 0, 0, 0);
 const ARROWS = {right: 'M14 46V30c0-6 4-10 10-10h14|M33 10l11 10-11 10', left: 'M42 46V30c0-6-4-10-10-10H18|M23 10L12 20l11 10', straight: 'M28 48V12|M17 22l11-11 11 11'};
 function setArrow(mod){ const k = /left/.test(mod) ? 'left' : /right/.test(mod) ? 'right' : 'straight'; const [a, b] = ARROWS[k].split('|'); $('#arrow').innerHTML = `<path d="${a}" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round"/><path d="${b}" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>`; }
 const fmtKm = m => m >= 1000 ? (m/1000).toFixed(m >= 10000 ? 0 : 1).replace('.', ',') + ' km' : Math.round(m/10)*10 + ' m';
@@ -173,10 +188,39 @@ function hud(d, u){
   if(ES0 !== null && d >= ES0 - 200 && d < ES0 + 900) { pl = 'Bem-vindo a Espanha'; ps = 'Galiza · Espanha'; }
   if(pl){ $('#pT').textContent = pl; $('#pS').textContent = ps; $('#place').classList.add('on'); placeShown = pl === 'Bem-vindo a Espanha' ? 'ESP' : placeShown; } else $('#place').classList.remove('on');
 }
+const hudC = document.createElement('canvas'); hudC.id = 'hud'; hudC.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2'; if(LOOK === 'app'){ $('#stage').appendChild(hudC); document.querySelectorAll('.top,.bottom,.place,.credit').forEach(e => e.style.display = 'none'); }
+const TITLE = Q.get('title') || `${STOPS[0]?.name || ''} → ${STOPS.at(-1)?.name || ''}`;
+function drawAppHud(d, u){
+  const st = $('#stage'), W = Math.round(st.clientWidth), H = Math.round(st.clientHeight); if(hudC.width !== W || hudC.height !== H){ hudC.width = W; hudC.height = H; }
+  const x = hudC.getContext('2d'), k = W/1280; x.clearRect(0, 0, W, H);
+  const rr = (X, Y, w, h, r, c) => { x.fillStyle = c; x.beginPath(); x.roundRect(X, Y, w, h, r); x.fill(); };
+  // título
+  rr(24*k, 22*k, 214*k, 40*k, 20*k, '#0A5BD6'); x.fillStyle = '#fff'; x.font = `800 ${17*k}px Inter`; x.fillText('LEANDRO NA ROTA', 44*k, 48*k);
+  x.shadowColor = 'rgba(0,0,0,.35)'; x.shadowBlur = 10*k; x.fillStyle = '#1F2328'; x.font = `800 ${34*k}px Inter`; x.fillText(TITLE, 26*k, 104*k); x.shadowBlur = 0;
+  x.font = `700 ${17*k}px Inter`; x.fillStyle = '#3C4043'; x.fillText(STOPS.slice(1, -1).map(s => s.name).join(' · '), 27*k, 130*k);
+  // cartão da paragem (ao chegar / na pausa)
+  const near = STOPS.find(s => Math.abs(s.d - d) < (s.pause ? 1200 : 1600));
+  if(near){ const ic = near.kind === 'fuel' ? '⛽' : near === STOPS.at(-1) ? '⚑' : near === STOPS[0] ? '🚗' : '📍'; x.font = `800 ${26*k}px Inter`; const tw = Math.max(x.measureText(near.name).width, (x.font = `700 ${16*k}px Inter`, x.measureText(near.sub || '').width)) + 96*k;
+    const bx = W/2 - tw/2, by = 150*k; x.shadowColor = 'rgba(0,0,0,.25)'; x.shadowBlur = 18*k; rr(bx, by, tw, 74*k, 18*k, '#FFFFFF'); x.shadowBlur = 0; rr(bx + 12*k, by + 13*k, 48*k, 48*k, 14*k, near.kind === 'fuel' ? '#F57C00' : '#E53935');
+    x.fillStyle = '#fff'; x.font = `${26*k}px sans-serif`; x.textAlign = 'center'; x.fillText(ic, bx + 36*k, by + 47*k); x.textAlign = 'left'; x.fillStyle = '#1F2328'; x.font = `800 ${26*k}px Inter`; x.fillText(near.name, bx + 74*k, by + 36*k); x.fillStyle = '#5F6368'; x.font = `700 ${16*k}px Inter`; x.fillText(near.sub || '', bx + 74*k, by + 60*k); }
+  // barra de progresso com as paragens
+  const px = 26*k, pw = W - 52*k, py = H - 40*k; rr(px - 10*k, py - 44*k, pw + 20*k, 64*k, 16*k, 'rgba(255,255,255,.92)');
+  rr(px, py - 3*k, pw, 6*k, 3*k, '#E3DED6'); rr(px, py - 3*k, pw*d/TOTAL, 6*k, 3*k, '#E53935');
+  STOPS.forEach(s => { const sx = px + pw*s.d/TOTAL; x.fillStyle = s.d <= d ? (s.kind === 'fuel' ? '#F57C00' : '#E53935') : '#BDB6AC'; x.beginPath(); x.arc(sx, py, 7*k, 0, 7); x.fill(); x.strokeStyle = '#fff'; x.lineWidth = 2.5*k; x.stroke(); x.fillStyle = '#3C4043'; x.font = `700 ${12*k}px Inter`; x.textAlign = s === STOPS[0] ? 'left' : s === STOPS.at(-1) ? 'right' : 'center'; x.fillText(s.kind === 'fuel' ? '⛽ ' + s.name : s.name, sx, py - 16*k); x.textAlign = 'left'; });
+  x.fillStyle = '#1F2328'; x.font = `800 ${15*k}px Inter`; x.textAlign = 'right'; x.fillText(`${(d/1000).toFixed(0)} / ${(TOTAL/1000).toFixed(0)} km`, W - 30*k, 46*k); x.textAlign = 'left';
+  x.fillStyle = 'rgba(0,0,0,.55)'; x.font = `600 ${10*k}px Inter`; x.textAlign = 'right'; x.fillText('© OpenStreetMap · OpenMapTiles · OpenFreeMap', W - 30*k, H - 76*k); x.textAlign = 'left';
+}
 function frame(u, first){
   const d = distAtTime(u); const {p} = posAt(d); const s = stepAt(d); const mw = isMotorway(s);
-  const head = headingAt(d, mw ? 420 : 160); if(camBear === null || first) camBear = head; let db = ((head - camBear + 540) % 360) - 180; camBear = (camBear + db*(first ? 1 : .12) + 360) % 360;
+  const head = headingAt(d, LOOK === 'app' ? 2500 : mw ? 420 : 160); if(camBear === null || first) camBear = head; let db = ((head - camBear + 540) % 360) - 180; camBear = (camBear + db*(first ? 1 : LOOK === 'app' ? .025 : .12) + 360) % 360;
   carState.lng = p[0]; carState.lat = p[1]; carState.dist = d; carState.alt = (map.queryTerrainElevation(p) || 0); const carHead = headingAt(d, 25); carState.yaw = (90 - carHead)*rad;
+  if(LOOK === 'app'){
+    // vista de cima inclinada, mais afastada; aproxima nas paragens
+    const near = STOPS.reduce((m, q) => Math.min(m, Math.abs(q.d - d)), 1e9); const zt = 11.6 + 1.6*Math.max(0, 1 - near/4000);
+    appZoom = appZoom === null || first ? zt : appZoom + (zt - appZoom)*.05;
+    map.jumpTo({center: p, zoom: appZoom, pitch: 50, bearing: camBear, padding: {top: H0()*.12, bottom: 0, left: 0, right: 0}});
+    setProgress(d/TOTAL); drawAppHud(d, u); map.triggerRepaint(); return;
+  }
   const z = mw ? 15.8 : 16.3; const near = (trip.points || []).some(q => hav([q.lon, q.lat], p) < 2500);
   map.jumpTo({center: p, zoom: near ? 16.6 : z, pitch: near ? 60 : 66, bearing: camBear, padding: {top: H0()*.42, bottom: 0, left: 0, right: 0}});
   setProgress(d/TOTAL); hud(d, u); map.triggerRepaint();
@@ -204,6 +248,7 @@ function run(rec){
 const rc = $('#rec'), rx = rc.getContext('2d');
 function drawRec(){
   const W = rc.width, H = rc.height, k = W/1280; rx.drawImage(map.getCanvas(), 0, 0, W, H);
+  if(LOOK === 'app'){ rx.drawImage(hudC, 0, 0, W, H); return; }
   const pill = (x, y, w, h, r, c) => { rx.fillStyle = c; rx.beginPath(); rx.roundRect(x, y, w, h, r); rx.fill(); };
   pill(0, -20, W, 112*k + 20, 0, '#101317');
   rx.save(); rx.translate(22*k, 22*k); rx.scale(k*68/56, k*68/56); rx.strokeStyle = '#fff'; rx.lineWidth = 6; rx.lineCap = 'round'; rx.lineJoin = 'round'; [...$('#arrow').querySelectorAll('path')].forEach(p => rx.stroke(new Path2D(p.getAttribute('d')))); rx.restore();
