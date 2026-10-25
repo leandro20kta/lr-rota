@@ -65,7 +65,7 @@ jobs:
         run: |
           D="studio/renders/$(date -u +%Y%m%d-%H%M)-${MODE}-${W}x${H}"
           mkdir -p "$D"; cp studio/out/frames/*.ov.png "$D"/ 2>/dev/null || true; cp studio/out/frames/still_*.png "$D"/ 2>/dev/null || true; cp studio/out/cinema.mp4 "$D"/ 2>/dev/null || true
-          cp studio/out/scene.json "$D"/; python -c "from PIL import Image; Image.MAX_IMAGE_PIXELS=None; Image.open('studio/out/map.png').resize((1536,1536)).save('$D/map_preview.jpg', quality=82)"; echo "modo=$MODE w=$W h=$H samples=$SAMPLES dur=$DUR fps=$FPS carro_glb=$(test -f models/car.glb && echo sim || echo nao)" > "$D"/info.txt
+          cp studio/out/scene.json "$D"/; python -c "from PIL import Image; Image.MAX_IMAGE_PIXELS=None; Image.open('studio/out/map.png').convert('RGB').resize((1536,1536)).save('$D/map_preview.jpg', quality=82)" || echo 'preview falhou'; echo "modo=$MODE w=$W h=$H samples=$SAMPLES dur=$DUR fps=$FPS carro_glb=$(test -f models/car.glb && echo sim || echo nao)" > "$D"/info.txt
           git config user.name "rota-cinema-bot"; git config user.email "bot@users.noreply.github.com"
           git add "$D"; git commit -m "Render Studio: $D [skip ci]" || exit 0
           git pull --rebase -q; git push
