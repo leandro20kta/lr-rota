@@ -634,12 +634,13 @@ function buildScript(t){
   scriptStops(t).forEach((s, i) => {
     const f = E[s.name] || {}; const lines = [];
     lines.push(`O que é: ${f.extract || s.desc || `${KIND_PT[s.kind] || 'local'} em ${t.dest.name}. ${C} — sem descrição pública encontrada.`}`);
-    lines.push(f.year ? `Quando: construído/fundado em ${f.year}.` : (s.start ? `Quando: ${s.start}.` : `Quando: ${C}`));
+    const yInText = /\b(1[0-9]{3}|20[0-2][0-9])\b/.test(f.extract || s.desc || '');
+    if(f.year) lines.push(`Quando: construído/fundado em ${f.year}.`); else if(s.start) lines.push(`Quando: ${s.start}.`); else if(!yInText) lines.push(`Quando: ${C}`);
     lines.push(`Horário: ${s.hours ? fmtHours(s.hours) : C + ' — não publicado no mapa; ver site oficial ou ligar antes'}.`);
     if(s.fee) lines.push(`Entrada: ${s.fee === 'no' ? 'gratuita' : s.fee === 'yes' ? 'paga ' + C + ' preço' : s.fee}.`);
     if(s.heritage) lines.push('Classificado como património.');
     lines.push(`Antes de vir: ${s.hours ? 'confirme o horário no próprio dia' : 'confirme se está aberto'}; leve calçado confortável${s.kind === 'beach' ? ', protetor solar e veja a maré' : ''}${s.kind === 'viewpoint' ? '; a melhor luz é ao fim da tarde' : ''}.`);
-    if(f.src || s.website) lines.push(`Fonte: ${[f.src, s.website ? 'site oficial' : '', 'OpenStreetMap'].filter(Boolean).join(' · ')}`);
+    const srcs = [f.src, s.website ? 'site oficial: ' + s.website : '', (s.hours || s.fee) ? 'OpenStreetMap' : ''].filter(Boolean); if(srcs.length) lines.push(`Fonte: ${srcs.join(' · ')}`);
     B.push({h:`Paragem ${i+1} — ${s.name}`, t: lines.join('\n')});
   });
   B.push({h:'Onde comi', t: d.rest ? `Para mim, o melhor restaurante aqui foi o ${d.rest}${d.restWhy ? ', porque ' + d.restWhy : ''}. Gastei ${eur(food)}${d.r1 && d.r1 !== '–' ? `; comida ${d.r1}/5` : ''}${d.r2 && d.r2 !== '–' ? `, atendimento ${d.r2}/5` : ''}.` : `${C} — preencher o restaurante e o porquê no diário depois da viagem.`});

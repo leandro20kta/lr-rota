@@ -33,7 +33,8 @@ class Rig:
         else:
             target = chase.lerp(over, reveal); look = (cp + ct*L*0.4).lerp(Vector((0, 0, 0)), reveal); lens, fstop = 70 - 35*reveal, 2.0 + 3*reveal
         if self.pos is None or p < .20: self.pos, self.look = target.copy(), look.copy()
-        self.pos = self.pos.lerp(target, .12); self.look = self.look.lerp(look, .15)
+        k = .12 if p < .20 or p >= .84 else .45  # no seguimento a câmara cola ao carro (rotas longas comprimidas em poucos segundos)
+        self.pos = self.pos.lerp(target, k); self.look = self.look.lerp(look, min(.6, k + .1))
         self.cam.location = self.pos; d = self.look - self.pos; self.cam.rotation_euler = d.to_track_quat("-Z", "Y").to_euler()
         self.cam.data.lens = lens; self.cam.data.dof.aperture_fstop = fstop
         self.focus.location = cp if .20 <= p < .84 else self.look
