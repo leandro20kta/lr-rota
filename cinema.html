@@ -83,7 +83,16 @@ async function buildMap(route){
   const noise = document.createElement('canvas'); noise.width = noise.height = 256; const nd = noise.getContext('2d'); const id = nd.createImageData(256,256); for(let i=0;i<id.data.length;i+=4){ const v = 110 + Math.random()*40; id.data[i]=id.data[i+1]=id.data[i+2]=v; id.data[i+3]=255; } nd.putImageData(id,0,0);
   ctx.globalAlpha = .12; ctx.globalCompositeOperation = 'overlay'; for(let x=0;x<TEX;x+=256) for(let y=0;y<TEX;y+=256) ctx.drawImage(noise,x,y); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
   const toWorld = p => new THREE.Vector3(lon2x(p[1],z)-ox-TEX/2, 0, lat2y(p[0],z)-oy-TEX/2);
-  return { canvas: c, noise, toWorld, z };
+  return { canvas: c, noise, toWorld, z, ox, oy };
+}
+function paperTile(im){ const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d'); x.drawImage(im,0,0); x.globalCompositeOperation = 'multiply'; x.fillStyle = '#E2D2B4'; x.fillRect(0,0,256,256); x.globalCompositeOperation = 'overlay'; x.fillStyle = 'rgba(255,214,160,.18)'; x.fillRect(0,0,256,256); return c; }
+async function buildDetail(routePts, m, bump){
+  const zd = m.z + 2, F = 4, S = 256/F; const want = new Map();
+  for(let i=0;i<routePts.length;i+=3){ const p = routePts[i]; const tx = Math.floor((p.x + m.ox + TEX/2)*F/256), ty = Math.floor((p.z + m.oy + TEX/2)*F/256); for(let dx=-4;dx<=4;dx++) for(let dy=-4;dy<=4;dy++){ if(dx*dx+dy*dy > 20) continue; want.set(`${tx+dx},${ty+dy}`, [tx+dx, ty+dy]); } }
+  status(`A carregar detalhe das ruas (${want.size} peças)…`);
+  const group = new THREE.Group(); let n = 0;
+  await Promise.all([...want.values()].map(async ([tx,ty]) => { const im = await loadImg(`https://tile.openstreetmap.org/${zd}/${tx}/${ty}.png`); if(!im) return; const tex = new THREE.CanvasTexture(paperTile(im)); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8; const mesh = new THREE.Mesh(new THREE.PlaneGeometry(S, S), new THREE.MeshStandardMaterial({map: tex, roughness: .95, metalness: 0, bumpMap: bump, bumpScale: .35, envMapIntensity: .25})); mesh.rotation.x = -Math.PI/2; mesh.position.set(tx*S + S/2 - m.ox - TEX/2, 0.35, ty*S + S/2 - m.oy - TEX/2); mesh.receiveShadow = true; group.add(mesh); n++; }));
+  scene.add(group); return n;
 }
 
 /* ---------- scene ---------- */
@@ -97,13 +106,13 @@ const sun = new THREE.DirectionalLight('#FFD9A8', 1.5); sun.castShadow = true; s
 scene.add(new THREE.HemisphereLight('#7FB7D6', '#2A1E14', 0.35));
 const rim = new THREE.DirectionalLight('#2FA3C9', 0.7); rim.position.set(-TEX, TEX*.6, -TEX*.4); scene.add(rim);
 let composer, bokeh, bloom;
-function setSize(w, h){ W = w; H = h; out.width = w; out.height = h; renderer.setSize(w, h, false); renderer.setPixelRatio(1); camera.aspect = w/h; camera.updateProjectionMatrix(); composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, camera)); bloom = new UnrealBloomPass(new THREE.Vector2(w,h), 0.5, 0.45, 1.35); composer.addPass(bloom); bokeh = new BokehPass(scene, camera, {focus: 400, aperture: 0.00003, maxblur: 0.009}); composer.addPass(bokeh); composer.addPass(new OutputPass()); }
+function setSize(w, h){ W = w; H = h; out.width = w; out.height = h; renderer.setSize(w, h, false); renderer.setPixelRatio(1); camera.aspect = w/h; camera.updateProjectionMatrix(); composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, camera)); bloom = new UnrealBloomPass(new THREE.Vector2(w,h), 0.42, 0.4, 1.2); composer.addPass(bloom); bokeh = new BokehPass(scene, camera, {focus: 400, aperture: 0.00003, maxblur: 0.009}); composer.addPass(bokeh); composer.addPass(new OutputPass()); }
 
 /* car: procedural coupé with clearcoat paint (swap for a .glb of the real car later) */
 function buildCar(L){
   const g = new THREE.Group(); const s = L/4.6;
-  const paint = new THREE.MeshPhysicalMaterial({color:'#0B0C10', metalness:.55, roughness:.3, clearcoat:1, clearcoatRoughness:.06, envMapIntensity:1.6});
-  const glass = new THREE.MeshPhysicalMaterial({color:'#1A2433', metalness:.9, roughness:.05, envMapIntensity:2, transparent:true, opacity:.92});
+  const paint = new THREE.MeshPhysicalMaterial({color:'#0A0B0E', metalness:.5, roughness:.32, clearcoat:1, clearcoatRoughness:.08, envMapIntensity:1.0});
+  const glass = new THREE.MeshPhysicalMaterial({color:'#0E1620', metalness:.25, roughness:.1, envMapIntensity:.9, transparent:true, opacity:.96});
   const prof = new THREE.Shape(); [[-2.3,.38],[-2.3,.9],[-1.95,1.02],[-1.05,1.06],[-.35,1.44],[.68,1.44],[1.4,1.06],[2.25,.9],[2.3,.5],[2.3,.38]].forEach((p,i) => i ? prof.lineTo(p[0],p[1]) : prof.moveTo(p[0],p[1])); prof.closePath();
   const body = new THREE.Mesh(new THREE.ExtrudeGeometry(prof, {depth:1.84, bevelEnabled:true, bevelThickness:.09, bevelSize:.09, bevelSegments:4, curveSegments:12}), paint); body.position.z = -.92; body.castShadow = true; g.add(body);
   const cab = new THREE.Shape(); [[-1.0,1.05],[-.38,1.41],[.66,1.41],[1.3,1.05]].forEach((p,i) => i ? cab.lineTo(p[0],p[1]) : cab.moveTo(p[0],p[1])); cab.closePath();
@@ -113,6 +122,7 @@ function buildCar(L){
   [[1.45,.9],[1.45,-.9],[-1.45,.9],[-1.45,-.9]].forEach(([x,z]) => { const t = new THREE.Mesh(new THREE.CylinderGeometry(.37,.37,.26,28), tyre); t.rotation.x = Math.PI/2; t.position.set(x,.37,z); t.castShadow = true; g.add(t); const r = new THREE.Mesh(new THREE.CylinderGeometry(.24,.24,.28,16), rimM); r.rotation.x = Math.PI/2; r.position.set(x,.37,z + (z>0?.01:-.01)); g.add(r); });
   const head = new THREE.MeshStandardMaterial({color:'#FFF6DD', emissive:'#FFE2A8', emissiveIntensity:2.2}); const tail = new THREE.MeshStandardMaterial({color:'#5A0A0A', emissive:'#FF2A1A', emissiveIntensity:3});
   [.62,-.62].forEach(z => { const h = new THREE.Mesh(new THREE.BoxGeometry(.06,.14,.42), head); h.position.set(2.31,.78,z); g.add(h); const t = new THREE.Mesh(new THREE.BoxGeometry(.06,.1,.5), tail); t.position.set(-2.31,.8,z); g.add(t); });
+  [1.0,-1.0].forEach(z => { const m = new THREE.Mesh(new THREE.BoxGeometry(.22,.1,.16), paint); m.position.set(.95,1.12,z); g.add(m); });
   const grille = new THREE.Mesh(new THREE.BoxGeometry(.05,.2,.7), new THREE.MeshStandardMaterial({color:'#15171C', metalness:.8, roughness:.4})); grille.position.set(2.31,.6,0); g.add(grille);
   g.scale.setScalar(s); return g;
 }
@@ -130,6 +140,7 @@ async function setup(){
   const src = trip.track && trip.track.length > 20 ? trip.track.map(p => [p.lat,p.lon]) : trip.route;
   const raw = src.map(map.toWorld); pts = raw.filter((p,i) => i === 0 || p.distanceTo(raw[i-1]) > 1.5); pts.forEach(p => p.y = 1.2);
   curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal', .2); total = curve.getLength();
+  await buildDetail(pts, map, bump);
   const span = Math.max(...pts.map(p=>Math.abs(p.x)), ...pts.map(p=>Math.abs(p.z)))*2; carL = Math.max(60, Math.min(120, span*0.11));
   const segs = Math.min(3000, Math.max(400, Math.floor(total/4)));
   tube = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, carL*0.045, 10, false), new THREE.MeshStandardMaterial({color:'#FF8A3D', emissive:'#FF6A2A', emissiveIntensity:3.2, roughness:.4})); tube.position.y = .6; scene.add(tube);
@@ -138,7 +149,7 @@ async function setup(){
   car = buildCar(carL); car.visible = false; scene.add(car);
   const sc = document.createElement('canvas'); sc.width = sc.height = 256; const sx = sc.getContext('2d'); const sg = sx.createRadialGradient(128,128,10,128,128,120); sg.addColorStop(0,'rgba(0,0,0,.55)'); sg.addColorStop(.5,'rgba(0,0,0,.25)'); sg.addColorStop(1,'rgba(0,0,0,0)'); sx.fillStyle = sg; sx.fillRect(0,0,256,256);
   contact = new THREE.Mesh(new THREE.PlaneGeometry(carL*1.5, carL*0.8), new THREE.MeshBasicMaterial({map: new THREE.CanvasTexture(sc), transparent: true, depthWrite: false})); contact.rotation.x = -Math.PI/2; contact.position.y = 1.0; contact.visible = false; scene.add(contact);
-  const mk = (name, p, big) => { const c = document.createElement('canvas'); c.width = 1024; c.height = 256; const x = c.getContext('2d'); x.font = `700 ${big?118:96}px Caveat`; x.textAlign = 'center'; x.shadowColor = 'rgba(0,0,0,.7)'; x.shadowBlur = 18; x.shadowOffsetY = 4; x.fillStyle = '#FFFFFF'; x.fillText(name, 512, 165); const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: new THREE.CanvasTexture(c), transparent: true, depthTest: false})); sp.scale.set(carL*2.6, carL*0.65, 1); sp.position.copy(p).add(new THREE.Vector3(carL*0.9, carL*0.55, -carL*0.1)); sp.material.opacity = 0; scene.add(sp); const dot = new THREE.Mesh(new THREE.SphereGeometry(carL*0.07, 16, 16), new THREE.MeshStandardMaterial({color:'#fff', emissive:'#fff', emissiveIntensity:.8})); dot.position.copy(p); dot.visible = false; scene.add(dot); return {sp, dot}; };
+  const mk = (name, p, big) => { const c = document.createElement('canvas'); c.width = 1024; c.height = 256; const x = c.getContext('2d'); x.font = `700 ${big?118:96}px Caveat`; x.textAlign = 'center'; x.shadowColor = 'rgba(0,0,0,.7)'; x.shadowBlur = 18; x.shadowOffsetY = 4; x.fillStyle = '#FFFFFF'; x.fillText(name, 512, 165); const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: new THREE.CanvasTexture(c), transparent: true, depthTest: false})); sp.scale.set(carL*1.5, carL*0.375, 1); sp.position.copy(p).add(new THREE.Vector3(carL*0.55, carL*0.42, -carL*0.05)); sp.material.opacity = 0; scene.add(sp); const dot = new THREE.Mesh(new THREE.SphereGeometry(carL*0.07, 16, 16), new THREE.MeshStandardMaterial({color:'#fff', emissive:'#fff', emissiveIntensity:.8})); dot.position.copy(p); dot.visible = false; scene.add(dot); return {sp, dot}; };
   labels = [{...mk(trip.origin.name, pts[0], false), u: 0}, ...(trip.stops||[]).map(s => { const p = map.toWorld([s.lat, s.lon]); let bu = 0, bd = 1e18; for(let i=0;i<pts.length;i+=4){ const d = pts[i].distanceToSquared(p); if(d<bd){ bd=d; bu=i/(pts.length-1); } } return {...mk(s.name, curve.getPointAt(Math.min(1,bu)), false), u: bu}; }), {...mk(trip.dest.name, pts.at(-1), true), u: 1}];
   stopsU = labels.map(l => l.u);
   setSize(W, H); status('Pronto. Toque em Reproduzir.'); drawFrame(0.36); overlay(0.36, false);
@@ -162,10 +173,11 @@ function drawFrame(p){
   labels.forEach(l => { const on = l.u <= carU + .01 || (l.u === 0 && p > .05) || (l.u === 1 && p > .9); l.sp.material.opacity += ((on?1:0) - l.sp.material.opacity)*.12; l.dot.visible = on; });
   sun.position.copy(cp).add(new THREE.Vector3(carL*4, carL*6, carL*2.5)); sun.target.position.copy(cp); const sc = sun.shadow.camera; const r = carL*3; sc.left = -r; sc.right = r; sc.top = r; sc.bottom = -r; sc.near = 10; sc.far = carL*20; sc.updateProjectionMatrix();
   // camera targets per scene
-  const head = curve.getPointAt(Math.min(1, cu + .035)); const back = ct.clone().multiplyScalar(-1);
+  const head = cp.clone().add(ct.clone().multiplyScalar(carL*0.9)); const back = ct.clone().multiplyScalar(-1);
   const origin = pts[0];
-  const far = tmp.set(origin.x + span*.9, span*1.25, origin.z + span*1.1); const near = new THREE.Vector3(origin.x + carL*2.2, carL*2.4, origin.z + carL*3.2);
-  const chase = cp.clone().add(back.multiplyScalar(carL*2.6)).add(new THREE.Vector3(0, carL*1.7, 0));
+  const far = tmp.set(origin.x + span*.9, span*1.25, origin.z + span*1.1); const near = new THREE.Vector3(origin.x + carL*2.4, carL*1.6, origin.z + carL*3.0);
+  const right = new THREE.Vector3().crossVectors(ct, new THREE.Vector3(0,1,0)).normalize();
+  const chase = cp.clone().add(back.multiplyScalar(carL*3.1)).add(right.multiplyScalar(carL*1.25)).add(new THREE.Vector3(0, carL*1.2, 0));
   const over = new THREE.Vector3(span*.1, span*1.35, span*.85);
   if(p < .22){ const t = ease(smooth(0,.22,p)); camPos.copy(far).lerp(near, t); camLook.copy(origin); }
   else if(p < .84){ camPos.copy(chase); camLook.copy(head); }
