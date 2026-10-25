@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from rcs import routes, maps
 
 ROOT = os.path.dirname(os.path.abspath(__file__)); OUT = os.environ.get("OUTDIR", os.path.join(ROOT, "out")); os.makedirs(OUT, exist_ok=True)
-MAP_M = 20.0; SIZE = int(os.environ.get("MAP_PX", "6144")); SCALE = float(os.environ.get("MAP_SCALE", "2.2"))
+MAP_M = 20.0; SIZE = int(os.environ.get("MAP_PX", "6144")); SCALE = float(os.environ.get("MAP_SCALE", "1.35"))
 
 def main():
     t0 = time.time()

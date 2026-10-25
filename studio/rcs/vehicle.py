@@ -13,7 +13,7 @@ def procedural(L):
     s = L/4.6; col = _collection("Carro")
     paint, glass = M.car_paint(), M.car_glass()
     trim = M.simple("Plastico", (0.02, 0.02, 0.022), 0.55); tyre = M.simple("Pneu", (0.012, 0.012, 0.012), 0.9)
-    rim = M.simple("Jante", (0.75, 0.77, 0.8), 0.2, 1.0); hub = M.simple("Cubo", (0.15, 0.16, 0.18), 0.4, 0.9)
+    rim = M.simple("Jante", (0.22, 0.23, 0.25), 0.28, 1.0); hub = M.simple("Cubo", (0.15, 0.16, 0.18), 0.4, 0.9)
     head = M.emissive("Farol", (0.85, 0.92, 1.0), 6); tail = M.emissive("Farolim", (1.0, 0.08, 0.05), 10, base=(0.3, 0.02, 0.02))
     def extrude_profile(name, pts, width, bevel, mat, z0=0.0):
         me = bpy.data.meshes.new(name); bm = bmesh.new()
@@ -36,7 +36,7 @@ def procedural(L):
     for y in (1.02,-1.02): box("Espelho", (.2,.14,.09), (.9,y,1.08), paint)
     for y in (.6,-.6): box("Farol", (.05,.5,.1), (2.33,y,.82), head); box("Farolim", (.05,.62,.08), (-2.31,y,.86), tail)
     for x, y in ((1.45,.97),(1.45,-.97),(-1.45,.97),(-1.45,-.97)):
-        for r_, d, mat, nm in ((.42,.3,tyre,"Pneu"),(.29,.32,rim,"Jante"),(.08,.36,hub,"Cubo")):
+        for r_, d, mat, nm in ((.42,.3,tyre,"Pneu"),(.33,.31,rim,"Jante"),(.07,.34,hub,"Cubo")):
             bpy.ops.mesh.primitive_cylinder_add(radius=r_*s, depth=d*s, vertices=48, location=(x*s, y*s, .42*s), rotation=(math.pi/2,0,0)); o = bpy.context.object
             for c in o.users_collection: c.objects.unlink(o)
             col.objects.link(o); o.data.materials.append(mat); o.name = nm

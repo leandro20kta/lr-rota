@@ -54,15 +54,15 @@ bpy.ops.mesh.primitive_plane_add(size=MAP_M); plane = bpy.context.object; plane.
 bpy.ops.mesh.primitive_cube_add(size=1); table = bpy.context.object; table.name = "Mesa"; table.scale = (MAP_M*12, MAP_M*12, 0.3); table.location = (0, 0, -0.151); table.data.materials.append(M.simple("MesaM", (0.025, 0.03, 0.04), 0.7))
 
 def make_curve(name, radius, mat, z):
-    cd = bpy.data.curves.new(name, "CURVE"); cd.dimensions = "3D"; cd.bevel_depth = radius; cd.bevel_resolution = 8; cd.fill_mode = "FULL"; cd.use_fill_caps = True; cd.resolution_u = 10; cd.twist_mode = "Z_UP"
+    cd = bpy.data.curves.new(name, "CURVE"); cd.dimensions = "3D"; cd.bevel_depth = radius; cd.bevel_resolution = 8; cd.fill_mode = "FULL"; cd.use_fill_caps = True; cd.resolution_u = 10; cd.twist_mode = "Z_UP"; cd.bevel_factor_mapping_start = "SPLINE"; cd.bevel_factor_mapping_end = "SPLINE"
     sp = cd.splines.new("NURBS"); sp.points.add(len(route)-1); sp.order_u = 3; sp.use_endpoint_u = True
     for i, p in enumerate(route): sp.points[i].co = (p.x, p.y, z, 1.0)
     ob = bpy.data.objects.new(name, cd); bpy.context.collection.objects.link(ob); ob.data.materials.append(mat); ob.visible_shadow = False; return ob
-tube = make_curve("Rota", CAR_L*0.036, M.route_glow((1.0, 0.33, 0.07), 2.6), CAR_L*0.036*0.9 + 0.002)
-preview = make_curve("RotaPrevia", CAR_L*0.012, M.route_glow((1.0, 0.45, 0.15), 1.2), 0.004)
+tube = make_curve("Rota", CAR_L*0.03, M.route_glow((1.0, 0.30, 0.04), 7.0), CAR_L*0.03*0.9 + 0.002)
+preview = make_curve("RotaPrevia", CAR_L*0.009, M.route_glow((1.0, 0.42, 0.12), 0.7), 0.004)
 
 car, car_real = vehicle.load(CAR_L, os.path.join(HERE, "..", "models", "car.glb"))
-sun, rim = lighting.setup(sc, MAP_M); lighting.bloom(sc)
+sun, rim, spot = lighting.setup(sc, MAP_M); lighting.bloom(sc)
 rig = camera.Rig(sc, at, tangent, route, CAR_L, span)
 
 # marcadores de paragens: disco branco
@@ -75,7 +75,7 @@ def pose(p):
     draw, car_u, cp, ct = rig.pose(p)
     tube.data.bevel_factor_end = max(0.0005, car_u); preview.data.bevel_factor_end = max(0.0005, draw)
     car.location = (cp.x, cp.y, 0.0); car.rotation_euler = (0, 0, math.atan2(ct.y, ct.x)); car.hide_render = p < .18
-    lighting.follow(sun, cp, CAR_L)
+    lighting.follow(sun, cp, CAR_L, spot, cp + ct*CAR_L*2)
 
 # ---------- render ----------
 os.makedirs(os.path.join(OUT, "frames"), exist_ok=True)
