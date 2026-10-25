@@ -54,7 +54,7 @@ const PACK = Q.get('pack');                  // pacote offline (ex.: studio/pack
 const CAR_SCALE = +(Q.get('carscale') || 11);
 // estilo 'app': o carro tem ~80 px na autoestrada (vista alta) e encolhe para caber na faixa quando a câmara desce às ruas
 const CAR_K = +(Q.get('carsize') || 1);
-const carScaleApp = z => 3.6*CAR_K*Math.pow(2, (17.5 - z)*1.12);  // carro ampliado para ser visível (tamanho real ficaria com poucos píxeis)
+const carScaleApp = z => 5.2*CAR_K*Math.pow(2, (17.5 - z)*1.1);  // carro ampliado para ser visível (tamanho real ficaria com poucos píxeis)
 const DUR = +(Q.get('dur') || 75);            // segundos de vídeo para a viagem inteira
 
 /* ---------- viagem ---------- */
@@ -136,8 +136,8 @@ if(ATLAS){
   map.setPaintProperty('hills', 'hillshade-exaggeration', .75); map.setPaintProperty('road', 'line-width', ['interpolate',['exponential',1.6],['zoom'],10,['match',['get','class'],'motorway',1.6,'trunk',1.3,.5],17,['match',['get','class'],'motorway',16,'trunk',14,['primary','secondary'],12,7]]); map.setPaintProperty('road-case', 'line-width', ['interpolate',['exponential',1.6],['zoom'],10,['match',['get','class'],'motorway',2.4,'trunk',2,.9],17,['match',['get','class'],'motorway',20,'trunk',18,['primary','secondary'],15,9]]); map.setPaintProperty('water', 'fill-color', '#9CC8C0');
 }
 if(LOOK === 'app'){
-  const wR = ['interpolate',['exponential',1.7],['zoom'],10,['match',['get','class'],'motorway',1.8,'trunk',1.4,.5],15,['match',['get','class'],'motorway',9,'trunk',8,['primary','secondary'],6,3.5],19,['match',['get','class'],'motorway',90,'trunk',80,['primary','secondary'],64,['tertiary','minor'],48,30]];
-  const wC = ['interpolate',['exponential',1.7],['zoom'],10,['match',['get','class'],'motorway',2.8,'trunk',2.2,1],15,['match',['get','class'],'motorway',12,'trunk',11,['primary','secondary'],8.5,5.5],19,['match',['get','class'],'motorway',100,'trunk',90,['primary','secondary'],72,['tertiary','minor'],56,36]];
+  const wR = ['interpolate',['exponential',1.7],['zoom'],10,['match',['get','class'],'motorway',1.8,'trunk',1.4,.5],15,['match',['get','class'],'motorway',7,'trunk',6,['primary','secondary'],5,3],19,['match',['get','class'],'motorway',42,'trunk',38,['primary','secondary'],32,['tertiary','minor'],26,18]];
+  const wC = ['interpolate',['exponential',1.7],['zoom'],10,['match',['get','class'],'motorway',2.8,'trunk',2.2,1],15,['match',['get','class'],'motorway',9.5,'trunk',8.5,['primary','secondary'],7,4.5],19,['match',['get','class'],'motorway',50,'trunk',45,['primary','secondary'],38,['tertiary','minor'],31,22]];
   map.setPaintProperty('road', 'line-width', wR); map.setPaintProperty('road-case', 'line-width', wC);
   map.setLayoutProperty('bld', 'visibility', 'none'); map.addLayer({id:'bld-flat', type:'fill', source:'omt', 'source-layer':'building', minzoom: 14, paint:{'fill-color': C.bld, 'fill-opacity': .55}}, 'road-case'); }
 map.setTerrain({source: 'dem', exaggeration: LOOK === 'app' ? 1.6 : 1.0});   // no estilo 'app' o relevo é acentuado para se ver subir e descer
@@ -277,7 +277,7 @@ function frame(u, first){
   setProgress(d/TOTAL); hud(d, u); map.triggerRepaint();
 }
 const uOfKm = km => { let lo = 0, hi = 1; for(let k=0;k<40;k++){ const m = (lo+hi)/2; distAtTime(m) < km*1000 ? lo = m : hi = m; } return (lo+hi)/2; };
-window.__nav = {frame, uOfKm, map, TOTAL, ready: () => carLayer.ready && map.loaded() && map.areTilesLoaded(), trip, dbg: () => ({ready: carLayer.ready, car: carState, model: !!carModel, wheels: wheels.length, err: window.__carErr || null})};
+window.__nav = {frame, uOfKm, STOPS, map, TOTAL, ready: () => carLayer.ready && map.loaded() && map.areTilesLoaded(), trip, dbg: () => ({ready: carLayer.ready, car: carState, model: !!carModel, wheels: wheels.length, err: window.__carErr || null})};
 frame(0, true);
 /* reprodução: o tempo só avança com o mapa carregado (sem saltos); na gravação o gravador pausa enquanto carrega */
 let playing = false;
