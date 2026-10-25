@@ -7,7 +7,7 @@ Escreve studio/packs/<name>/:
   dem/{z}/{x}/{y}.png  altitude Terrarium (AWS Terrain Tiles, dados abertos) z8–12 no corredor
 Atribuição obrigatória nos vídeos: © OpenStreetMap contributors · OpenMapTiles · OpenFreeMap; altitude: Mapzen/AWS Terrain Tiles.
 """
-import gzip, json, math, os, sys, time, urllib.request
+import gzip, json, math, os, sys, time, urllib.parse, urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 from rcs import routes
 
@@ -34,7 +34,27 @@ def tile_of(lat, lon, z):
     y = int((1 - math.asinh(math.tan(r)) / math.pi) / 2 * n); return x, y
 
 # 1) pontos e percurso com passos
-pts = [routes.geocode(p) if isinstance(p, str) else p for p in CFG["points"]]
+def find(spec):
+    """{"name": ..., "find": {"tags": '["amenity"="fuel"]["brand"~"Repsol",i]', "near": [lat, lon], "radius": 8000}} → ponto real do OSM mais perto."""
+    f = spec["find"]; la, lo = f["near"]; q = f'[out:json][timeout:60];(node{f["tags"]}(around:{f.get("radius", 8000)},{la},{lo});way{f["tags"]}(around:{f.get("radius", 8000)},{la},{lo}););out center tags;'
+    for url in ("https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter", "https://maps.mail.ru/osm/tools/overpass/api/interpreter"):
+        try:
+            els = json.loads(get(url + "?data=" + urllib.parse.quote(q)))["elements"]; break
+        except Exception as e: print("overpass", url, e); els = []
+    cands = []
+    for e in els:
+        c = e.get("center", e); t = e.get("tags", {})
+        d = math.hypot((c["lat"] - la) * 111, (c["lon"] - lo) * 111 * math.cos(math.radians(la)))
+        cands.append({"lat": c["lat"], "lon": c["lon"], "km": round(d, 2), "osm": f'{e["type"]}/{e["id"]}', "tags": {k: v for k, v in t.items() if k in ("name", "brand", "operator", "addr:street", "addr:housenumber", "addr:city", "opening_hours")}})
+    cands.sort(key=lambda c: c["km"]); print("candidatos", spec["name"], json.dumps(cands[:6], ensure_ascii=False))
+    if not cands: raise RuntimeError("não encontrado: " + spec["name"])
+    best = cands[0]; out = {k: v for k, v in spec.items() if k != "find"}; out.update(lat=best["lat"], lon=best["lon"], osm=best["osm"], tags=best["tags"], alternatives=cands[1:6]); return out
+def point(p):
+    if isinstance(p, str): return routes.geocode(p)
+    if "find" in p: return find(p)
+    if "query" in p and "lat" not in p: g = routes.geocode(p["query"]); q = dict(p); q.update(lat=g["lat"], lon=g["lon"]); return q
+    return p
+pts = [point(p) for p in CFG["points"]]
 coords = ";".join(f"{p['lon']},{p['lat']}" for p in pts)
 j = json.loads(get(f"https://router.project-osrm.org/route/v1/driving/{coords}?overview=full&geometries=geojson&steps=true"))
 r = j["routes"][0]

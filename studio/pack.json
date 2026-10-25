@@ -1,30 +1,6 @@
-{
- "name": "pontedelima-vigo",
- "points": [
-  {
-   "name": "Ponte de Lima",
-   "lat": 41.7672,
-   "lon": -8.5838,
-   "country": "PT"
-  },
-  {
-   "name": "Valença",
-   "lat": 42.0302,
-   "lon": -8.6417,
-   "country": "PT"
-  },
-  {
-   "name": "Tui",
-   "lat": 42.0471,
-   "lon": -8.6443,
-   "country": "ES"
-  },
-  {
-   "name": "Vigo",
-   "lat": 42.2373,
-   "lon": -8.7208,
-   "country": "ES"
-  }
- ],
- "buffer_km": 4
-}
+{"name": "pontedelima-pontevedra", "buffer_km": 4, "points": [
+  {"name": "Ponte de Lima", "sub": "Arcozelo", "query": "Arcozelo, Ponte de Lima, Portugal", "country": "PT"},
+  {"name": "Valença", "sub": "Centro", "lat": 42.0302, "lon": -8.6417, "country": "PT"},
+  {"name": "Repsol", "sub": "Abastecimento", "kind": "fuel", "pause": 2.5, "find": {"tags": "[\"amenity\"=\"fuel\"][\"brand\"~\"Repsol\",i]", "near": [42.0302, -8.6417], "radius": 9000}},
+  {"name": "Vigo", "sub": "Galiza · Espanha", "lat": 42.2373, "lon": -8.7208, "country": "ES"},
+  {"name": "Pontevedra", "sub": "Paseo Marítimo · Porto das Corbaceiras", "lat": 42.4209, "lon": -8.6547, "country": "ES"}]}
