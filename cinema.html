@@ -76,7 +76,7 @@ async function buildMap(route){
   for(let x = Math.floor(ox/256); x <= Math.floor((ox+TEX)/256); x++) for(let y = Math.floor(oy/256); y <= Math.floor((oy+TEX)/256); y++) jobs.push(loadImg(`https://tile.openstreetmap.org/${z}/${x}/${y}.png`).then(im => { if(im) ctx.drawImage(im, x*256-ox, y*256-oy, 256, 256); }));
   status('A carregar o mapa real…'); await Promise.all(jobs);
   // paper look: warm multiply, grain, vignette
-  ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = '#F3E6CF'; ctx.fillRect(0,0,TEX,TEX);
+  ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = '#E2D2B4'; ctx.fillRect(0,0,TEX,TEX);
   ctx.globalCompositeOperation = 'overlay'; ctx.fillStyle = 'rgba(255,214,160,.18)'; ctx.fillRect(0,0,TEX,TEX);
   ctx.globalCompositeOperation = 'source-over';
   const g = ctx.createRadialGradient(TEX/2,TEX/2,TEX*.3,TEX/2,TEX/2,TEX*.75); g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1,'rgba(30,20,10,.55)'); ctx.fillStyle = g; ctx.fillRect(0,0,TEX,TEX);
@@ -89,15 +89,15 @@ async function buildMap(route){
 /* ---------- scene ---------- */
 const gl = $('#gl'), out = $('#out'); const octx = out.getContext('2d');
 const renderer = new THREE.WebGLRenderer({canvas: gl, antialias: true, powerPreference: 'high-performance'});
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.95;
 const scene = new THREE.Scene(); scene.background = new THREE.Color('#0E2430'); scene.fog = new THREE.Fog('#0E2430', TEX*0.9, TEX*2.2);
 const camera = new THREE.PerspectiveCamera(38, 16/9, 2, TEX*4);
 const pmrem = new THREE.PMREMGenerator(renderer); scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-const sun = new THREE.DirectionalLight('#FFD9A8', 2.6); sun.castShadow = true; sun.shadow.mapSize.set(2048,2048); sun.shadow.bias = -0.0005; scene.add(sun); scene.add(sun.target);
-scene.add(new THREE.HemisphereLight('#7FB7D6', '#2A1E14', 0.9));
-const rim = new THREE.DirectionalLight('#2FA3C9', 1.1); rim.position.set(-TEX, TEX*.6, -TEX*.4); scene.add(rim);
+const sun = new THREE.DirectionalLight('#FFD9A8', 1.5); sun.castShadow = true; sun.shadow.mapSize.set(2048,2048); sun.shadow.bias = -0.0005; scene.add(sun); scene.add(sun.target);
+scene.add(new THREE.HemisphereLight('#7FB7D6', '#2A1E14', 0.35));
+const rim = new THREE.DirectionalLight('#2FA3C9', 0.7); rim.position.set(-TEX, TEX*.6, -TEX*.4); scene.add(rim);
 let composer, bokeh, bloom;
-function setSize(w, h){ W = w; H = h; out.width = w; out.height = h; renderer.setSize(w, h, false); renderer.setPixelRatio(1); camera.aspect = w/h; camera.updateProjectionMatrix(); composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, camera)); bloom = new UnrealBloomPass(new THREE.Vector2(w,h), 0.55, 0.5, 0.92); composer.addPass(bloom); bokeh = new BokehPass(scene, camera, {focus: 400, aperture: 0.0022, maxblur: 0.011}); composer.addPass(bokeh); composer.addPass(new OutputPass()); }
+function setSize(w, h){ W = w; H = h; out.width = w; out.height = h; renderer.setSize(w, h, false); renderer.setPixelRatio(1); camera.aspect = w/h; camera.updateProjectionMatrix(); composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, camera)); bloom = new UnrealBloomPass(new THREE.Vector2(w,h), 0.5, 0.45, 1.35); composer.addPass(bloom); bokeh = new BokehPass(scene, camera, {focus: 400, aperture: 0.00003, maxblur: 0.009}); composer.addPass(bokeh); composer.addPass(new OutputPass()); }
 
 /* car: procedural coupé with clearcoat paint (swap for a .glb of the real car later) */
 function buildCar(L){
@@ -117,13 +117,14 @@ function buildCar(L){
   g.scale.setScalar(s); return g;
 }
 
-let trip, map, carL, curve, tube, halo, car, pts = [], labels = [], total = 0, stopsU = [];
+let trip, map, carL, curve, tube, halo, car, contact, pts = [], labels = [], total = 0, stopsU = [];
 async function setup(){
+  await Promise.all(['700 56px Caveat','700 118px Caveat','800 20px Inter','700 22px Inter'].map(f => document.fonts.load(f).catch(()=>{})));
   trip = loadTrip() || await demoTrip();
   map = await buildMap(trip.track && trip.track.length > 20 ? trip.track.map(p => [p.lat,p.lon]) : trip.route);
   const tex = new THREE.CanvasTexture(map.canvas); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
   const bump = new THREE.CanvasTexture(map.noise); bump.wrapS = bump.wrapT = THREE.RepeatWrapping; bump.repeat.set(16,16);
-  const plane = new THREE.Mesh(new THREE.PlaneGeometry(TEX, TEX), new THREE.MeshStandardMaterial({map: tex, roughness: .92, metalness: 0, bumpMap: bump, bumpScale: .6}));
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(TEX, TEX), new THREE.MeshStandardMaterial({map: tex, roughness: .95, metalness: 0, bumpMap: bump, bumpScale: .5, envMapIntensity: .25}));
   plane.rotation.x = -Math.PI/2; plane.receiveShadow = true; scene.add(plane);
   const base = new THREE.Mesh(new THREE.BoxGeometry(TEX*1.02, 22, TEX*1.02), new THREE.MeshStandardMaterial({color:'#C9B48E', roughness:.9})); base.position.y = -11; scene.add(base);
   const src = trip.track && trip.track.length > 20 ? trip.track.map(p => [p.lat,p.lon]) : trip.route;
@@ -135,6 +136,8 @@ async function setup(){
   halo = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, carL*0.12, 10, false), new THREE.MeshBasicMaterial({color:'#FF7A2A', transparent:true, opacity:.22, depthWrite:false})); halo.position.y = .4; scene.add(halo);
   tube.geometry.setDrawRange(0,0); halo.geometry.setDrawRange(0,0);
   car = buildCar(carL); car.visible = false; scene.add(car);
+  const sc = document.createElement('canvas'); sc.width = sc.height = 256; const sx = sc.getContext('2d'); const sg = sx.createRadialGradient(128,128,10,128,128,120); sg.addColorStop(0,'rgba(0,0,0,.55)'); sg.addColorStop(.5,'rgba(0,0,0,.25)'); sg.addColorStop(1,'rgba(0,0,0,0)'); sx.fillStyle = sg; sx.fillRect(0,0,256,256);
+  contact = new THREE.Mesh(new THREE.PlaneGeometry(carL*1.5, carL*0.8), new THREE.MeshBasicMaterial({map: new THREE.CanvasTexture(sc), transparent: true, depthWrite: false})); contact.rotation.x = -Math.PI/2; contact.position.y = 1.0; contact.visible = false; scene.add(contact);
   const mk = (name, p, big) => { const c = document.createElement('canvas'); c.width = 1024; c.height = 256; const x = c.getContext('2d'); x.font = `700 ${big?118:96}px Caveat`; x.textAlign = 'center'; x.shadowColor = 'rgba(0,0,0,.7)'; x.shadowBlur = 18; x.shadowOffsetY = 4; x.fillStyle = '#FFFFFF'; x.fillText(name, 512, 165); const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: new THREE.CanvasTexture(c), transparent: true, depthTest: false})); sp.scale.set(carL*2.6, carL*0.65, 1); sp.position.copy(p).add(new THREE.Vector3(carL*0.9, carL*0.55, -carL*0.1)); sp.material.opacity = 0; scene.add(sp); const dot = new THREE.Mesh(new THREE.SphereGeometry(carL*0.07, 16, 16), new THREE.MeshStandardMaterial({color:'#fff', emissive:'#fff', emissiveIntensity:.8})); dot.position.copy(p); dot.visible = false; scene.add(dot); return {sp, dot}; };
   labels = [{...mk(trip.origin.name, pts[0], false), u: 0}, ...(trip.stops||[]).map(s => { const p = map.toWorld([s.lat, s.lon]); let bu = 0, bd = 1e18; for(let i=0;i<pts.length;i+=4){ const d = pts[i].distanceToSquared(p); if(d<bd){ bd=d; bu=i/(pts.length-1); } } return {...mk(s.name, curve.getPointAt(Math.min(1,bu)), false), u: bu}; }), {...mk(trip.dest.name, pts.at(-1), true), u: 1}];
   stopsU = labels.map(l => l.u);
@@ -154,7 +157,7 @@ function drawFrame(p){
   const idxT = tube.geometry.index.count, idxH = halo.geometry.index.count;
   tube.geometry.setDrawRange(0, Math.floor(idxT*draw)); halo.geometry.setDrawRange(0, Math.floor(idxH*draw));
   const cu = Math.max(0.0005, Math.min(.9995, carU)); const cp = curve.getPointAt(cu), ct = curve.getTangentAt(cu);
-  car.visible = p > .2; car.position.copy(cp); car.position.y = 1.4; car.rotation.y = Math.atan2(-ct.z, ct.x) + 0;
+  car.visible = p > .2; car.position.copy(cp); car.position.y = 1.4; car.rotation.y = Math.atan2(-ct.z, ct.x); contact.visible = car.visible; contact.position.set(cp.x, 1.0, cp.z); contact.rotation.z = car.rotation.y;
   car.rotation.z = THREE.MathUtils.clamp(-ct.clone().cross(curve.getTangentAt(Math.min(.9995,cu+.002))).y*18, -.08, .08);
   labels.forEach(l => { const on = l.u <= carU + .01 || (l.u === 0 && p > .05) || (l.u === 1 && p > .9); l.sp.material.opacity += ((on?1:0) - l.sp.material.opacity)*.12; l.dot.visible = on; });
   sun.position.copy(cp).add(new THREE.Vector3(carL*4, carL*6, carL*2.5)); sun.target.position.copy(cp); const sc = sun.shadow.camera; const r = carL*3; sc.left = -r; sc.right = r; sc.top = r; sc.bottom = -r; sc.near = 10; sc.far = carL*20; sc.updateProjectionMatrix();
@@ -169,7 +172,7 @@ function drawFrame(p){
   else { camPos.copy(chase).lerp(over, reveal); camLook.copy(head).lerp(new THREE.Vector3(0,0,0), reveal); }
   if(first){ camera.position.copy(camPos); lookAt.copy(camLook); first = false; }
   camera.position.lerp(camPos, p < .22 ? 1 : .085); lookAt.lerp(camLook, .1); camera.lookAt(lookAt);
-  bokeh.uniforms.focus.value = camera.position.distanceTo(p < .22 ? origin : (p < .84 ? cp : new THREE.Vector3(0,0,0))); bokeh.uniforms.aperture.value = p < .22 || p >= .84 ? 0.0009 : 0.0023;
+  bokeh.uniforms.focus.value = camera.position.distanceTo(p < .22 ? origin : (p < .84 ? cp : new THREE.Vector3(0,0,0))); bokeh.uniforms.aperture.value = p < .22 || p >= .84 ? 0.000012 : 0.00003;
   composer.render();
 }
 function overlay(p, recording){
