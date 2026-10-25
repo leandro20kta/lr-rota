@@ -61,7 +61,7 @@ def make_curve(name, radius, mat, z):
 tube = make_curve("Rota", CAR_L*0.03, M.route_glow((1.0, 0.26, 0.02), 3.2), CAR_L*0.03*0.9 + 0.002)
 preview = make_curve("RotaPrevia", CAR_L*0.009, M.route_glow((1.0, 0.35, 0.06), 0.45), 0.004)
 
-GLB = os.path.join(HERE, "..", "models", "car.glb")
+GLB = os.environ.get("CAR_GLB") or os.path.join(HERE, "..", "models", "car.glb")
 if os.path.exists(GLB):
     car, car_real = vehicle.load(CAR_L, GLB); car = vehicle_rig.adopt(car, CAR_L)
 else:

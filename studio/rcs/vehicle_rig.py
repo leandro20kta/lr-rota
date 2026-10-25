@@ -148,7 +148,15 @@ def adopt(root, length):
         susp = bpy.data.objects.new("Suspensao", None); bpy.context.collection.objects.link(susp); susp.parent = root
         for o in list(root.children):
             if not o.name.startswith(tuple(n+"_pivot" for n in WHEELS)) and o is not susp: o.parent = susp
-    root.setdefault("wheel_radius", 0.36*length/4.6); root.setdefault("wheelbase", 2.8*length/4.6); root["length"] = length
+    # medidas reais a partir da geometria já escalada (rodas: altura do centro ≈ raio; entre-eixos = distância FE→TE)
+    bpy.context.view_layer.update()
+    piv = {o.name.split(".")[0]: o for o in root.children_recursive if o.name.split(".")[0].endswith("_pivot")}
+    if "roda_FE_pivot" in piv and "roda_TE_pivot" in piv:
+        fe, te = piv["roda_FE_pivot"].matrix_world.translation, piv["roda_TE_pivot"].matrix_world.translation
+        root["wheel_radius"] = max(1e-4, fe.z - root.matrix_world.translation.z); root["wheelbase"] = (fe - te).length
+    else:
+        root["wheel_radius"] = 0.36*length/4.6; root["wheelbase"] = 2.8*length/4.6
+    root["length"] = length
     return root
 
 # ---------------------------------------------------------------- animação
@@ -158,7 +166,7 @@ class Animator:
         self.root = root; self.fps = fps; self.r = root["wheel_radius"]; self.wb = root["wheelbase"]; self.L = root["length"]
         self.susp = next((o for o in root.children if o.name.startswith("Suspensao")), None)
         self.piv = {nm: next((o for o in root.children if o.name.startswith(nm+"_pivot")), None) for nm in WHEELS}
-        self.wheel = {nm: (p.children[0] if p and p.children else None) for nm, p in self.piv.items()}
+        self.wheel = {nm: (next((c for c in p.children if c.name.split('.')[0] == nm), None) if p else None) for nm, p in self.piv.items()}  # a roda pelo nome; pinças e outros filhos do pivot não giram
         self.spin = 0.0; self.steer = 0.0; self.prev = None; self.prev_heading = None; self.prev_speed = 0.0
         self.roll = 0.0; self.pitch = 0.0; self.dist = 0.0; self.max_spin = max_spin_per_frame
 

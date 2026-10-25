@@ -35,10 +35,10 @@ for p in cyc.data.polygons: p.use_smooth = True
 cyc.data.materials.append(M.simple("Fundo", (0.012, 0.014, 0.018), 0.6)); cyc.modifiers.new("solid", "SOLIDIFY").thickness = -0.1
 
 # veículo
-GLB = os.path.join(HERE, "..", "models", "car.glb")
+GLB = os.environ.get("CAR_GLB") or os.path.join(HERE, "..", "models", "car.glb")
 if os.path.exists(GLB): car, real = vehicle.load(L, GLB); car = vehicle_rig.adopt(car, L)
 else: car, real = vehicle_rig.build_estate(L), False
-anim = vehicle_rig.Animator(car, fps=FPS); fumo = smoke.Exhaust(car, L, puffs_per_pipe=6, life_frames=26, strength=0.05)
+anim = vehicle_rig.Animator(car, fps=FPS); fumo = smoke.Exhaust(car, L, puffs_per_pipe=6, life_frames=26, strength=0.05, follow=True)
 
 # luz: softbox por cima, contraluz azul-petróleo, recorte laranja
 def area(name, energy, color, size, loc, target=(0, 0, 0.7)):

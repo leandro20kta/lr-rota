@@ -22,9 +22,9 @@ def _material():
     return m
 
 class Exhaust:
-    def __init__(self, vehicle_root, car_len, puffs_per_pipe=10, life_frames=22, strength=0.35, seed=7):
+    def __init__(self, vehicle_root, car_len, puffs_per_pipe=10, life_frames=22, strength=0.35, seed=7, follow=False):
         self.pipes = sorted([o for o in vehicle_root.children_recursive if o.name.startswith("escape_")], key=lambda o: o.name)
-        self.L, self.N, self.life, self.k = car_len, puffs_per_pipe, life_frames, strength
+        self.L, self.N, self.life, self.k, self.follow = car_len, puffs_per_pipe, life_frames, strength, follow
         self.mat = _material(); self.hist = []; self.rng = random.Random(seed); self.puffs = []
         col = bpy.data.collections.new("Fumo"); bpy.context.scene.collection.children.link(col)
         for pi, pipe in enumerate(self.pipes):
@@ -45,7 +45,7 @@ class Exhaust:
             if birth < 0: o.hide_render = True; continue
             age = (len(self.hist) - 1 - birth)/self.life
             if age > 1: o.hide_render = True; continue
-            pos, back = self.hist[birth][pi]
+            pos, back = self.hist[-1][pi] if self.follow else self.hist[birth][pi]
             L = self.L
             o.location = pos + back*(L*0.08 + age*L*0.35) + Vector((drift.x*L*0.06*age, drift.y*L*0.06*age, drift.z*L*0.22*age))
             r = L*(0.025 + 0.09*age); o.scale = (r, r*0.85, r*0.8)

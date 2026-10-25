@@ -51,14 +51,16 @@ def load(L, glb_path):
     if os.path.exists(glb_path):
         try:
             before = set(bpy.data.objects); bpy.ops.import_scene.gltf(filepath=glb_path); new = [o for o in bpy.data.objects if o not in before]
-            root = bpy.data.objects.new("CarroRoot", None); bpy.context.collection.objects.link(root)
-            for o in new:
-                if o.parent is None: o.parent = root
+            tops = [o for o in new if o.parent is None]
+            for o in new: o.rotation_mode = "XYZ"   # glTF importa em quaterniões; o rig anima em Euler
+            if len(tops) == 1 and tops[0].name.startswith("Veiculo"):
+                root = tops[0]   # já segue a convenção do Studio (Veiculo/Suspensao/roda_XX_pivot)
+            else:
+                root = bpy.data.objects.new("CarroRoot", None); bpy.context.collection.objects.link(root)
+                for o in tops: o.parent = root
             pts = [o.matrix_world @ Vector(c) for o in new if o.type == "MESH" for c in o.bound_box]
             xs, ys, zs = [p.x for p in pts], [p.y for p in pts], [p.z for p in pts]
             length = max(max(xs)-min(xs), max(ys)-min(ys)); k = L/length; root.scale = (k, k, k); root.location.z = -min(zs)*k
-            for o in new:
-                if o.type == "MESH": o.cast_shadow = True if hasattr(o, "cast_shadow") else None
             print("carro: models/car.glb"); return root, True
         except Exception as e: print("car.glb falhou, carro provisório:", e)
     print("carro: PROVISÓRIO (procedural, genérico — não é o BMW)"); return procedural(L), False

@@ -32,6 +32,8 @@ select{font-family:inherit;font-size:13px;font-weight:600;border-radius:10px;pad
   <select id="res"><option value="1280">720p (telemóvel)</option><option value="1920">1080p</option><option value="3840">4K (só computador)</option></select>
   <button id="play" class="brand">▶ Reproduzir</button>
   <button id="rec" class="accent">● Exportar vídeo</button>
+  <button id="carbtn">🚗 Carro 3D</button><input type="file" id="carfile" accept=".glb,model/gltf-binary" hidden>
+  <button id="turnbtn">360°</button>
 </div>
 <script type="module">
 import * as THREE from 'three';
@@ -45,6 +47,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const $ = s => document.querySelector(s);
 const status = t => $('#status').textContent = t;
+const TURN = new URLSearchParams(location.search).get('turn') === '1';   // apresentação 360° do carro
 const TEX = 2048;              // map texture size (px) = world units of the map plane
 const isPhone = innerWidth < 900;
 let W = isPhone ? 1280 : 1920, H = W * 9/16;
@@ -103,7 +106,7 @@ renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadow
 const scene = new THREE.Scene(); scene.background = new THREE.Color('#071420'); scene.fog = new THREE.Fog('#0B2233', TEX*0.7, TEX*2.0);
 const camera = new THREE.PerspectiveCamera(38, 16/9, 2, TEX*4);
 const pmrem = new THREE.PMREMGenerator(renderer); scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-const sun = new THREE.DirectionalLight('#FFD9A8', 1.35); sun.castShadow = true; sun.shadow.mapSize.set(2048,2048); sun.shadow.bias = -0.0005; scene.add(sun); scene.add(sun.target);
+const sun = new THREE.DirectionalLight('#FFD9A8', 1.35); sun.castShadow = true; sun.shadow.mapSize.set(2048,2048); sun.shadow.bias = -0.0002; sun.shadow.normalBias = 1.5; scene.add(sun); scene.add(sun.target);
 scene.add(new THREE.HemisphereLight('#3F86C4', '#2A1E14', 0.4));
 const rim = new THREE.DirectionalLight('#2F8FD6', 1.0); rim.position.set(-TEX, TEX*.6, -TEX*.4); scene.add(rim);
 let composer, bokeh, bloom;
@@ -137,15 +140,68 @@ function buildCar(L){
   [.6,-.6].forEach(z => { const h = new THREE.Mesh(new THREE.BoxGeometry(.05,.1,.5), head); h.position.set(2.33,.82,z); g.add(h); const t = new THREE.Mesh(new THREE.BoxGeometry(.05,.08,.62), tail); t.position.set(-2.31,.86,z); g.add(t); });
   g.scale.setScalar(s); return g;
 }
-let trip, map, carL, curve, tube, halo, car, contact, pts = [], labels = [], total = 0, stopsU = [], carIsReal = false;
+let trip, map, carL, curve, tube, halo, car, contact, pts = [], labels = [], total = 0, stopsU = [], carIsReal = false, rig = null;
+/* armazenamento local do telemóvel (IndexedDB): o .glb do carro nunca sai do aparelho */
+function idb(mode, fn){ return new Promise((res, rej) => { const r = indexedDB.open('lr-rota', 1); r.onupgradeneeded = () => r.result.createObjectStore('files'); r.onerror = () => rej(r.error); r.onsuccess = () => { const tx = r.result.transaction('files', mode); const q = fn(tx.objectStore('files')); tx.oncomplete = () => res(q && q.result); tx.onerror = () => rej(tx.error); }; }); }
+const idbGet = k => idb('readonly', st => st.get(k)), idbSet = (k, v) => idb('readwrite', st => st.put(v, k)), idbDel = k => idb('readwrite', st => st.delete(k));
+const WHEELS = ['roda_FE', 'roda_FD', 'roda_TE', 'roda_TD'];
 async function loadCar(L){
-  try{ const g = await new GLTFLoader().loadAsync('models/car.glb'); const m = g.scene; m.traverse(o => { if(o.isMesh){ o.castShadow = true; if(o.material && 'envMapIntensity' in o.material) o.material.envMapIntensity = 1.1; } }); const box = new THREE.Box3().setFromObject(m); const size = box.getSize(new THREE.Vector3()); const len = Math.max(size.x, size.z); m.scale.setScalar(L/len); box.setFromObject(m); m.position.y -= box.min.y; carIsReal = true; const w = new THREE.Group(); w.add(m); return w; }
-  catch(e){ carIsReal = false; return buildCar(L); }
+  try{
+    const url = new URLSearchParams(location.search).get('car');
+    const buf = url ? null : await idbGet('car').catch(() => null);
+    const loader = new GLTFLoader();
+    const g = buf ? await loader.parseAsync(buf, '') : await loader.loadAsync(url || 'models/car.glb');
+    const m = g.scene; m.traverse(o => { if(o.isMesh){ o.castShadow = true; o.frustumCulled = false; if(o.material && 'envMapIntensity' in o.material) o.material.envMapIntensity = 1.1; } });
+    const box = new THREE.Box3().setFromObject(m); const size = box.getSize(new THREE.Vector3()); const len = Math.max(size.x, size.z); const k = L/len;
+    m.scale.setScalar(k); box.setFromObject(m); m.position.y -= box.min.y; carIsReal = true;
+    // rig (convenção do Studio): pivots esterçam em Y, rodas giram em Z (eixo lateral no glTF)
+    const piv = {}, wh = {}; WHEELS.forEach(n => { piv[n] = m.getObjectByName(n + '_pivot'); wh[n] = m.getObjectByName(n); });
+    if(piv.roda_FE && wh.roda_FE){ m.updateMatrixWorld(true); const a = new THREE.Vector3(), b = new THREE.Vector3(); piv.roda_FE.getWorldPosition(a); piv.roda_TE.getWorldPosition(b);
+      rig = {piv, wh, r: Math.max(1e-3, a.y - box.min.y + m.position.y), wb: a.distanceTo(b), spin: 0}; }
+    const w = new THREE.Group(); w.add(m); return w;
+  }catch(e){ console.warn('carro 3D:', e); carIsReal = false; return buildCar(L); }
+}
+function animateRig(dist, steer){
+  if(!rig) return;
+  rig.spin = -dist/rig.r;
+  WHEELS.forEach(n => { if(rig.wh[n]) rig.wh[n].rotation.z = rig.spin; if(rig.piv[n]) rig.piv[n].rotation.y = n.startsWith('roda_F') ? steer : 0; });
+}
+$('#carbtn').addEventListener('click', () => $('#carfile').click());
+$('#carfile').addEventListener('change', async e => { const f = e.target.files[0]; if(!f) return; status('A guardar o carro neste telemóvel…'); try{ await idbSet('car', await f.arrayBuffer()); status('Carro guardado. A recarregar…'); setTimeout(() => location.reload(), 400); }catch(err){ status('Não foi possível guardar: ' + err.message); } });
+if(TURN) document.querySelector('#turnbtn').textContent = '🗺️ Mapa';
+$('#turnbtn').addEventListener('click', () => { const u = new URL(location.href); if(u.searchParams.get('turn')) u.searchParams.delete('turn'); else u.searchParams.set('turn', '1'); location.href = u.toString(); });
+async function setupTurn(){
+  await Promise.all(['700 56px Caveat','800 20px Inter'].map(f => document.fonts.load(f).catch(()=>{})));
+  scene.fog = new THREE.Fog('#05090F', 260, 760); scene.background = new THREE.Color('#05090F'); scene.environmentIntensity = 0.55; carL = 100;
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(900, 96), new THREE.MeshStandardMaterial({color:'#07090C', roughness:.55, metalness:0, envMapIntensity:.12})); floor.rotation.x = -Math.PI/2; floor.receiveShadow = true; scene.add(floor);
+  const key = new THREE.SpotLight('#FFF4E6', 1.2e5, 0, Math.PI/7, .8, 2); key.position.set(20, 420, 40); key.castShadow = true; key.shadow.mapSize.set(2048, 2048); scene.add(key); scene.add(key.target);
+  const tealL = new THREE.SpotLight('#3FA0FF', 5e4, 0, Math.PI/10, .7, 2); tealL.position.set(-300, 260, -340); tealL.target.position.set(0, 50, 0); scene.add(tealL); scene.add(tealL.target);
+  const orange = new THREE.SpotLight('#FF8A3D', 2.5e4, 0, Math.PI/10, .7, 2); orange.position.set(360, 70, 300); orange.target.position.set(0, 30, 0); scene.add(orange); scene.add(orange.target);
+  sun.intensity = 0.25; rim.intensity = 0.6;
+  car = await loadCar(carL); scene.add(car); car.visible = true;
+  { const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d'); const g = x.createRadialGradient(128,128,8,128,128,124); g.addColorStop(0,'rgba(0,0,0,.85)'); g.addColorStop(.55,'rgba(0,0,0,.45)'); g.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0,0,256,256);
+    const sh = new THREE.Mesh(new THREE.PlaneGeometry(carL*1.25, carL*0.55), new THREE.MeshBasicMaterial({map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false})); sh.rotation.x = -Math.PI/2; sh.position.y = 0.3; car.add(sh); }
+  trip = {origin:{name:'LR Rota'}, dest:{name:'360°'}, distance:0, duration:0};
+  setSize(W, H); status(carIsReal ? (rig ? 'Pronto — o seu carro (rodas e direção animadas).' : 'Pronto — o seu carro.') : 'Carro provisório: toque em 🚗 Carro 3D para escolher o seu .glb.'); drawTurn(0.08); overlayTurn();
+}
+function drawTurn(p){
+  car.rotation.set(0, -0.6 + p*Math.PI*2, 0);
+  animateRig(p*carL*3, 0.4*Math.sin(p*Math.PI*4));
+  const ang = 0.55, dist = carL*1.75; camera.position.set(Math.cos(ang)*dist, carL*0.32, Math.sin(ang)*dist); camera.lookAt(0, carL*0.14, 0);
+  bokeh.uniforms.focus.value = camera.position.distanceTo(new THREE.Vector3(0, carL*0.12, 0)); bokeh.uniforms.aperture.value = 0.00002;
+  composer.render();
+}
+function overlayTurn(){ octx.drawImage(gl, 0, 0, W, H); const k = W/1280; octx.fillStyle = '#0A5BD6'; rr(octx, 32*k, 32*k, 300*k, 54*k, 27*k); octx.fill(); octx.fillStyle = '#fff'; octx.font = `800 ${20*k}px Inter`; octx.textAlign = 'left'; octx.fillText('LEANDRO NA ROTA', 58*k, 67*k); }
+function buildMapOverride(o){
+  const c = document.createElement('canvas'); c.width = c.height = TEX; const ctx = c.getContext('2d'); ctx.drawImage(o.img, 0, 0, TEX, TEX);
+  const noise = document.createElement('canvas'); noise.width = noise.height = 256; const nd = noise.getContext('2d'); const id = nd.createImageData(256,256); for(let i=0;i<id.data.length;i+=4){ const v = 110 + Math.random()*40; id.data[i]=id.data[i+1]=id.data[i+2]=v; id.data[i+3]=255; } nd.putImageData(id,0,0);
+  return { canvas: c, noise, toWorld: p => new THREE.Vector3(p[0]/o.mapM*TEX, 0, -p[1]/o.mapM*TEX), z: 0, ox: 0, oy: 0, override: true };
 }
 async function setup(){
   await Promise.all(['700 56px Caveat','700 118px Caveat','800 20px Inter','700 22px Inter'].map(f => document.fonts.load(f).catch(()=>{})));
-  trip = loadTrip() || await demoTrip();
-  map = await buildMap(trip.track && trip.track.length > 20 ? trip.track.map(p => [p.lat,p.lon]) : trip.route);
+  const OV = window.__mapOverride;
+  if(OV){ trip = OV.trip; const img = await loadImg(OV.src); map = buildMapOverride({img, mapM: OV.mapM}); }
+  else { trip = loadTrip() || await demoTrip(); map = await buildMap(trip.track && trip.track.length > 20 ? trip.track.map(p => [p.lat,p.lon]) : trip.route); }
   const tex = new THREE.CanvasTexture(map.canvas); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
   const bump = new THREE.CanvasTexture(map.noise); bump.wrapS = bump.wrapT = THREE.RepeatWrapping; bump.repeat.set(16,16);
   const plane = new THREE.Mesh(new THREE.PlaneGeometry(TEX, TEX), new THREE.MeshStandardMaterial({map: tex, roughness: .95, metalness: 0, bumpMap: bump, bumpScale: .5, envMapIntensity: .25}));
@@ -154,7 +210,7 @@ async function setup(){
   const src = trip.track && trip.track.length > 20 ? trip.track.map(p => [p.lat,p.lon]) : trip.route;
   const raw = src.map(map.toWorld); pts = raw.filter((p,i) => i === 0 || p.distanceTo(raw[i-1]) > 1.5); pts.forEach(p => p.y = 1.2);
   curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal', .2); total = curve.getLength();
-  await buildDetail(pts, map, bump);
+  if(!map.override) await buildDetail(pts, map, bump);
   const span = Math.max(...pts.map(p=>Math.abs(p.x)), ...pts.map(p=>Math.abs(p.z)))*2; carL = Math.max(60, Math.min(120, span*0.11));
   const segs = Math.min(3000, Math.max(400, Math.floor(total/4)));
   tube = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, carL*0.03, 12, false), new THREE.MeshStandardMaterial({color:'#FF7A2A', emissive:'#FF6A2A', emissiveIntensity:2.2, roughness:.35, metalness:.1})); tube.position.y = .6; scene.add(tube);
@@ -166,7 +222,7 @@ async function setup(){
   const mk = (name, p, big) => { const c = document.createElement('canvas'); c.width = 1024; c.height = 256; const x = c.getContext('2d'); x.font = `700 ${big?118:96}px Caveat`; x.textAlign = 'center'; x.shadowColor = 'rgba(0,0,0,.7)'; x.shadowBlur = 18; x.shadowOffsetY = 4; x.fillStyle = '#FFFFFF'; x.fillText(name, 512, 165); const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: new THREE.CanvasTexture(c), transparent: true, depthTest: false})); sp.scale.set(carL*1.5, carL*0.375, 1); sp.position.copy(p).add(new THREE.Vector3(carL*0.8, carL*0.5, carL*0.25)); sp.material.opacity = 0; scene.add(sp); const dot = new THREE.Mesh(new THREE.CylinderGeometry(carL*0.05, carL*0.05, carL*0.012, 24), new THREE.MeshStandardMaterial({color:'#FFF4E6', roughness:.6})); dot.position.copy(p); dot.visible = false; scene.add(dot); return {sp, dot}; };
   labels = [{...mk(trip.origin.name, pts[0], false), u: 0}, ...(trip.stops||[]).map(s => { const p = map.toWorld([s.lat, s.lon]); let bu = 0, bd = 1e18; for(let i=0;i<pts.length;i+=4){ const d = pts[i].distanceToSquared(p); if(d<bd){ bd=d; bu=i/(pts.length-1); } } return {...mk(s.name, curve.getPointAt(Math.min(1,bu)), false), u: bu}; }), {...mk(trip.dest.name, pts.at(-1), true), u: 1}];
   stopsU = labels.map(l => l.u);
-  setSize(W, H); status(carIsReal ? 'Pronto (modelo 3D do seu carro).' : 'Pronto — carro provisório genérico (coloque models/car.glb para usar o seu).'); drawFrame(0.36); overlay(0.36, false);
+  setSize(W, H); status(carIsReal ? 'Pronto — o seu carro 3D.' : 'Pronto — carro provisório. Toque em 🚗 Carro 3D para usar o seu .glb (fica só neste telemóvel).'); drawFrame(0.36); overlay(0.36, false);
 }
 
 /* ---------- animation script (5 cenas) ---------- */
@@ -183,7 +239,9 @@ function drawFrame(p){
   tube.geometry.setDrawRange(0, Math.floor(idxT*carU)); halo.geometry.setDrawRange(0, Math.floor(idxH*draw));
   const cu = Math.max(0.0005, Math.min(.9995, carU)); const cp = curve.getPointAt(cu), ct = curve.getTangentAt(cu);
   car.visible = p > .2; car.position.copy(cp); car.position.y = 0.6; car.rotation.y = Math.atan2(-ct.z, ct.x); contact.visible = car.visible; contact.position.set(cp.x, 1.0, cp.z); contact.rotation.z = car.rotation.y;
-  car.rotation.z = THREE.MathUtils.clamp(-ct.clone().cross(curve.getTangentAt(Math.min(.9995,cu+.002))).y*18, -.08, .08);
+  const turnRate = -ct.clone().cross(curve.getTangentAt(Math.min(.9995,cu+.004))).y;
+  car.rotation.z = THREE.MathUtils.clamp(turnRate*18, -.08, .08);
+  animateRig(carU*total*0.04, THREE.MathUtils.clamp(turnRate*120, -.45, .45));   // rotação visual reduzida (rotas de km comprimidas em segundos)
   labels.forEach(l => { const on = l.u <= carU + .01 || (l.u === 0 && p > .05) || (l.u === 1 && p > .9); l.sp.material.opacity += ((on?1:0) - l.sp.material.opacity)*.12; l.dot.visible = on; });
   sun.position.copy(cp).add(new THREE.Vector3(carL*4, carL*6, carL*2.5)); sun.target.position.copy(cp); const sc = sun.shadow.camera; const r = carL*3; sc.left = -r; sc.right = r; sc.top = r; sc.bottom = -r; sc.near = 10; sc.far = carL*20; sc.updateProjectionMatrix();
   // camera targets per scene
@@ -211,9 +269,9 @@ function overlay(p, recording){
 function rr(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
 
 let raf = null;
-function play(onEnd, recording){ const D = +$('#dur').value*1000; const t0 = performance.now(); first = true; cancelAnimationFrame(raf); (function step(){ const p = Math.min(1, (performance.now()-t0)/D); drawFrame(p); overlay(p, recording); status(recording ? `A gravar… ${Math.round(p*100)}%` : `${Math.round(p*100)}%`); if(p < 1) raf = requestAnimationFrame(step); else { status('Fim.'); if(onEnd) setTimeout(onEnd, 500); } })(); }
+function play(onEnd, recording){ const D = +$('#dur').value*1000; const t0 = performance.now(); first = true; cancelAnimationFrame(raf); (function step(){ const p = Math.min(1, (performance.now()-t0)/D); if(TURN){ drawTurn(p); overlayTurn(); } else { drawFrame(p); overlay(p, recording); } status(recording ? `A gravar… ${Math.round(p*100)}%` : `${Math.round(p*100)}%`); if(p < 1) raf = requestAnimationFrame(step); else { status('Fim.'); if(onEnd) setTimeout(onEnd, 500); } })(); }
 $('#play').addEventListener('click', () => play());
-$('#res').addEventListener('change', e => { const w = +e.target.value; setSize(w, w*9/16); drawFrame(0.36); overlay(0.36,false); });
+$('#res').addEventListener('change', e => { const w = +e.target.value; setSize(w, w*9/16); if(TURN){ drawTurn(0.08); overlayTurn(); } else { drawFrame(0.36); overlay(0.36,false); } });
 $('#rec').addEventListener('click', () => {
   if(!('MediaRecorder' in window)){ status('Este browser não grava vídeo; grave o ecrã durante a reprodução.'); return; }
   const mime = ['video/mp4;codecs=avc1','video/mp4','video/webm;codecs=vp9','video/webm'].find(m => MediaRecorder.isTypeSupported(m));
@@ -221,8 +279,8 @@ $('#rec').addEventListener('click', () => {
   rec.onstop = () => { const blob = new Blob(chunks, {type: mime}); const file = new File([blob], `lr-rota-cinema-${trip.dest.name}.${mime.includes('mp4')?'mp4':'webm'}`, {type: mime}); if(navigator.canShare && navigator.canShare({files:[file]})) navigator.share({files:[file], title:'LR Rota'}).catch(()=>{}); else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click(); } $('#rec').disabled = false; status('Vídeo pronto.'); };
   $('#rec').disabled = true; rec.start(); play(() => rec.stop(), true);
 });
-window.__cinema = { drawFrame, overlay, play, THREE, get trip(){ return trip; }, get car(){ return car; }, get map(){ return map; }, get carL(){ return carL; } };
-setup().catch(e => { console.error(e); status('Erro: ' + e.message); });
+window.__cinema = { drawFrame, overlay, drawTurn, overlayTurn, play, THREE, get trip(){ return trip; }, get car(){ return car; }, get map(){ return map; }, get carL(){ return carL; }, get rig(){ return rig; }, get ready(){ return !!composer; } };
+(TURN ? setupTurn() : setup()).catch(e => { console.error(e); status('Erro: ' + e.message); });
 </script>
 </body>
 </html>
