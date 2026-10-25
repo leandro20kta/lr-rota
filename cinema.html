@@ -74,7 +74,7 @@ async function buildMap(route){
   const c = document.createElement('canvas'); c.width = c.height = TEX; const ctx = c.getContext('2d');
   ctx.fillStyle = '#E8E0D0'; ctx.fillRect(0,0,TEX,TEX);
   const jobs = [];
-  for(let x = Math.floor(ox/256); x <= Math.floor((ox+TEX)/256); x++) for(let y = Math.floor(oy/256); y <= Math.floor((oy+TEX)/256); y++) jobs.push(loadImg(`https://tile.openstreetmap.org/${z}/${x}/${y}.png`).then(im => { if(im){ ctx.filter = 'saturate(1.6) contrast(1.22) brightness(.96)'; ctx.drawImage(im, x*256-ox, y*256-oy, 256, 256); ctx.filter = 'none'; } }));
+  for(let x = Math.floor(ox/256); x <= Math.floor((ox+TEX)/256); x++) for(let y = Math.floor(oy/256); y <= Math.floor((oy+TEX)/256); y++) jobs.push(loadImg(`https://tile.openstreetmap.org/${z}/${x}/${y}.png`).then(im => { if(im){ ctx.filter = 'saturate(1.9) contrast(1.3) brightness(.93)'; ctx.drawImage(im, x*256-ox, y*256-oy, 256, 256); ctx.filter = 'none'; } }));
   status('A carregar o mapa real…'); await Promise.all(jobs);
   // paper look: warm multiply, grain, vignette
   ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = '#CFBD9A'; ctx.fillRect(0,0,TEX,TEX);
@@ -86,7 +86,7 @@ async function buildMap(route){
   const toWorld = p => new THREE.Vector3(lon2x(p[1],z)-ox-TEX/2, 0, lat2y(p[0],z)-oy-TEX/2);
   return { canvas: c, noise, toWorld, z, ox, oy };
 }
-function paperTile(im){ const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d'); x.filter = 'saturate(1.6) contrast(1.22) brightness(.96)'; x.drawImage(im,0,0); x.filter = 'none'; x.globalCompositeOperation = 'multiply'; x.fillStyle = '#CFBD9A'; x.fillRect(0,0,256,256); x.globalCompositeOperation = 'overlay'; x.fillStyle = 'rgba(255,214,160,.24)'; x.fillRect(0,0,256,256); return c; }
+function paperTile(im){ const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d'); x.filter = 'saturate(1.9) contrast(1.3) brightness(.93)'; x.drawImage(im,0,0); x.filter = 'none'; x.globalCompositeOperation = 'multiply'; x.fillStyle = '#CFBD9A'; x.fillRect(0,0,256,256); x.globalCompositeOperation = 'overlay'; x.fillStyle = 'rgba(255,214,160,.24)'; x.fillRect(0,0,256,256); return c; }
 async function buildDetail(routePts, m, bump){
   const zd = m.z + 2, F = 4, S = 256/F; const want = new Map();
   for(let i=0;i<routePts.length;i+=3){ const p = routePts[i]; const tx = Math.floor((p.x + m.ox + TEX/2)*F/256), ty = Math.floor((p.z + m.oy + TEX/2)*F/256); for(let dx=-5;dx<=5;dx++) for(let dy=-5;dy<=5;dy++){ if(dx*dx+dy*dy > 30) continue; want.set(`${tx+dx},${ty+dy}`, [tx+dx, ty+dy]); } }
@@ -99,15 +99,15 @@ async function buildDetail(routePts, m, bump){
 /* ---------- scene ---------- */
 const gl = $('#gl'), out = $('#out'); const octx = out.getContext('2d');
 const renderer = new THREE.WebGLRenderer({canvas: gl, antialias: true, powerPreference: 'high-performance'});
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.95;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.88;
 const scene = new THREE.Scene(); scene.background = new THREE.Color('#071420'); scene.fog = new THREE.Fog('#0B2233', TEX*0.7, TEX*2.0);
 const camera = new THREE.PerspectiveCamera(38, 16/9, 2, TEX*4);
 const pmrem = new THREE.PMREMGenerator(renderer); scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-const sun = new THREE.DirectionalLight('#FFD9A8', 1.75); sun.castShadow = true; sun.shadow.mapSize.set(2048,2048); sun.shadow.bias = -0.0005; scene.add(sun); scene.add(sun.target);
-scene.add(new THREE.HemisphereLight('#3F86C4', '#2A1E14', 0.5));
+const sun = new THREE.DirectionalLight('#FFD9A8', 1.35); sun.castShadow = true; sun.shadow.mapSize.set(2048,2048); sun.shadow.bias = -0.0005; scene.add(sun); scene.add(sun.target);
+scene.add(new THREE.HemisphereLight('#3F86C4', '#2A1E14', 0.4));
 const rim = new THREE.DirectionalLight('#2F8FD6', 1.0); rim.position.set(-TEX, TEX*.6, -TEX*.4); scene.add(rim);
 let composer, bokeh, bloom;
-function setSize(w, h){ W = w; H = h; out.width = w; out.height = h; renderer.setSize(w, h, false); renderer.setPixelRatio(1); camera.aspect = w/h; camera.updateProjectionMatrix(); composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, camera)); bloom = new UnrealBloomPass(new THREE.Vector2(w,h), 0.38, 0.55, 1.0); composer.addPass(bloom); bokeh = new BokehPass(scene, camera, {focus: 400, aperture: 0.00003, maxblur: 0.009}); composer.addPass(bokeh); composer.addPass(new OutputPass()); }
+function setSize(w, h){ W = w; H = h; out.width = w; out.height = h; renderer.setSize(w, h, false); renderer.setPixelRatio(1); camera.aspect = w/h; camera.updateProjectionMatrix(); composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, camera)); bloom = new UnrealBloomPass(new THREE.Vector2(w,h), 0.33, 0.5, 1.55); composer.addPass(bloom); bokeh = new BokehPass(scene, camera, {focus: 400, aperture: 0.00003, maxblur: 0.009}); composer.addPass(bokeh); composer.addPass(new OutputPass()); }
 
 /* car: procedural coupé with clearcoat paint (swap for a .glb of the real car later) */
 function buildCar(L){
@@ -157,8 +157,8 @@ async function setup(){
   await buildDetail(pts, map, bump);
   const span = Math.max(...pts.map(p=>Math.abs(p.x)), ...pts.map(p=>Math.abs(p.z)))*2; carL = Math.max(60, Math.min(120, span*0.11));
   const segs = Math.min(3000, Math.max(400, Math.floor(total/4)));
-  tube = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, carL*0.03, 12, false), new THREE.MeshStandardMaterial({color:'#FF7A2A', emissive:'#FF6A2A', emissiveIntensity:1.7, roughness:.35, metalness:.1})); tube.position.y = .6; scene.add(tube);
-  halo = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, carL*0.075, 10, false), new THREE.MeshBasicMaterial({color:'#FF8A3D', transparent:true, opacity:.3, depthWrite:false, blending: THREE.AdditiveBlending})); halo.position.y = .5; scene.add(halo);
+  tube = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, carL*0.03, 12, false), new THREE.MeshStandardMaterial({color:'#FF7A2A', emissive:'#FF6A2A', emissiveIntensity:2.2, roughness:.35, metalness:.1})); tube.position.y = .6; scene.add(tube);
+  halo = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, carL*0.075, 10, false), new THREE.MeshBasicMaterial({color:'#FF7A2A', transparent:true, opacity:.32, depthWrite:false})); halo.position.y = .5; scene.add(halo);
   tube.geometry.setDrawRange(0,0); halo.geometry.setDrawRange(0,0);
   car = await loadCar(carL); car.visible = false; scene.add(car);
   const sc = document.createElement('canvas'); sc.width = sc.height = 256; const sx = sc.getContext('2d'); const sg = sx.createRadialGradient(128,128,10,128,128,120); sg.addColorStop(0,'rgba(0,0,0,.55)'); sg.addColorStop(.5,'rgba(0,0,0,.25)'); sg.addColorStop(1,'rgba(0,0,0,0)'); sx.fillStyle = sg; sx.fillRect(0,0,256,256);
