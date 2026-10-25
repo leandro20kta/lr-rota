@@ -1,0 +1,1 @@
+w=960 h=540 samples=24 dur=5 fps=24 shards=8 carro_glb=nao

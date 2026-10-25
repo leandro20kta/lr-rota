@@ -1,0 +1,4 @@
+stream|width=960|height=540|r_frame_rate=24/1|nb_frames=120
+format|duration=5.000000
+stream|width=960|height=540|r_frame_rate=24/1|nb_frames=120
+format|duration=5.000000
