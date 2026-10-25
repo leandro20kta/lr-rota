@@ -40,12 +40,15 @@ jobs:
             STILL_P="0.30,0.55,0.90" python -c "import runpy; runpy.run_path('studio/render_blender.py')"
           else
             FRAMES="" python -c "import runpy; runpy.run_path('studio/render_blender.py')"
-            ffmpeg -y -framerate "$FPS" -i studio/out/frames/f%04d.png -c:v libx264 -pix_fmt yuv420p -crf 17 -preset slow studio/out/cinema.mp4
+          fi
+          python studio/overlay_frames.py
+          if [ "$MODE" = "clip" ]; then
+            ffmpeg -y -framerate "$FPS" -i studio/out/frames/f%04d.ov.png -c:v libx264 -pix_fmt yuv420p -crf 17 -preset slow studio/out/cinema.mp4
           fi
       - name: Publicar resultados no repositório
         run: |
           D="studio/renders/$(date -u +%Y%m%d-%H%M)-${MODE}-${W}x${H}"
-          mkdir -p "$D"; cp studio/out/frames/*.png "$D"/ 2>/dev/null || true; cp studio/out/cinema.mp4 "$D"/ 2>/dev/null || true
+          mkdir -p "$D"; cp studio/out/frames/*.ov.png "$D"/ 2>/dev/null || true; cp studio/out/frames/still_*.png "$D"/ 2>/dev/null || true; cp studio/out/cinema.mp4 "$D"/ 2>/dev/null || true
           cp studio/out/scene.json "$D"/; echo "modo=$MODE w=$W h=$H samples=$SAMPLES dur=$DUR fps=$FPS carro_glb=$(test -f models/car.glb && echo sim || echo nao)" > "$D"/info.txt
           git config user.name "rota-cinema-bot"; git config user.email "bot@users.noreply.github.com"
           git add "$D"; git commit -m "Render Studio: $D [skip ci]" || exit 0
