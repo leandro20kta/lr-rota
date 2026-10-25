@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LR Rota — Cinema 3D</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800&family=Caveat:wght@700&display=swap">
+<style>
+:root{--brand:#0A5BD6;--accent:#FF6A2A;--ink:#0F172A}
+html,body{margin:0;height:100%;background:#0B1220;color:#fff;font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+#stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#0B1220}
+#out{max-width:100%;max-height:100%;aspect-ratio:16/9;background:#000;box-shadow:0 20px 80px rgba(0,0,0,.6)}
+#gl{display:none}
+#ui{position:fixed;left:0;right:0;bottom:0;padding:12px 16px calc(env(safe-area-inset-bottom) + 14px);display:flex;gap:10px;align-items:center;justify-content:center;background:linear-gradient(transparent,rgba(11,18,32,.95));flex-wrap:wrap}
+button{font-family:inherit;font-weight:700;font-size:14px;border:0;border-radius:12px;padding:12px 18px;cursor:pointer;color:#fff;background:#1E293B}
+button.accent{background:linear-gradient(135deg,#FF8A3D,#F0561F)}
+button.brand{background:var(--brand)}
+button:disabled{opacity:.5}
+#status{position:fixed;top:calc(env(safe-area-inset-top) + 12px);left:16px;right:16px;text-align:center;font-size:13px;font-weight:600;color:#CBD5E1;pointer-events:none}
+a.back{position:fixed;top:calc(env(safe-area-inset-top) + 10px);left:12px;color:#fff;text-decoration:none;font-weight:700;font-size:13px;background:rgba(255,255,255,.12);padding:8px 12px;border-radius:999px}
+select{font-family:inherit;font-size:13px;font-weight:600;border-radius:10px;padding:10px;border:0;background:#1E293B;color:#fff}
+</style>
+<script type="importmap">{"imports":{"three":"./vendor/three/build/three.module.js","three/addons/":"./vendor/three/jsm/"}}</script>
+</head>
+<body>
+<div id="stage"><canvas id="out"></canvas></div>
+<canvas id="gl"></canvas>
+<a class="back" href="./#video">‹ LR Rota</a>
+<div id="status">A preparar a cena…</div>
+<div id="ui">
+  <select id="dur"><option value="12">12 s</option><option value="20" selected>20 s</option><option value="30">30 s</option></select>
+  <select id="res"><option value="1280">720p (telemóvel)</option><option value="1920">1080p</option><option value="3840">4K (só computador)</option></select>
+  <button id="play" class="brand">▶ Reproduzir</button>
+  <button id="rec" class="accent">● Exportar vídeo</button>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+const $ = s => document.querySelector(s);
+const status = t => $('#status').textContent = t;
+const TEX = 2048;              // map texture size (px) = world units of the map plane
+const isPhone = innerWidth < 900;
+let W = isPhone ? 1280 : 1920, H = W * 9/16;
+
+/* ---------- trip data: from the app (localStorage) or a demo route ---------- */
+function loadTrip(){ try{ const t = JSON.parse(localStorage.getItem('lr.current')); if(t && t.route && t.route.length > 10) return t; }catch(e){} return null; }
+async function demoTrip(){
+  const o = {lat:41.6932, lon:-8.8329, name:'Viana do Castelo'}, d = {lat:41.7675, lon:-8.5839, name:'Ponte de Lima'};
+  const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${o.lon},${o.lat};${d.lon},${d.lat}?overview=full&geometries=geojson`).then(r => r.json());
+  return { origin:o, dest:d, route: r.routes[0].geometry.coordinates.map(c => [c[1], c[0]]), distance: r.routes[0].distance, duration: r.routes[0].duration, stops: [{name:'Lanheses', lat:41.7357, lon:-8.7218},{name:'Ponte Medieval', lat:41.7686, lon:-8.5852}], track: [], tollM: 0 };
+}
+const settings = Object.assign({fuel:'Gasóleo', cons:6.5, price:1.72}, (()=>{ try{ return JSON.parse(localStorage.getItem('lr.settings')) || {}; }catch(e){ return {}; } })());
+const eur = n => '€' + (Math.round(n*100)/100).toFixed(2).replace('.', ',');
+const km = m => (m/1000 < 10 ? (m/1000).toFixed(1) : Math.round(m/1000)).toString().replace('.', ',') + ' km';
+const mins = s => { const m = Math.round(s/60); return m < 60 ? m + ' min' : Math.floor(m/60) + ' h ' + String(m%60).padStart(2,'0'); };
+
+/* ---------- map texture from real OSM tiles, paper look ---------- */
+const lon2x = (lon, z) => (lon + 180) / 360 * 2**z * 256;
+const lat2y = (lat, z) => { const r = lat*Math.PI/180; return (1 - Math.log(Math.tan(r) + 1/Math.cos(r))/Math.PI) / 2 * 2**z * 256; };
+function loadImg(src){ return new Promise(res => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => res(im); im.onerror = () => res(null); im.src = src; }); }
+async function buildMap(route){
+  const lats = route.map(p=>p[0]), lons = route.map(p=>p[1]);
+  const b = {minLat:Math.min(...lats), maxLat:Math.max(...lats), minLon:Math.min(...lons), maxLon:Math.max(...lons)};
+  let z = 17; while(z > 3){ const w = lon2x(b.maxLon,z)-lon2x(b.minLon,z), h = lat2y(b.minLat,z)-lat2y(b.maxLat,z); if(Math.max(w,h) < TEX*0.55) break; z--; }
+  const cx = (lon2x(b.minLon,z)+lon2x(b.maxLon,z))/2, cy = (lat2y(b.minLat,z)+lat2y(b.maxLat,z))/2;
+  const ox = cx - TEX/2, oy = cy - TEX/2;
+  const c = document.createElement('canvas'); c.width = c.height = TEX; const ctx = c.getContext('2d');
+  ctx.fillStyle = '#E8E0D0'; ctx.fillRect(0,0,TEX,TEX);
+  const jobs = [];
+  for(let x = Math.floor(ox/256); x <= Math.floor((ox+TEX)/256); x++) for(let y = Math.floor(oy/256); y <= Math.floor((oy+TEX)/256); y++) jobs.push(loadImg(`https://tile.openstreetmap.org/${z}/${x}/${y}.png`).then(im => { if(im) ctx.drawImage(im, x*256-ox, y*256-oy, 256, 256); }));
+  status('A carregar o mapa real…'); await Promise.all(jobs);
+  // paper look: warm multiply, grain, vignette
+  ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = '#F3E6CF'; ctx.fillRect(0,0,TEX,TEX);
+  ctx.globalCompositeOperation = 'overlay'; ctx.fillStyle = 'rgba(255,214,160,.18)'; ctx.fillRect(0,0,TEX,TEX);
+  ctx.globalCompositeOperation = 'source-over';
+  const g = ctx.createRadialGradient(TEX/2,TEX/2,TEX*.3,TEX/2,TEX/2,TEX*.75); g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1,'rgba(30,20,10,.55)'); ctx.fillStyle = g; ctx.fillRect(0,0,TEX,TEX);
+  const noise = document.createElement('canvas'); noise.width = noise.height = 256; const nd = noise.getContext('2d'); const id = nd.createImageData(256,256); for(let i=0;i<id.data.length;i+=4){ const v = 110 + Math.random()*40; id.data[i]=id.data[i+1]=id.data[i+2]=v; id.data[i+3]=255; } nd.putImageData(id,0,0);
+  ctx.globalAlpha = .12; ctx.globalCompositeOperation = 'overlay'; for(let x=0;x<TEX;x+=256) for(let y=0;y<TEX;y+=256) ctx.drawImage(noise,x,y); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  const toWorld = p => new THREE.Vector3(lon2x(p[1],z)-ox-TEX/2, 0, lat2y(p[0],z)-oy-TEX/2);
+  return { canvas: c, noise, toWorld, z };
+}
+
+/* ---------- scene ---------- */
+const gl = $('#gl'), out = $('#out'); const octx = out.getContext('2d');
+const renderer = new THREE.WebGLRenderer({canvas: gl, antialias: true, powerPreference: 'high-performance'});
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#0E2430'); scene.fog = new THREE.Fog('#0E2430', TEX*0.9, TEX*2.2);
+const camera = new THREE.PerspectiveCamera(38, 16/9, 2, TEX*4);
+const pmrem = new THREE.PMREMGenerator(renderer); scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+const sun = new THREE.DirectionalLight('#FFD9A8', 2.6); sun.castShadow = true; sun.shadow.mapSize.set(2048,2048); sun.shadow.bias = -0.0005; scene.add(sun); scene.add(sun.target);
+scene.add(new THREE.HemisphereLight('#7FB7D6', '#2A1E14', 0.9));
+const rim = new THREE.DirectionalLight('#2FA3C9', 1.1); rim.position.set(-TEX, TEX*.6, -TEX*.4); scene.add(rim);
+let composer, bokeh, bloom;
+function setSize(w, h){ W = w; H = h; out.width = w; out.height = h; renderer.setSize(w, h, false); renderer.setPixelRatio(1); camera.aspect = w/h; camera.updateProjectionMatrix(); composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, camera)); bloom = new UnrealBloomPass(new THREE.Vector2(w,h), 0.55, 0.5, 0.92); composer.addPass(bloom); bokeh = new BokehPass(scene, camera, {focus: 400, aperture: 0.0022, maxblur: 0.011}); composer.addPass(bokeh); composer.addPass(new OutputPass()); }
+
+/* car: procedural coupé with clearcoat paint (swap for a .glb of the real car later) */
+function buildCar(L){
+  const g = new THREE.Group(); const s = L/4.6;
+  const paint = new THREE.MeshPhysicalMaterial({color:'#0B0C10', metalness:.55, roughness:.3, clearcoat:1, clearcoatRoughness:.06, envMapIntensity:1.6});
+  const glass = new THREE.MeshPhysicalMaterial({color:'#1A2433', metalness:.9, roughness:.05, envMapIntensity:2, transparent:true, opacity:.92});
+  const prof = new THREE.Shape(); [[-2.3,.38],[-2.3,.9],[-1.95,1.02],[-1.05,1.06],[-.35,1.44],[.68,1.44],[1.4,1.06],[2.25,.9],[2.3,.5],[2.3,.38]].forEach((p,i) => i ? prof.lineTo(p[0],p[1]) : prof.moveTo(p[0],p[1])); prof.closePath();
+  const body = new THREE.Mesh(new THREE.ExtrudeGeometry(prof, {depth:1.84, bevelEnabled:true, bevelThickness:.09, bevelSize:.09, bevelSegments:4, curveSegments:12}), paint); body.position.z = -.92; body.castShadow = true; g.add(body);
+  const cab = new THREE.Shape(); [[-1.0,1.05],[-.38,1.41],[.66,1.41],[1.3,1.05]].forEach((p,i) => i ? cab.lineTo(p[0],p[1]) : cab.moveTo(p[0],p[1])); cab.closePath();
+  const cabin = new THREE.Mesh(new THREE.ExtrudeGeometry(cab, {depth:1.64, bevelEnabled:true, bevelThickness:.03, bevelSize:.03, bevelSegments:2}), glass); cabin.position.set(0,.025,-.82); g.add(cabin);
+  const roofBar = new THREE.Mesh(new THREE.BoxGeometry(.9,.03,1.66), paint); roofBar.position.set(.15,1.46,0); g.add(roofBar);
+  const tyre = new THREE.MeshStandardMaterial({color:'#0A0A0A', roughness:.95}); const rimM = new THREE.MeshStandardMaterial({color:'#C9CED8', metalness:.9, roughness:.25});
+  [[1.45,.9],[1.45,-.9],[-1.45,.9],[-1.45,-.9]].forEach(([x,z]) => { const t = new THREE.Mesh(new THREE.CylinderGeometry(.37,.37,.26,28), tyre); t.rotation.x = Math.PI/2; t.position.set(x,.37,z); t.castShadow = true; g.add(t); const r = new THREE.Mesh(new THREE.CylinderGeometry(.24,.24,.28,16), rimM); r.rotation.x = Math.PI/2; r.position.set(x,.37,z + (z>0?.01:-.01)); g.add(r); });
+  const head = new THREE.MeshStandardMaterial({color:'#FFF6DD', emissive:'#FFE2A8', emissiveIntensity:2.2}); const tail = new THREE.MeshStandardMaterial({color:'#5A0A0A', emissive:'#FF2A1A', emissiveIntensity:3});
+  [.62,-.62].forEach(z => { const h = new THREE.Mesh(new THREE.BoxGeometry(.06,.14,.42), head); h.position.set(2.31,.78,z); g.add(h); const t = new THREE.Mesh(new THREE.BoxGeometry(.06,.1,.5), tail); t.position.set(-2.31,.8,z); g.add(t); });
+  const grille = new THREE.Mesh(new THREE.BoxGeometry(.05,.2,.7), new THREE.MeshStandardMaterial({color:'#15171C', metalness:.8, roughness:.4})); grille.position.set(2.31,.6,0); g.add(grille);
+  g.scale.setScalar(s); return g;
+}
+
+let trip, map, carL, curve, tube, halo, car, pts = [], labels = [], total = 0, stopsU = [];
+async function setup(){
+  trip = loadTrip() || await demoTrip();
+  map = await buildMap(trip.track && trip.track.length > 20 ? trip.track.map(p => [p.lat,p.lon]) : trip.route);
+  const tex = new THREE.CanvasTexture(map.canvas); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+  const bump = new THREE.CanvasTexture(map.noise); bump.wrapS = bump.wrapT = THREE.RepeatWrapping; bump.repeat.set(16,16);
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(TEX, TEX), new THREE.MeshStandardMaterial({map: tex, roughness: .92, metalness: 0, bumpMap: bump, bumpScale: .6}));
+  plane.rotation.x = -Math.PI/2; plane.receiveShadow = true; scene.add(plane);
+  const base = new THREE.Mesh(new THREE.BoxGeometry(TEX*1.02, 22, TEX*1.02), new THREE.MeshStandardMaterial({color:'#C9B48E', roughness:.9})); base.position.y = -11; scene.add(base);
+  const src = trip.track && trip.track.length > 20 ? trip.track.map(p => [p.lat,p.lon]) : trip.route;
+  const raw = src.map(map.toWorld); pts = raw.filter((p,i) => i === 0 || p.distanceTo(raw[i-1]) > 1.5); pts.forEach(p => p.y = 1.2);
+  curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal', .2); total = curve.getLength();
+  const span = Math.max(...pts.map(p=>Math.abs(p.x)), ...pts.map(p=>Math.abs(p.z)))*2; carL = Math.max(60, Math.min(120, span*0.11));
+  const segs = Math.min(3000, Math.max(400, Math.floor(total/4)));
+  tube = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, carL*0.045, 10, false), new THREE.MeshStandardMaterial({color:'#FF8A3D', emissive:'#FF6A2A', emissiveIntensity:3.2, roughness:.4})); tube.position.y = .6; scene.add(tube);
+  halo = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, carL*0.12, 10, false), new THREE.MeshBasicMaterial({color:'#FF7A2A', transparent:true, opacity:.22, depthWrite:false})); halo.position.y = .4; scene.add(halo);
+  tube.geometry.setDrawRange(0,0); halo.geometry.setDrawRange(0,0);
+  car = buildCar(carL); car.visible = false; scene.add(car);
+  const mk = (name, p, big) => { const c = document.createElement('canvas'); c.width = 1024; c.height = 256; const x = c.getContext('2d'); x.font = `700 ${big?118:96}px Caveat`; x.textAlign = 'center'; x.shadowColor = 'rgba(0,0,0,.7)'; x.shadowBlur = 18; x.shadowOffsetY = 4; x.fillStyle = '#FFFFFF'; x.fillText(name, 512, 165); const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: new THREE.CanvasTexture(c), transparent: true, depthTest: false})); sp.scale.set(carL*2.6, carL*0.65, 1); sp.position.copy(p).add(new THREE.Vector3(carL*0.9, carL*0.55, -carL*0.1)); sp.material.opacity = 0; scene.add(sp); const dot = new THREE.Mesh(new THREE.SphereGeometry(carL*0.07, 16, 16), new THREE.MeshStandardMaterial({color:'#fff', emissive:'#fff', emissiveIntensity:.8})); dot.position.copy(p); dot.visible = false; scene.add(dot); return {sp, dot}; };
+  labels = [{...mk(trip.origin.name, pts[0], false), u: 0}, ...(trip.stops||[]).map(s => { const p = map.toWorld([s.lat, s.lon]); let bu = 0, bd = 1e18; for(let i=0;i<pts.length;i+=4){ const d = pts[i].distanceToSquared(p); if(d<bd){ bd=d; bu=i/(pts.length-1); } } return {...mk(s.name, curve.getPointAt(Math.min(1,bu)), false), u: bu}; }), {...mk(trip.dest.name, pts.at(-1), true), u: 1}];
+  stopsU = labels.map(l => l.u);
+  setSize(W, H); status('Pronto. Toque em Reproduzir.'); drawFrame(0.36); overlay(0.36, false);
+}
+
+/* ---------- animation script (5 cenas) ---------- */
+const ease = t => t<.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2;
+const smooth = (a,b,t) => Math.min(1, Math.max(0, (t-a)/(b-a)));
+const camPos = new THREE.Vector3(), camLook = new THREE.Vector3(), tmp = new THREE.Vector3(), lookAt = new THREE.Vector3();
+let first = true;
+function drawFrame(p){
+  const span = TEX*0.55;
+  const draw = ease(smooth(.10,.42,p));       // cena 2: a linha desenha-se
+  const carU = ease(smooth(.22,.86,p));       // cena 3-4: o carro percorre
+  const reveal = ease(smooth(.84,1,p));       // cena 5: afastar
+  const idxT = tube.geometry.index.count, idxH = halo.geometry.index.count;
+  tube.geometry.setDrawRange(0, Math.floor(idxT*draw)); halo.geometry.setDrawRange(0, Math.floor(idxH*draw));
+  const cu = Math.max(0.0005, Math.min(.9995, carU)); const cp = curve.getPointAt(cu), ct = curve.getTangentAt(cu);
+  car.visible = p > .2; car.position.copy(cp); car.position.y = 1.4; car.rotation.y = Math.atan2(-ct.z, ct.x) + 0;
+  car.rotation.z = THREE.MathUtils.clamp(-ct.clone().cross(curve.getTangentAt(Math.min(.9995,cu+.002))).y*18, -.08, .08);
+  labels.forEach(l => { const on = l.u <= carU + .01 || (l.u === 0 && p > .05) || (l.u === 1 && p > .9); l.sp.material.opacity += ((on?1:0) - l.sp.material.opacity)*.12; l.dot.visible = on; });
+  sun.position.copy(cp).add(new THREE.Vector3(carL*4, carL*6, carL*2.5)); sun.target.position.copy(cp); const sc = sun.shadow.camera; const r = carL*3; sc.left = -r; sc.right = r; sc.top = r; sc.bottom = -r; sc.near = 10; sc.far = carL*20; sc.updateProjectionMatrix();
+  // camera targets per scene
+  const head = curve.getPointAt(Math.min(1, cu + .035)); const back = ct.clone().multiplyScalar(-1);
+  const origin = pts[0];
+  const far = tmp.set(origin.x + span*.9, span*1.25, origin.z + span*1.1); const near = new THREE.Vector3(origin.x + carL*2.2, carL*2.4, origin.z + carL*3.2);
+  const chase = cp.clone().add(back.multiplyScalar(carL*2.6)).add(new THREE.Vector3(0, carL*1.7, 0));
+  const over = new THREE.Vector3(span*.1, span*1.35, span*.85);
+  if(p < .22){ const t = ease(smooth(0,.22,p)); camPos.copy(far).lerp(near, t); camLook.copy(origin); }
+  else if(p < .84){ camPos.copy(chase); camLook.copy(head); }
+  else { camPos.copy(chase).lerp(over, reveal); camLook.copy(head).lerp(new THREE.Vector3(0,0,0), reveal); }
+  if(first){ camera.position.copy(camPos); lookAt.copy(camLook); first = false; }
+  camera.position.lerp(camPos, p < .22 ? 1 : .085); lookAt.lerp(camLook, .1); camera.lookAt(lookAt);
+  bokeh.uniforms.focus.value = camera.position.distanceTo(p < .22 ? origin : (p < .84 ? cp : new THREE.Vector3(0,0,0))); bokeh.uniforms.aperture.value = p < .22 || p >= .84 ? 0.0009 : 0.0023;
+  composer.render();
+}
+function overlay(p, recording){
+  octx.drawImage(gl, 0, 0, W, H); const k = W/1280;
+  octx.fillStyle = '#0A5BD6'; rr(octx, 32*k, 32*k, 300*k, 54*k, 27*k); octx.fill(); octx.fillStyle = '#fff'; octx.font = `800 ${20*k}px Inter`; octx.textAlign = 'left'; octx.fillText('LEANDRO NA ROTA', 58*k, 67*k);
+  octx.font = `700 ${56*k}px Caveat`; octx.shadowColor = 'rgba(0,0,0,.6)'; octx.shadowBlur = 14*k; octx.fillText(`${trip.origin.name} → ${trip.dest.name}`, 36*k, 140*k); octx.shadowBlur = 0;
+  const dd = trip.trackDistance || trip.distance; const q = ease(smooth(.22,.86,p)); const txt = `${km(dd*q)} · ${eur(dd*q/1000*settings.cons/100*settings.price)} ${settings.fuel.toLowerCase()} · ${mins(trip.duration)}`; octx.font = `700 ${22*k}px Inter`; const w = octx.measureText(txt).width + 40*k; octx.fillStyle = 'rgba(10,16,28,.78)'; rr(octx, 32*k, H-86*k, w, 54*k, 14*k); octx.fill(); octx.strokeStyle = '#FF6A2A'; octx.lineWidth = 2*k; octx.globalAlpha = .8; octx.stroke(); octx.globalAlpha = 1; octx.fillStyle = '#fff'; octx.fillText(txt, 52*k, H-50*k);
+  if(recording){ octx.fillStyle = '#FF3B30'; octx.beginPath(); octx.arc(W-40*k, 52*k, 9*k, 0, 7); octx.fill(); }
+}
+function rr(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
+
+let raf = null;
+function play(onEnd, recording){ const D = +$('#dur').value*1000; const t0 = performance.now(); first = true; cancelAnimationFrame(raf); (function step(){ const p = Math.min(1, (performance.now()-t0)/D); drawFrame(p); overlay(p, recording); status(recording ? `A gravar… ${Math.round(p*100)}%` : `${Math.round(p*100)}%`); if(p < 1) raf = requestAnimationFrame(step); else { status('Fim.'); if(onEnd) setTimeout(onEnd, 500); } })(); }
+$('#play').addEventListener('click', () => play());
+$('#res').addEventListener('change', e => { const w = +e.target.value; setSize(w, w*9/16); drawFrame(0.36); overlay(0.36,false); });
+$('#rec').addEventListener('click', () => {
+  if(!('MediaRecorder' in window)){ status('Este browser não grava vídeo; grave o ecrã durante a reprodução.'); return; }
+  const mime = ['video/mp4;codecs=avc1','video/mp4','video/webm;codecs=vp9','video/webm'].find(m => MediaRecorder.isTypeSupported(m));
+  const rec = new MediaRecorder(out.captureStream(30), {mimeType: mime, videoBitsPerSecond: W >= 1920 ? 24e6 : 10e6}); const chunks = []; rec.ondataavailable = e => chunks.push(e.data);
+  rec.onstop = () => { const blob = new Blob(chunks, {type: mime}); const file = new File([blob], `lr-rota-cinema-${trip.dest.name}.${mime.includes('mp4')?'mp4':'webm'}`, {type: mime}); if(navigator.canShare && navigator.canShare({files:[file]})) navigator.share({files:[file], title:'LR Rota'}).catch(()=>{}); else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click(); } $('#rec').disabled = false; status('Vídeo pronto.'); };
+  $('#rec').disabled = true; rec.start(); play(() => rec.stop(), true);
+});
+window.__cinema = { drawFrame, overlay, play, get trip(){ return trip; } };
+setup().catch(e => { console.error(e); status('Erro: ' + e.message); });
+</script>
+</body>
+</html>
