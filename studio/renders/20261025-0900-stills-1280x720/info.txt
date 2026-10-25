@@ -1,0 +1,1 @@
+modo=stills w=1280 h=720 samples=64 dur=5 fps=24 carro_glb=nao
