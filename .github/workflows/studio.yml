@@ -35,7 +35,11 @@ jobs:
         run: python studio/build_assets.py
       - name: Render (Cycles, CPU)
         run: |
-          MODE_RAW="$MODE"; case "$MODE_RAW" in clip*) MODE=clip;; *) MODE=stills;; esac
+          MSG="${{ github.event.head_commit.message }}"
+          case "$MSG" in *"[render clip"*) MODE=clip; W=${W_CLIP:-960}; H=${H_CLIP:-540}; SAMPLES=${S_CLIP:-32};; esac
+          case "$MODE" in clip*) MODE=clip;; *) MODE=stills;; esac
+          echo "MODE=$MODE W=$W H=$H SAMPLES=$SAMPLES DUR=$DUR FPS=$FPS"; export MODE W H SAMPLES
+          echo "MODE=$MODE" >> "$GITHUB_ENV"; echo "W=$W" >> "$GITHUB_ENV"; echo "H=$H" >> "$GITHUB_ENV"; echo "SAMPLES=$SAMPLES" >> "$GITHUB_ENV"
           if [ "$MODE" = "stills" ]; then
             STILL_P="0.30,0.55,0.90" python -c "import runpy; runpy.run_path('studio/render_blender.py')"
           else

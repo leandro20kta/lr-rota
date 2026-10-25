@@ -11,7 +11,16 @@ S = json.load(open(os.path.join(OUT, 'scene.json'), encoding='utf-8'))
 W, H = int(os.environ.get('W', 1280)), int(os.environ.get('H', 720)); SAMPLES = int(os.environ.get('SAMPLES', 64))
 FPS, DUR = int(os.environ.get('FPS', 30)), float(os.environ.get('DUR', 20)); NF = int(FPS*DUR)
 MAP_M = S.get('map_m', 20.0)
-route = [Vector((p[0], p[1], 0.0)) for p in S['route']]
+def _dp(pts, eps):
+    if len(pts) < 3: return pts
+    a, b = pts[0], pts[-1]; ab = b - a; L = ab.length; best, bi = 0, 0
+    for i in range(1, len(pts)-1):
+        d = (pts[i]-a).length if L < 1e-9 else abs(ab.x*(a.y-pts[i].y) - ab.y*(a.x-pts[i].x))/L
+        if d > best: best, bi = d, i
+    if best > eps: return _dp(pts[:bi+1], eps)[:-1] + _dp(pts[bi:], eps)
+    return [a, b]
+route_full = [Vector((p[0], p[1], 0.0)) for p in S['route']]
+route = _dp(route_full, 0.006); print('rota:', len(route_full), '->', len(route), 'pontos')
 # comprimento acumulado para amostrar por distância
 cum = [0.0]
 for i in range(1, len(route)): cum.append(cum[-1] + (route[i]-route[i-1]).length)
@@ -72,26 +81,21 @@ bump2 = nt2.nodes.new('ShaderNodeBump'); bump2.inputs['Strength'].default_value 
 noise2 = nt2.nodes.new('ShaderNodeTexNoise'); noise2.inputs['Scale'].default_value = 900; nt2.links.new(noise2.outputs['Fac'], bump2.inputs['Height']); nt2.links.new(bump2.outputs['Normal'], b2.inputs['Normal'])
 m2.blend_method = 'BLEND' if hasattr(m2, 'blend_method') else None; det.data.materials.append(m2)
 # base/mesa por baixo
-bpy.ops.mesh.primitive_cube_add(size=1); table = bpy.context.object; table.scale = (MAP_M*1.04, MAP_M*1.04, 0.25); table.location = (0, 0, -0.126)
-mt, ntt, bt = mat('Mesa'); bt.inputs['Base Color'].default_value = (0.08, 0.06, 0.05, 1); bt.inputs['Roughness'].default_value = 0.8; table.data.materials.append(mt)
+bpy.ops.mesh.primitive_cube_add(size=1); table = bpy.context.object; table.scale = (MAP_M*12, MAP_M*12, 0.25); table.location = (0, 0, -0.126)
+mt, ntt, bt = mat('Mesa'); bt.inputs['Base Color'].default_value = (0.03, 0.035, 0.045, 1); bt.inputs['Roughness'].default_value = 0.7; table.data.materials.append(mt)
 
 # ---------- rota luminosa (curva com bevel, revelada por bevel_factor_end) ----------
-def make_route(name, radius, emission, strength, alpha=1.0):
-    cd = bpy.data.curves.new(name, 'CURVE'); cd.dimensions = '3D'; cd.bevel_depth = radius; cd.bevel_resolution = 6; cd.fill_mode = 'FULL'; cd.use_fill_caps = True
-    sp = cd.splines.new('POLY'); sp.points.add(len(route)-1)
-    for i, p in enumerate(route): sp.points[i].co = (p.x, p.y, radius*0.9 + 0.002, 1.0)
+def make_route(name, radius, emission, strength):
+    cd = bpy.data.curves.new(name, 'CURVE'); cd.dimensions = '3D'; cd.bevel_depth = radius; cd.bevel_resolution = 8; cd.fill_mode = 'FULL'; cd.use_fill_caps = True; cd.resolution_u = 10; cd.twist_mode = 'Z_UP'
+    sp = cd.splines.new('NURBS'); sp.points.add(len(route)-1); sp.order_u = 3; sp.use_endpoint_u = True
+    for i, p in enumerate(route): sp.points[i].co = (p.x, p.y, radius*0.95 + 0.002, 1.0)
     ob = bpy.data.objects.new(name, cd); bpy.context.collection.objects.link(ob)
     mr = bpy.data.materials.new(name+'M'); mr.use_nodes = True; nr = mr.node_tree; nr.nodes.clear()
     em = nr.nodes.new('ShaderNodeEmission'); em.inputs['Color'].default_value = emission; em.inputs['Strength'].default_value = strength
-    out = nr.nodes.new('ShaderNodeOutputMaterial')
-    if alpha < 1:
-        tr = nr.nodes.new('ShaderNodeBsdfTransparent'); mix = nr.nodes.new('ShaderNodeMixShader'); mix.inputs['Fac'].default_value = alpha
-        nr.links.new(tr.outputs[0], mix.inputs[1]); nr.links.new(em.outputs[0], mix.inputs[2]); nr.links.new(mix.outputs[0], out.inputs['Surface'])
-        if hasattr(mr, 'blend_method'): mr.blend_method = 'BLEND'
-    else: nr.links.new(em.outputs[0], out.inputs['Surface'])
+    out = nr.nodes.new('ShaderNodeOutputMaterial'); nr.links.new(em.outputs[0], out.inputs['Surface'])
     ob.data.materials.append(mr); ob.visible_shadow = False; return ob
-tube = make_route('Rota', CAR_L*0.028, (1.0, 0.33, 0.08, 1), 9.0)
-halo = make_route('RotaHalo', CAR_L*0.075, (1.0, 0.42, 0.12, 1), 1.2, alpha=0.28)
+tube = make_route('Rota', CAR_L*0.034, (1.0, 0.36, 0.09, 1), 7.0)
+halo = make_route('RotaPreview', CAR_L*0.016, (1.0, 0.45, 0.15, 1), 2.0)
 
 # ---------- carro ----------
 def procedural_car(L):
@@ -156,7 +160,7 @@ car, car_real = load_car(CAR_L)
 # ---------- luz e ambiente ----------
 bpy.ops.object.light_add(type='SUN'); sun = bpy.context.object; sun.data.energy = 3.2; sun.data.color = (1.0, 0.86, 0.68); sun.data.angle = math.radians(3.5); sun.rotation_euler = (math.radians(52), 0, math.radians(-35))
 bpy.ops.object.light_add(type='AREA'); rimL = bpy.context.object; rimL.data.energy = 1500; rimL.data.color = (0.35, 0.62, 1.0); rimL.data.size = 10; rimL.location = (-MAP_M*0.4, MAP_M*0.5, MAP_M*0.35); rimL.rotation_euler = (math.radians(55), 0, math.radians(-140))
-sc.world = bpy.data.worlds.new('Mundo'); sc.world.use_nodes = True; wn = sc.world.node_tree; bgn = wn.nodes['Background']; bgn.inputs['Color'].default_value = (0.02, 0.07, 0.12, 1); bgn.inputs['Strength'].default_value = 0.6
+sc.world = bpy.data.worlds.new('Mundo'); sc.world.use_nodes = True; wn = sc.world.node_tree; bgn = wn.nodes['Background']; bgn.inputs['Color'].default_value = (0.012, 0.045, 0.085, 1); bgn.inputs['Strength'].default_value = 0.55
 
 # ---------- câmara com DOF ----------
 bpy.ops.object.camera_add(); cam = bpy.context.object; sc.camera = cam; cam.data.lens = 50; cam.data.sensor_width = 36
@@ -174,9 +178,9 @@ def pose(p):
     tube.data.bevel_factor_end = max(0.0005, carU); halo.data.bevel_factor_end = max(0.0005, draw)
     cu = max(0.0005, min(.9995, carU)); cp, _ = at(cu); ct = tangent_smooth(cu); up = Vector((0,0,1)); right = ct.cross(up).normalized()
     car.location = (cp.x, cp.y, 0.0); car.rotation_euler = (0, 0, math.atan2(ct.y, ct.x)); car.hide_render = p < .2
-    origin = route[0]; head = cp + ct*CAR_L*0.9
+    origin = route[0]; head = cp + ct*CAR_L*0.5
     far = Vector((origin.x + span*.9, origin.y - span*1.1, span*1.25)); near = Vector((origin.x + CAR_L*2.4, origin.y - CAR_L*3.0, CAR_L*1.6))
-    chase = cp - ct*CAR_L*3.3 + right*CAR_L*1.45 + up*CAR_L*0.95; over = Vector((span*.1, -span*.85, span*1.35))
+    chase = cp - ct*CAR_L*2.9 + right*CAR_L*2.0 + up*CAR_L*1.15; over = Vector((span*.1, -span*.85, span*1.35))
     if p < .22: t = ease(smooth(0, .22, p)); camp = far.lerp(near, t); look = Vector((origin.x, origin.y, 0))
     elif p < .84: camp = chase; look = Vector((head.x, head.y, CAR_L*0.3))
     else: camp = chase.lerp(over, reveal); look = Vector((head.x, head.y, CAR_L*0.3)).lerp(Vector((0,0,0)), reveal)
@@ -199,7 +203,7 @@ try:
     except Exception:
         try: gl.inputs['Type'].default_value = 'Bloom'
         except Exception: pass
-    for k, v in (('Threshold', 1.0), ('Strength', 0.3), ('Size', 0.6), ('Quality', 'High')):
+    for k, v in (('Threshold', 1.0), ('Strength', 0.4), ('Size', 0.75), ('Quality', 'High')):
         try: gl.inputs[k].default_value = v
         except Exception: pass
     ct.links.new(rl.outputs['Image'], gl.inputs['Image']); ct.links.new(gl.outputs['Image'], outn.inputs[0]); print('compositor: bloom ok')
