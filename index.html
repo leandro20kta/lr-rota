@@ -483,8 +483,8 @@ async function overpass(body){
 }
 // pontos turísticos com artigo na Wikipédia, por proximidade (rápido e fiável; traz o título para a história)
 const NOT_SIGHT = /freguesia|aldeia|lugar d|município|concelho|cidade|vila portuguesa|vila e |localidade|rio |ribeira|ribeiro|estação|escola|clube|futebol|estrada|autoestrada|empresa|hospital|bairro|serra |monte |paróquia/i;
-async function wikiPlaces(p, radius=6000){
-  const u = `https://pt.wikipedia.org/w/api.php?action=query&generator=geosearch&ggscoord=${p.lat}|${p.lon}&ggsradius=${radius}&ggslimit=40&prop=coordinates|description|pageprops&ppprop=wikibase_item&format=json&origin=*`;
+async function wikiPlaces(p, radius=3000){
+  const u = `https://pt.wikipedia.org/w/api.php?action=query&generator=geosearch&ggscoord=${p.lat}|${p.lon}&ggsradius=${radius}&ggslimit=100&prop=coordinates|description|pageprops&colimit=max&ppprop=wikibase_item&format=json&origin=*`;
   const j = await (await fetch(u)).json(); const pages = Object.values(j.query?.pages || {});
   return pages.filter(g => g.coordinates && !NOT_SIGHT.test(g.description || '') && !NOT_SIGHT.test(g.title) && g.title.toLowerCase() !== (p.name||'').toLowerCase())
     .map(g => { const lat = g.coordinates[0].lat, lon = g.coordinates[0].lon, t = g.title, ds = g.description || '';
@@ -492,9 +492,10 @@ async function wikiPlaces(p, radius=6000){
       return {name: t.replace(/ \(.*\)$/, ''), kind, lat, lon, d: dist(p.lat, p.lon, lat, lon), desc: ds, wiki: 'pt:' + t, wd: g.pageprops?.wikibase_item || '', hours:'', fee:'', start:'', heritage:''}; })
     .sort((a, b) => a.d - b.d);
 }
+async function wikiSights(p){ let r = await wikiPlaces(p, 3000); if(r.length < 3){ const more = await wikiPlaces(p, 10000); const seen = new Set(r.map(x => x.name)); r = r.concat(more.filter(x => !seen.has(x.name))); } return r; }
 async function pois(p, kinds){
   const sights = kinds.some(k => ['attraction','museum','viewpoint','beach'].includes(k));
-  const [wp, op] = await Promise.allSettled([sights ? wikiPlaces(p) : Promise.resolve([]), poisOSM(p, kinds)]);
+  const [wp, op] = await Promise.allSettled([sights ? wikiSights(p) : Promise.resolve([]), poisOSM(p, kinds)]);
   const osm = op.status === 'fulfilled' ? op.value : []; const wiki = wp.status === 'fulfilled' ? wp.value : [];
   // juntar: se o OSM tiver o mesmo local (nome parecido, <300 m), herda horários/entrada do OSM
   for(const w of wiki){ const o = osm.find(x => x.name && dist(x.lat, x.lon, w.lat, w.lon) < 300 && (x.name.toLowerCase().includes(w.name.toLowerCase().split(' ').slice(-1)[0]) || w.name.toLowerCase().includes(x.name.toLowerCase().split(' ').slice(-1)[0]))); if(o){ w.hours = o.hours; w.fee = o.fee; w.website = o.website; w.heritage = o.heritage; o._merged = true; } }
