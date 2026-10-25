@@ -84,7 +84,8 @@ const headingAt = (d, look) => bearingOf(posAt(d - look*.3).p, posAt(d + look).p
 /* ---------- mapa (estilo navegação escuro, edifícios 3D, relevo) ---------- */
 const base = PACK ? new URL(PACK + '/', location.href).href : null;
 const omt = PACK ? {type: 'vector', tiles: [base + 'tiles/{z}/{x}/{y}.pbf'], maxzoom: 14, minzoom: 0} : {type: 'vector', url: 'https://tiles.openfreemap.org/planet'};
-const dem = PACK ? {type: 'raster-dem', tiles: [base + 'dem/{z}/{x}/{y}.png'], encoding: 'terrarium', tileSize: 256, minzoom: 8, maxzoom: 12} : {type: 'raster-dem', tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'], encoding: 'terrarium', tileSize: 256, maxzoom: 12};
+const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);   // pacote offline completo só em testes locais; online a altitude vem da AWS
+const dem = PACK && LOCAL ? {type: 'raster-dem', tiles: [base + 'dem/{z}/{x}/{y}.png'], encoding: 'terrarium', tileSize: 256, minzoom: 8, maxzoom: 12} : {type: 'raster-dem', tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'], encoding: 'terrarium', tileSize: 256, maxzoom: 12};
 const glyphs = PACK ? base + 'glyphs/{fontstack}/{range}.pbf' : 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf';
 const C = {bg:'#3A4A63', water:'#22405F', park:'#2F5A4A', wood:'#335C49', res:'#405170', road:'#5B6C86', roadHi:'#8C9AB0', mway:'#97A6BD', bld:'#55678A', label:'#E8EEF6'};
 const style = {version: 8, glyphs, sources: {omt, dem},
@@ -187,9 +188,11 @@ frame(0, true);
 let playing = false;
 function run(rec){
   if(playing) return; playing = true; let u = 0, last = null; camBear = null;
+  let waitSince = null;
   const tick = t => {
     const dt = last === null ? 0 : Math.min(.1, (t - last)/1000); last = t;
-    const loaded = map.areTilesLoaded() && carLayer.ready;
+    let loaded = map.isSourceLoaded('omt') && carLayer.ready;   // espera só pelas ruas e prédios; o relevo pode chegar depois
+    if(!loaded){ waitSince = waitSince ?? t; if(t - waitSince > 4000) loaded = true; } else waitSince = null;
     if(rec){ if(!loaded && rec.state === 'recording') rec.pause(); if(loaded && rec.state === 'paused') rec.resume(); }
     if(loaded) u = Math.min(1, u + dt/DUR);
     frame(u, u === 0); if(rec){ drawRec(); status(`A gravar… ${Math.round(u*100)}%`); }
