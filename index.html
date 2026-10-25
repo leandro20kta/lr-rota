@@ -498,7 +498,8 @@ $('#btn-plan').addEventListener('click', async () => {
     trip.distance = legs.reduce((s,l) => s + (l.type==='car' ? l.distance : 0), 0); trip.flightKm = legs.filter(l=>l.type==='plane').reduce((s,l)=> s+l.distance,0)/1000;
     trip.duration = legs.reduce((s,l) => s + l.duration, 0); trip.tollM = legs.reduce((s,l) => s + l.tollM, 0); trip.refs = legs.flatMap(l => l.refs);
     try{ trip.pois = await pois(dest, kinds); }catch(e){ trip.pois = []; }
-    trip.stops = trip.pois.filter(p => ['attraction','viewpoint','museum','beach'].includes(p.kind)).slice(0,4).map(p => ({name:p.name, lat:p.lat, lon:p.lon, note: p.kind === 'viewpoint' ? 'Miradouro' : p.kind === 'museum' ? 'Museu' : p.kind === 'beach' ? 'Praia' : 'Ponto turístico'}));
+    const notab = p => (p.wiki || p.wd ? 0 : 3) + (p.heritage ? 0 : 1) + (p.kind === 'museum' || p.kind === 'viewpoint' ? 0 : 0.5) + p.d/4000;
+    const seen = new Set(); trip.stops = trip.pois.filter(p => ['attraction','viewpoint','museum','beach'].includes(p.kind)).sort((a,b) => notab(a) - notab(b)).filter(p => { const k = p.name.toLowerCase(); if(seen.has(k)) return false; seen.add(k); return true; }).slice(0,4).map(p => ({...p, note: p.kind === 'viewpoint' ? 'Miradouro' : p.kind === 'museum' ? 'Museu' : p.kind === 'beach' ? 'Praia' : 'Ponto turístico'}));
     current = trip; store.set('current', current);
     const rec = store.get('recent', []); rec.unshift({o: origin.name, d: dest.name, km: Math.round(trip.distance/1000), mode}); store.set('recent', rec.slice(0,5));
     go('plan');
