@@ -172,12 +172,12 @@ if(TURN) document.querySelector('#turnbtn').textContent = '🗺️ Mapa';
 $('#turnbtn').addEventListener('click', () => { const u = new URL(location.href); if(u.searchParams.get('turn')) u.searchParams.delete('turn'); else u.searchParams.set('turn', '1'); location.href = u.toString(); });
 async function setupTurn(){
   await Promise.all(['700 56px Caveat','800 20px Inter'].map(f => document.fonts.load(f).catch(()=>{})));
-  scene.fog = new THREE.Fog('#05090F', 260, 760); scene.background = new THREE.Color('#05090F'); scene.environmentIntensity = 0.55; carL = 100;
+  scene.fog = new THREE.Fog('#05090F', 260, 760); scene.background = new THREE.Color('#05090F'); scene.environmentIntensity = 0.4; carL = 100;
   const floor = new THREE.Mesh(new THREE.CircleGeometry(900, 96), new THREE.MeshStandardMaterial({color:'#07090C', roughness:.55, metalness:0, envMapIntensity:.12})); floor.rotation.x = -Math.PI/2; floor.receiveShadow = true; scene.add(floor);
   const key = new THREE.SpotLight('#FFF4E6', 1.2e5, 0, Math.PI/7, .8, 2); key.position.set(20, 420, 40); key.castShadow = true; key.shadow.mapSize.set(2048, 2048); scene.add(key); scene.add(key.target);
-  const tealL = new THREE.SpotLight('#3FA0FF', 5e4, 0, Math.PI/10, .7, 2); tealL.position.set(-300, 260, -340); tealL.target.position.set(0, 50, 0); scene.add(tealL); scene.add(tealL.target);
+  const back = new THREE.SpotLight('#E6ECF4', 2.2e4, 0, Math.PI/9, .8, 2); back.position.set(-360, 70, -240); back.target.position.set(0, 35, 0); scene.add(back); scene.add(back.target);   // recorte neutro, baixo (sem reflexo azul no tejadilho)
   const orange = new THREE.SpotLight('#FF8A3D', 2.5e4, 0, Math.PI/10, .7, 2); orange.position.set(360, 70, 300); orange.target.position.set(0, 30, 0); scene.add(orange); scene.add(orange.target);
-  sun.intensity = 0.25; rim.intensity = 0.6;
+  sun.intensity = 0.25; rim.intensity = 0;
   car = await loadCar(carL); scene.add(car); car.visible = true;
   { const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d'); const g = x.createRadialGradient(128,128,8,128,128,124); g.addColorStop(0,'rgba(0,0,0,.85)'); g.addColorStop(.55,'rgba(0,0,0,.45)'); g.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0,0,256,256);
     const sh = new THREE.Mesh(new THREE.PlaneGeometry(carL*1.25, carL*0.55), new THREE.MeshBasicMaterial({map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false})); sh.rotation.x = -Math.PI/2; sh.position.y = 0.3; car.add(sh); }
