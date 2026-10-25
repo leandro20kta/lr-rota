@@ -1,0 +1,27 @@
+name: Rota Cinema Studio — pacote de mapa offline
+on:
+  workflow_dispatch:
+  push:
+    paths: ["studio/pack.json", "studio/fetch_pack.py", ".github/workflows/pack.yml"]
+permissions:
+  contents: write
+concurrency: { group: pack, cancel-in-progress: false }
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - name: Descarregar rota, tiles, glifos e altitude
+        run: python studio/fetch_pack.py
+      - name: Publicar o pacote no repositório
+        run: |
+          N=$(python -c "import json;print(json.load(open('studio/pack.json'))['name'])")
+          du -sh "studio/packs/$N" || true
+          git config user.name "rota-cinema-bot"; git config user.email "bot@users.noreply.github.com"
+          git add -f "studio/packs/$N"
+          git commit -m "Pacote de mapa: $N [skip ci]" || { echo "nada para publicar"; exit 0; }
+          for i in 1 2 3; do git pull --rebase --autostash -q origin main && git push origin HEAD:main && exit 0; sleep 8; done
+          exit 1
