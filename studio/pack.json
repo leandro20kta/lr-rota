@@ -1,1 +1,5 @@
-{"name": "pontedelima-vigo", "points": ["Ponte de Lima, Portugal", "Valença, Portugal", "Tui, Pontevedra, España", "Vigo, Pontevedra, España"], "buffer_km": 4}
+{"name": "pontedelima-vigo", "points": [
+  {"name": "Ponte de Lima", "lat": 41.7672, "lon": -8.5838},
+  {"name": "Valença", "lat": 42.0302, "lon": -8.6417},
+  {"name": "Tui", "lat": 42.0471, "lon": -8.6443},
+  {"name": "Vigo", "lat": 42.2373, "lon": -8.7208}], "buffer_km": 4}
