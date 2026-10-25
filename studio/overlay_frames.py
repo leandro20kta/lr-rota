@@ -41,7 +41,7 @@ def overlay(path, p):
     q = ease(smooth(.22, .86, p)); dd = S['distance']*q
     txt = f"{km(dd)} · {eur(dd/1000*cons/100*price)} {fuel.lower()} · {round(S['duration']/60)} min"; fs = font('sans', int(21*k)); tw = d.textlength(txt, font=fs) + 40*k
     d.rounded_rectangle([32*k, H-86*k, 32*k+tw, H-32*k], radius=14*k, fill=(10, 16, 28, 205), outline=(255, 106, 42, 210), width=int(2*k)); d.text((52*k, H-70*k), txt, font=fs, fill='white')
-    cred = '© OpenStreetMap contributors · openstreetmap.org/copyright'; fc = font('sans', int(13*k)); cw = d.textlength(cred, font=fc)
+    cred = 'Data from OpenStreetMap · OpenMapTiles · OpenFreeMap · openstreetmap.org/copyright'; fc = font('sans', int(13*k)); cw = d.textlength(cred, font=fc)
     d.rounded_rectangle([W-cw-44*k, H-52*k, W-16*k, H-20*k], radius=8*k, fill=(0, 0, 0, 120)); d.text((W-cw-30*k, H-44*k), cred, font=fc, fill=(255, 255, 255, 230))
     return im.convert('RGB')
 

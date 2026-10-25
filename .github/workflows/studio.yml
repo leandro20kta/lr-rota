@@ -2,6 +2,9 @@ name: Rota Cinema Studio — render (Blender/Cycles)
 on:
   workflow_dispatch:
     inputs:
+      origin: { description: "Origem (texto, ex. Viana do Castelo) — vazio = trip.json", default: "" }
+      dest: { description: "Destino", default: "" }
+      stops: { description: "Paragens separadas por ; (opcional)", default: "" }
       mode: { description: "stills | clip", default: "stills" }
       w: { description: "largura", default: "1280" }
       h: { description: "altura", default: "720" }
@@ -30,8 +33,17 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.13" }
       - run: sudo apt-get -qq update && sudo apt-get -qq install -y libegl1 libgl1 libxi6 libxrender1 libxkbcommon0 libsm6 libxxf86vm1 libxfixes3 libgomp1 ffmpeg
-      - run: pip install bpy pillow
-      - name: Mapa real + rota real (OSM / OSRM)
+      - run: pip install bpy pillow playwright && python -m playwright install --with-deps chromium
+      - name: Viagem (inputs → trip.json)
+        if: github.event.inputs.origin != '' && github.event.inputs.dest != ''
+        run: |
+          python - <<'PY'
+          import json, os
+          o, d, st = os.environ['O'], os.environ['D'], os.environ['ST']
+          json.dump({"origin": o, "dest": d, "stops": [s.strip() for s in st.split(';') if s.strip()]}, open('studio/trip.json', 'w'), ensure_ascii=False, indent=2)
+          PY
+        env: { O: "${{ github.event.inputs.origin }}", D: "${{ github.event.inputs.dest }}", ST: "${{ github.event.inputs.stops }}" }
+      - name: Rota real (OSRM) + mapa (OpenFreeMap vetorial → MapLibre headless)
         run: python studio/build_assets.py
       - name: Render (Cycles, CPU)
         run: |
@@ -53,7 +65,7 @@ jobs:
         run: |
           D="studio/renders/$(date -u +%Y%m%d-%H%M)-${MODE}-${W}x${H}"
           mkdir -p "$D"; cp studio/out/frames/*.ov.png "$D"/ 2>/dev/null || true; cp studio/out/frames/still_*.png "$D"/ 2>/dev/null || true; cp studio/out/cinema.mp4 "$D"/ 2>/dev/null || true
-          cp studio/out/scene.json "$D"/; echo "modo=$MODE w=$W h=$H samples=$SAMPLES dur=$DUR fps=$FPS carro_glb=$(test -f models/car.glb && echo sim || echo nao)" > "$D"/info.txt
+          cp studio/out/scene.json "$D"/; python -c "from PIL import Image; Image.MAX_IMAGE_PIXELS=None; Image.open('studio/out/map.png').resize((1536,1536)).save('$D/map_preview.jpg', quality=82)"; echo "modo=$MODE w=$W h=$H samples=$SAMPLES dur=$DUR fps=$FPS carro_glb=$(test -f models/car.glb && echo sim || echo nao)" > "$D"/info.txt
           git config user.name "rota-cinema-bot"; git config user.email "bot@users.noreply.github.com"
           git add "$D"; git commit -m "Render Studio: $D [skip ci]" || exit 0
           git pull --rebase -q; git push
