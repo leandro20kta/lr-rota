@@ -24,7 +24,12 @@ html,body{margin:0;height:100%;background:#0B0F14;font-family:Inter,system-ui,sa
 .place .t{font-size:56px;font-weight:800;letter-spacing:-.5px}
 .place .s{font-size:20px;font-weight:700;color:#DCE6F2;margin-top:2px}
 .credit{position:absolute;right:10px;bottom:84px;font-size:11px;color:rgba(255,255,255,.65);z-index:3}
-#status{position:absolute;left:12px;top:110px;z-index:4;font-size:13px;color:#cfd8e3}
+#status{position:absolute;left:12px;top:110px;z-index:4;font-size:13px;color:#cfd8e3;text-shadow:0 1px 4px #000}
+#ctl{position:fixed;right:12px;top:112px;z-index:9;display:flex;flex-direction:column;gap:8px}
+#ctl button{font:800 15px Inter,system-ui;color:#fff;background:rgba(16,19,23,.88);border:1px solid rgba(255,255,255,.25);border-radius:12px;padding:10px 14px}
+#ctl button.rec{background:#C62828}
+body.recording #ctl{display:none}
+body.recording #stage{width:1280px;height:720px;transform-origin:0 0}
 </style></head><body>
 <div id="stage">
   <div id="map"></div>
@@ -35,6 +40,8 @@ html,body{margin:0;height:100%;background:#0B0F14;font-family:Inter,system-ui,sa
   <div class="credit">© OpenStreetMap · OpenMapTiles · OpenFreeMap</div>
   <div id="status"></div>
 </div>
+<div id="ctl"><button id="bPlay">▶ Ver viagem</button><button id="bRec" class="rec">● Gravar vídeo (MP4)</button><button id="bSave" hidden>⬇ Guardar vídeo</button></div>
+<canvas id="rec" width="1280" height="720" hidden></canvas>
 <script src="vendor/maplibre/maplibre-gl.js"></script>
 <script type="importmap">{"imports":{"three":"./vendor/three/build/three.module.js","three/addons/":"./vendor/three/jsm/"}}</script>
 <script type="module">
@@ -51,6 +58,7 @@ const DUR = +(Q.get('dur') || 75);            // segundos de vídeo para a viage
 let trip;
 if(PACK){ trip = await (await fetch(PACK + '/route.json')).json(); }
 else { try{ trip = JSON.parse(localStorage.getItem('lr-nav-trip')); }catch(e){} }
+if(!trip && !PACK){ location.replace(location.pathname + '?pack=studio/packs/pontedelima-vigo'); }
 if(!trip){ status('Sem viagem. Planeie uma rota na app.'); throw new Error('sem viagem'); }
 const line = trip.route.map(([la, lo]) => [lo, la]);
 const R = 6371008.8, rad = Math.PI/180;
@@ -175,5 +183,47 @@ function frame(u, first){
 const uOfKm = km => { let lo = 0, hi = 1; for(let k=0;k<40;k++){ const m = (lo+hi)/2; distAtTime(m) < km*1000 ? lo = m : hi = m; } return (lo+hi)/2; };
 window.__nav = {frame, uOfKm, map, TOTAL, ready: () => carLayer.ready && map.loaded() && map.areTilesLoaded(), trip, dbg: () => ({ready: carLayer.ready, car: carState, model: !!carModel, wheels: wheels.length, err: window.__carErr || null})};
 frame(0, true);
-if(!Q.get('capture')){ let t0 = null; const loop = t => { if(t0 === null) t0 = t; const u = Math.min(1, (t - t0)/1000/DUR); frame(u); if(u < 1) requestAnimationFrame(loop); }; setTimeout(() => requestAnimationFrame(loop), 1200); }
+/* reprodução: o tempo só avança com o mapa carregado (sem saltos); na gravação o gravador pausa enquanto carrega */
+let playing = false;
+function run(rec){
+  if(playing) return; playing = true; let u = 0, last = null; camBear = null;
+  const tick = t => {
+    const dt = last === null ? 0 : Math.min(.1, (t - last)/1000); last = t;
+    const loaded = map.areTilesLoaded() && carLayer.ready;
+    if(rec){ if(!loaded && rec.state === 'recording') rec.pause(); if(loaded && rec.state === 'paused') rec.resume(); }
+    if(loaded) u = Math.min(1, u + dt/DUR);
+    frame(u, u === 0); if(rec){ drawRec(); status(`A gravar… ${Math.round(u*100)}%`); }
+    if(u < 1) requestAnimationFrame(tick); else { playing = false; if(rec) setTimeout(() => rec.stop(), 600); else status(''); }
+  };
+  requestAnimationFrame(tick);
+}
+// HUD desenhado no vídeo (o mesmo que está no ecrã)
+const rc = $('#rec'), rx = rc.getContext('2d');
+function drawRec(){
+  const W = rc.width, H = rc.height, k = W/1280; rx.drawImage(map.getCanvas(), 0, 0, W, H);
+  const pill = (x, y, w, h, r, c) => { rx.fillStyle = c; rx.beginPath(); rx.roundRect(x, y, w, h, r); rx.fill(); };
+  pill(0, -20, W, 112*k + 20, 0, '#101317');
+  rx.save(); rx.translate(22*k, 22*k); rx.scale(k*68/56, k*68/56); rx.strokeStyle = '#fff'; rx.lineWidth = 6; rx.lineCap = 'round'; rx.lineJoin = 'round'; [...$('#arrow').querySelectorAll('path')].forEach(p => rx.stroke(new Path2D(p.getAttribute('d')))); rx.restore();
+  rx.fillStyle = '#fff'; rx.font = `800 ${40*k}px Inter`; rx.textBaseline = 'alphabetic'; rx.fillText($('#tDist').textContent, 108*k, 52*k);
+  let x = 108*k; const sh = $('#tName .shield'); if(sh){ rx.font = `800 ${22*k}px Inter`; const tw = rx.measureText(sh.textContent).width + 22*k; pill(x, 64*k, tw, 32*k, 7*k, '#fff'); pill(x + 2*k, 66*k, tw - 4*k, 28*k, 6*k, '#1D58C9'); rx.fillStyle = '#fff'; rx.fillText(sh.textContent, x + 11*k, 88*k); x += tw + 10*k; }
+  rx.font = `700 ${26*k}px Inter`; rx.fillStyle = '#C9D1DC'; rx.fillText([...$('#tName').childNodes].filter(n => !n.classList).map(n => n.textContent).join(''), x, 90*k);
+  if($('#place').classList.contains('on')){ rx.textAlign = 'center'; rx.shadowColor = 'rgba(0,0,0,.65)'; rx.shadowBlur = 16*k; rx.fillStyle = '#fff'; rx.font = `800 ${58*k}px Inter`; rx.fillText($('#pT').textContent, W/2, 205*k); rx.font = `700 ${21*k}px Inter`; rx.fillStyle = '#DCE6F2'; rx.fillText($('#pS').textContent, W/2, 236*k); rx.shadowBlur = 0; rx.textAlign = 'left'; }
+  pill(0, H - 84*k, W, 84*k + 20, 0, '#101317');
+  [['#bEta','chegada'],['#bMin','min'],['#bKm','km']].forEach(([id, lb], i) => { const bx = (26 + [0, 140, 250][i])*k; rx.fillStyle = '#fff'; rx.font = `800 ${34*k}px Inter`; rx.fillText($(id).textContent, bx, H - 38*k); rx.fillStyle = '#A9B3C1'; rx.font = `700 ${15*k}px Inter`; rx.fillText(lb, bx, H - 16*k); });
+  pill(W - 236*k, H - 64*k, 210*k, 42*k, 21*k, '#0A5BD6'); rx.fillStyle = '#fff'; rx.font = `800 ${16*k}px Inter`; rx.fillText('LEANDRO NA ROTA', W - 214*k, H - 37*k);
+  rx.fillStyle = 'rgba(255,255,255,.7)'; rx.font = `600 ${11*k}px Inter`; rx.textAlign = 'right'; rx.fillText('© OpenStreetMap · OpenMapTiles · OpenFreeMap', W - 10*k, H - 92*k); rx.textAlign = 'left';
+}
+let lastFile = null;
+$('#bPlay').onclick = () => run(null);
+$('#bRec').onclick = () => {
+  if(!('MediaRecorder' in window) || !rc.captureStream){ status('Este browser não grava vídeo — use a gravação de ecrã do iPhone durante "Ver viagem".'); return; }
+  document.body.classList.add('recording'); const fit = Math.min(innerWidth/1280, innerHeight/720); $('#stage').style.transform = `scale(${fit})`; map.setPixelRatio(1); map.resize();
+  const mime = ['video/mp4;codecs=avc1','video/mp4','video/webm;codecs=vp9','video/webm'].find(m => MediaRecorder.isTypeSupported(m));
+  const rec = new MediaRecorder(rc.captureStream(30), {mimeType: mime, videoBitsPerSecond: 12e6}); const chunks = []; rec.ondataavailable = e => chunks.push(e.data);
+  rec.onstop = () => { const blob = new Blob(chunks, {type: mime}); lastFile = new File([blob], `lr-rota-viagem.${mime.includes('mp4') ? 'mp4' : 'webm'}`, {type: mime});
+    document.body.classList.remove('recording'); $('#stage').style.transform = ''; map.setPixelRatio(devicePixelRatio); map.resize(); $('#bSave').hidden = false; status(`Vídeo pronto (${(blob.size/1e6).toFixed(1)} MB). Toque em "Guardar vídeo".`); };
+  rec.start(1000); run(rec);
+};
+$('#bSave').onclick = () => { if(!lastFile) return; if(navigator.canShare && navigator.canShare({files: [lastFile]})) navigator.share({files: [lastFile], title: 'LR Rota'}).catch(() => {}); else { const a = document.createElement('a'); a.href = URL.createObjectURL(lastFile); a.download = lastFile.name; a.click(); } };
+if(Q.get('capture')) $('#ctl').hidden = true;
 </script></body></html>
