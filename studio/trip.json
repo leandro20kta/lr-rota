@@ -1,0 +1,5 @@
+{
+  "origin": {"name": "Viana do Castelo", "lat": 41.6932, "lon": -8.8329},
+  "dest":   {"name": "Ponte de Lima",    "lat": 41.7675, "lon": -8.5839},
+  "stops":  [{"name": "Lanheses", "lat": 41.7357, "lon": -8.7218}, {"name": "Ponte Medieval", "lat": 41.7686, "lon": -8.5852}]
+}

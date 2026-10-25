@@ -1,0 +1,52 @@
+name: Rota Cinema Studio — render (Blender/Cycles)
+on:
+  workflow_dispatch:
+    inputs:
+      mode: { description: "stills | clip", default: "stills" }
+      w: { description: "largura", default: "1280" }
+      h: { description: "altura", default: "720" }
+      samples: { description: "amostras Cycles", default: "64" }
+      dur: { description: "duração do clip (s)", default: "5" }
+      fps: { description: "fps", default: "24" }
+  push:
+    paths: ["studio/**"]
+permissions:
+  contents: write
+concurrency: { group: studio, cancel-in-progress: false }
+jobs:
+  render:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[render')
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      MODE: ${{ github.event.inputs.mode || 'stills' }}
+      W: ${{ github.event.inputs.w || '1280' }}
+      H: ${{ github.event.inputs.h || '720' }}
+      SAMPLES: ${{ github.event.inputs.samples || '64' }}
+      DUR: ${{ github.event.inputs.dur || '5' }}
+      FPS: ${{ github.event.inputs.fps || '24' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - run: pip install bpy pillow
+      - name: Mapa real + rota real (OSM / OSRM)
+        run: python studio/build_assets.py
+      - name: Render (Cycles, CPU)
+        run: |
+          MODE_RAW="$MODE"; case "$MODE_RAW" in clip*) MODE=clip;; *) MODE=stills;; esac
+          if [ "$MODE" = "stills" ]; then
+            STILL_P="0.30,0.55,0.90" python -c "import runpy; runpy.run_path('studio/render_blender.py')"
+          else
+            FRAMES="" python -c "import runpy; runpy.run_path('studio/render_blender.py')"
+            sudo apt-get -qq update && sudo apt-get -qq install -y ffmpeg
+            ffmpeg -y -framerate "$FPS" -i studio/out/frames/f%04d.png -c:v libx264 -pix_fmt yuv420p -crf 17 -preset slow studio/out/cinema.mp4
+          fi
+      - name: Publicar resultados no repositório
+        run: |
+          D="studio/renders/$(date -u +%Y%m%d-%H%M)-${MODE}-${W}x${H}"
+          mkdir -p "$D"; cp studio/out/frames/*.png "$D"/ 2>/dev/null || true; cp studio/out/cinema.mp4 "$D"/ 2>/dev/null || true
+          cp studio/out/scene.json "$D"/; echo "modo=$MODE w=$W h=$H samples=$SAMPLES dur=$DUR fps=$FPS carro_glb=$(test -f models/car.glb && echo sim || echo nao)" > "$D"/info.txt
+          git config user.name "rota-cinema-bot"; git config user.email "bot@users.noreply.github.com"
+          git add "$D"; git commit -m "Render Studio: $D [skip ci]" || exit 0
+          git pull --rebase -q; git push
