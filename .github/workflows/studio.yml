@@ -62,10 +62,24 @@ jobs:
             ffmpeg -y -framerate "$FPS" -i studio/out/frames/f%04d.ov.png -c:v libx264 -pix_fmt yuv420p -crf 17 -preset slow studio/out/cinema.mp4
           fi
       - name: Publicar resultados no repositório
+        if: always()
         run: |
-          D="studio/renders/$(date -u +%Y%m%d-%H%M)-${MODE}-${W}x${H}"
-          mkdir -p "$D"; cp studio/out/frames/*.ov.png "$D"/ 2>/dev/null || true; cp studio/out/frames/still_*.png "$D"/ 2>/dev/null || true; cp studio/out/cinema.mp4 "$D"/ 2>/dev/null || true
-          cp studio/out/scene.json "$D"/; python -c "from PIL import Image; Image.MAX_IMAGE_PIXELS=None; Image.open('studio/out/map.png').convert('RGB').resize((1536,1536)).save('$D/map_preview.jpg', quality=82)" || echo 'preview falhou'; echo "modo=$MODE w=$W h=$H samples=$SAMPLES dur=$DUR fps=$FPS carro_glb=$(test -f models/car.glb && echo sim || echo nao)" > "$D"/info.txt
+          set -x
+          D="studio/renders/$(date -u +%Y%m%d-%H%M)-${MODE:-stills}-${W}x${H}"
+          mkdir -p "$D"
+          cp studio/out/frames/*.ov.png "$D"/ 2>/dev/null || true
+          cp studio/out/frames/still_*.png "$D"/ 2>/dev/null || true
+          cp studio/out/cinema.mp4 "$D"/ 2>/dev/null || true
+          cp studio/out/scene.json "$D"/ 2>/dev/null || true
+          python -c "from PIL import Image; Image.MAX_IMAGE_PIXELS=None; Image.open('studio/out/map.png').convert('RGB').resize((1536,1536)).save('$D/map_preview.jpg', quality=82)" || echo "preview falhou"
+          echo "modo=${MODE:-stills} w=$W h=$H samples=$SAMPLES dur=$DUR fps=$FPS carro_glb=$(test -f models/car.glb && echo sim || echo nao)" > "$D"/info.txt
+          ls -la studio/out/frames/ > "$D"/frames_ls.txt 2>&1 || true
+          git status --porcelain > "$D"/git_status.txt 2>&1 || true
           git config user.name "rota-cinema-bot"; git config user.email "bot@users.noreply.github.com"
-          git add "$D"; git commit -m "Render Studio: $D [skip ci]" || exit 0
-          git pull --rebase -q; git push
+          git add -f "$D"
+          git commit -m "Render Studio: $D [skip ci]" || { echo "nada para publicar"; exit 0; }
+          for i in 1 2 3; do
+            git pull --rebase --autostash -q origin main && git push origin HEAD:main && exit 0
+            sleep 8
+          done
+          exit 1
