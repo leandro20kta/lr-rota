@@ -1,0 +1,3 @@
+© OpenStreetMap contributors (ODbL) · OpenMapTiles · OpenFreeMap
+Altitude: Mapzen Terrain Tiles (AWS Open Data), fontes SRTM/EU-DEM e outras
+Rotas: OSRM (project-osrm.org)
