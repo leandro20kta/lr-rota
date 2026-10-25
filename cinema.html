@@ -206,7 +206,7 @@ async function setup(){
   const bump = new THREE.CanvasTexture(map.noise); bump.wrapS = bump.wrapT = THREE.RepeatWrapping; bump.repeat.set(16,16);
   const plane = new THREE.Mesh(new THREE.PlaneGeometry(TEX, TEX), new THREE.MeshStandardMaterial({map: tex, roughness: .95, metalness: 0, bumpMap: bump, bumpScale: .5, envMapIntensity: .25}));
   plane.rotation.x = -Math.PI/2; plane.receiveShadow = true; scene.add(plane);
-  const base = new THREE.Mesh(new THREE.BoxGeometry(TEX*1.02, 22, TEX*1.02), new THREE.MeshStandardMaterial({color:'#C9B48E', roughness:.9})); base.position.y = -11; scene.add(base);
+  const base = new THREE.Mesh(new THREE.BoxGeometry(TEX*1.02, 22, TEX*1.02), new THREE.MeshStandardMaterial({color:'#C9B48E', roughness:.9})); base.position.y = -11.6;   // topo abaixo do mapa (evita z-fighting que apagava o mapa) scene.add(base);
   const src = trip.track && trip.track.length > 20 ? trip.track.map(p => [p.lat,p.lon]) : trip.route;
   const raw = src.map(map.toWorld); pts = raw.filter((p,i) => i === 0 || p.distanceTo(raw[i-1]) > 1.5); pts.forEach(p => p.y = 1.2);
   curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal', .2); total = curve.getLength();
