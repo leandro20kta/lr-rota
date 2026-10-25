@@ -194,7 +194,8 @@ function drawAppHud(d, u){
   const st = $('#stage'), W = Math.round(st.clientWidth), H = Math.round(st.clientHeight); if(hudC.width !== W || hudC.height !== H){ hudC.width = W; hudC.height = H; }
   const x = hudC.getContext('2d'), k = W/1280; x.clearRect(0, 0, W, H);
   const rr = (X, Y, w, h, r, c) => { x.fillStyle = c; x.beginPath(); x.roundRect(X, Y, w, h, r); x.fill(); };
-  // título
+  // título (com fundo suave para não se misturar com os nomes do mapa)
+  { const g = x.createLinearGradient(0, 0, 0, 160*k); g.addColorStop(0, 'rgba(255,255,255,.92)'); g.addColorStop(.75, 'rgba(255,255,255,.6)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, W, 160*k); }
   rr(24*k, 22*k, 214*k, 40*k, 20*k, '#0A5BD6'); x.fillStyle = '#fff'; x.font = `800 ${17*k}px Inter`; x.fillText('LEANDRO NA ROTA', 44*k, 48*k);
   x.shadowColor = 'rgba(0,0,0,.35)'; x.shadowBlur = 10*k; x.fillStyle = '#1F2328'; x.font = `800 ${34*k}px Inter`; x.fillText(TITLE, 26*k, 104*k); x.shadowBlur = 0;
   x.font = `700 ${17*k}px Inter`; x.fillStyle = '#3C4043'; x.fillText(STOPS.slice(1, -1).map(s => s.name).join(' · '), 27*k, 130*k);
@@ -204,9 +205,9 @@ function drawAppHud(d, u){
     const bx = W/2 - tw/2, by = 150*k; x.shadowColor = 'rgba(0,0,0,.25)'; x.shadowBlur = 18*k; rr(bx, by, tw, 74*k, 18*k, '#FFFFFF'); x.shadowBlur = 0; rr(bx + 12*k, by + 13*k, 48*k, 48*k, 14*k, near.kind === 'fuel' ? '#F57C00' : '#E53935');
     x.fillStyle = '#fff'; x.font = `${26*k}px sans-serif`; x.textAlign = 'center'; x.fillText(ic, bx + 36*k, by + 47*k); x.textAlign = 'left'; x.fillStyle = '#1F2328'; x.font = `800 ${26*k}px Inter`; x.fillText(near.name, bx + 74*k, by + 36*k); x.fillStyle = '#5F6368'; x.font = `700 ${16*k}px Inter`; x.fillText(near.sub || '', bx + 74*k, by + 60*k); }
   // barra de progresso com as paragens
-  const px = 26*k, pw = W - 52*k, py = H - 40*k; rr(px - 10*k, py - 44*k, pw + 20*k, 64*k, 16*k, 'rgba(255,255,255,.92)');
+  const px = 40*k, pw = W - 80*k, py = H - 46*k; rr(px - 24*k, py - 40*k, pw + 48*k, 74*k, 16*k, 'rgba(255,255,255,.94)');
   rr(px, py - 3*k, pw, 6*k, 3*k, '#E3DED6'); rr(px, py - 3*k, pw*d/TOTAL, 6*k, 3*k, '#E53935');
-  STOPS.forEach(s => { const sx = px + pw*s.d/TOTAL; x.fillStyle = s.d <= d ? (s.kind === 'fuel' ? '#F57C00' : '#E53935') : '#BDB6AC'; x.beginPath(); x.arc(sx, py, 7*k, 0, 7); x.fill(); x.strokeStyle = '#fff'; x.lineWidth = 2.5*k; x.stroke(); x.fillStyle = '#3C4043'; x.font = `700 ${12*k}px Inter`; x.textAlign = s === STOPS[0] ? 'left' : s === STOPS.at(-1) ? 'right' : 'center'; x.fillText(s.kind === 'fuel' ? '⛽ ' + s.name : s.name, sx, py - 16*k); x.textAlign = 'left'; });
+  let lastLx = -1e9; STOPS.forEach((s, i) => { const sx = px + pw*s.d/TOTAL; const below = sx - lastLx < 90*k; if(!below) lastLx = sx; x.fillStyle = s.d <= d ? (s.kind === 'fuel' ? '#F57C00' : '#E53935') : '#BDB6AC'; x.beginPath(); x.arc(sx, py, 7*k, 0, 7); x.fill(); x.strokeStyle = '#fff'; x.lineWidth = 2.5*k; x.stroke(); x.fillStyle = '#3C4043'; x.font = `700 ${12*k}px Inter`; x.textAlign = s === STOPS[0] ? 'left' : s === STOPS.at(-1) ? 'right' : 'center'; x.fillText(s.kind === 'fuel' ? '⛽ ' + s.name : s.name, sx, below ? py + 20*k : py - 16*k); x.textAlign = 'left'; });
   x.fillStyle = '#1F2328'; x.font = `800 ${15*k}px Inter`; x.textAlign = 'right'; x.fillText(`${(d/1000).toFixed(0)} / ${(TOTAL/1000).toFixed(0)} km`, W - 30*k, 46*k); x.textAlign = 'left';
   x.fillStyle = 'rgba(0,0,0,.55)'; x.font = `600 ${10*k}px Inter`; x.textAlign = 'right'; x.fillText('© OpenStreetMap · OpenMapTiles · OpenFreeMap', W - 30*k, H - 76*k); x.textAlign = 'left';
 }
@@ -273,5 +274,5 @@ $('#bRec').onclick = () => {
   rec.start(1000); run(rec);
 };
 $('#bSave').onclick = () => { if(!lastFile) return; if(navigator.canShare && navigator.canShare({files: [lastFile]})) navigator.share({files: [lastFile], title: 'LR Rota'}).catch(() => {}); else { const a = document.createElement('a'); a.href = URL.createObjectURL(lastFile); a.download = lastFile.name; a.click(); } };
-if(Q.get('capture')) $('#ctl').hidden = true;
+if(Q.get('capture')) $('#ctl').style.display = 'none';
 </script></body></html>
