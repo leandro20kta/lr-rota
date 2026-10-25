@@ -464,10 +464,21 @@ async function route(a, b, vias=[]) {
   rt.legs.forEach(l => l.steps.forEach(s => { const ref = (s.ref || '').split(';')[0].trim(); const isMotorway = /^(A ?\d|AP-?\d|A-\d|E ?\d)/i.test(ref) || /autoestrada|autopista|autovía|autoroute/i.test(s.name || ''); if(isMotorway){ tollM += s.distance; refs.add(ref || 'AE'); } }));
   return { coords: rt.geometry.coordinates.map(c => [c[1], c[0]]), distance: rt.distance, duration: rt.duration, tollM, refs: [...refs] };
 }
-async function nearestAirport(p){ const r = await fetch(`https://overpass-api.de/api/interpreter`, {method:'POST', body:`[out:json][timeout:20];node(around:120000,${p.lat},${p.lon})[aeroway=aerodrome][iata];out 5;`}); const j = await r.json(); const el = (j.elements||[]).sort((a,b)=> dist(p.lat,p.lon,a.lat,a.lon) - dist(p.lat,p.lon,b.lat,b.lon))[0]; return el ? {lat:el.lat, lon:el.lon, name:(el.tags.name||'Aeroporto') + ' (' + el.tags.iata + ')'} : null; }
+async function nearestAirport(p){ const j = await overpass(`[out:json][timeout:20];node(around:120000,${p.lat},${p.lon})[aeroway=aerodrome][iata];out 5;`); const el = (j.elements||[]).sort((a,b)=> dist(p.lat,p.lon,a.lat,a.lon) - dist(p.lat,p.lon,b.lat,b.lon))[0]; return el ? {lat:el.lat, lon:el.lon, name:(el.tags.name||'Aeroporto') + ' (' + el.tags.iata + ')'} : null; }
 function dist(a,b,c,d){ const R=6371000, toR=x=>x*Math.PI/180, dLat=toR(c-a), dLon=toR(d-b); const h=Math.sin(dLat/2)**2+Math.cos(toR(a))*Math.cos(toR(c))*Math.sin(dLon/2)**2; return 2*R*Math.asin(Math.sqrt(h)); }
 
 /* ---------- POIs (Overpass) ---------- */
+const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+async function overpass(body){
+  let last;
+  for(const url of OVERPASS){
+    try{ const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 20000);
+      const r = await fetch(url, {method:'POST', body, signal: ctl.signal}); clearTimeout(to);
+      if(!r.ok) throw new Error(url.split('/')[2] + ' ' + r.status); return await r.json();
+    }catch(e){ last = e; }
+  }
+  throw last || new Error('Overpass indisponível');
+}
 async function pois(p, kinds){
   const q = [];
   if(kinds.includes('attraction')) q.push('nwr(around:3000,LAT,LON)[tourism~"attraction|castle|artwork"];nwr(around:3000,LAT,LON)[historic~"castle|monument|bridge|church|ruins|tower|archaeological_site"];');
@@ -477,7 +488,7 @@ async function pois(p, kinds){
   if(kinds.includes('restaurant')) q.push('nwr(around:2000,LAT,LON)[amenity=restaurant][name];');
   if(kinds.includes('hotel')) q.push('nwr(around:3000,LAT,LON)[tourism~"hotel|guest_house"][name];');
   const body = `[out:json][timeout:25];(${q.join('').replaceAll('LAT', p.lat).replaceAll('LON', p.lon)});out center 60;`;
-  const r = await fetch('https://overpass-api.de/api/interpreter', {method:'POST', body}); const j = await r.json();
+  const j = await overpass(body);
   return (j.elements||[]).filter(e => e.tags && e.tags.name).map(e => { const lat = e.lat ?? e.center.lat, lon = e.lon ?? e.center.lon; const t = e.tags; let kind = 'attraction'; if(t.amenity === 'restaurant') kind = 'restaurant'; else if(t.tourism === 'hotel' || t.tourism === 'guest_house') kind = 'hotel'; else if(t.tourism === 'viewpoint') kind = 'viewpoint'; else if(t.tourism === 'museum') kind = 'museum'; else if(t.natural === 'beach') kind = 'beach'; return {name:t.name, kind, lat, lon, cuisine:t.cuisine, stars:t.stars, website:t.website, d: dist(p.lat,p.lon,lat,lon), desc: t['description:pt'] || t.description || '', hours: t.opening_hours || '', wiki: t.wikipedia || '', wd: t.wikidata || '', fee: t.fee || '', start: t.start_date || '', heritage: t.heritage || ''}; }).sort((a,b) => a.d - b.d);
 }
 
@@ -582,6 +593,7 @@ function scriptStops(t){
   return vis.length ? vis : (t.pois || []).filter(p => ['attraction', 'viewpoint', 'museum', 'beach'].includes(p.kind)).slice(0, 4);
 }
 async function gatherFacts(t, force){
+  if(!(t.pois||[]).length){ $('#sc-status').textContent = 'A procurar locais para visitar…'; try{ t.pois = await pois(t.dest, ['attraction','museum','viewpoint','restaurant','hotel']); const notab = p => (p.wiki || p.wd ? 0 : 3) + (p.heritage ? 0 : 1) + p.d/4000; if(!(t.stops||[]).length){ const seen = new Set(); t.stops = t.pois.filter(p => ['attraction','viewpoint','museum','beach'].includes(p.kind)).sort((a,b) => notab(a) - notab(b)).filter(p => { const k = p.name.toLowerCase(); if(seen.has(k)) return false; seen.add(k); return true; }).slice(0,4); } }catch(e){} }
   t.enrich = force ? {} : (t.enrich || {}); const city = t.dest.name; const list = [{name: city, wiki:'', wd:'', isCity:true}, ...scriptStops(t)];
   let n = 0;
   for(const s of list){
