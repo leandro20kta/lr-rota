@@ -51,7 +51,10 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 const Q = new URLSearchParams(location.search), $ = s => document.querySelector(s), status = t => $('#status').textContent = t || '';
 const PACK = Q.get('pack');                  // pacote offline (ex.: studio/packs/pontedelima-vigo) — senão usa a rede
-const CAR_SCALE = +(Q.get('carscale') || (Q.get('map') === 'atlas' ? 17 : Q.get('look') === 'app' ? 13 : 11));  // carro ampliado para ser visível (tamanho real ficaria com poucos píxeis)
+const CAR_SCALE = +(Q.get('carscale') || 11);
+// estilo 'app': o carro tem ~80 px na autoestrada (vista alta) e encolhe para caber na faixa quando a câmara desce às ruas
+const CAR_K = +(Q.get('carsize') || 1);
+const carScaleApp = z => 3.6*CAR_K*Math.pow(2, (17.5 - z)*1.12);  // carro ampliado para ser visível (tamanho real ficaria com poucos píxeis)
 const DUR = +(Q.get('dur') || 75);            // segundos de vídeo para a viagem inteira
 
 /* ---------- viagem ---------- */
@@ -132,7 +135,11 @@ if(ATLAS){
   map.addLayer({id:'relief', type:'color-relief', source:'dem2', paint:{'color-relief-opacity': 1, 'color-relief-color': ['interpolate', ['linear'], ['elevation'], -50, '#9CC8C0', 0, '#A9CF9C', 60, '#BAD69C', 180, '#D7DDA0', 350, '#E8D6A0', 550, '#E6BE8A', 800, '#D9A374', 1100, '#C4875E', 1600, '#B07A5A']}}, 'hills');
   map.setPaintProperty('hills', 'hillshade-exaggeration', .75); map.setPaintProperty('road', 'line-width', ['interpolate',['exponential',1.6],['zoom'],10,['match',['get','class'],'motorway',1.6,'trunk',1.3,.5],17,['match',['get','class'],'motorway',16,'trunk',14,['primary','secondary'],12,7]]); map.setPaintProperty('road-case', 'line-width', ['interpolate',['exponential',1.6],['zoom'],10,['match',['get','class'],'motorway',2.4,'trunk',2,.9],17,['match',['get','class'],'motorway',20,'trunk',18,['primary','secondary'],15,9]]); map.setPaintProperty('water', 'fill-color', '#9CC8C0');
 }
-if(LOOK === 'app'){ map.setLayoutProperty('bld', 'visibility', 'none'); map.addLayer({id:'bld-flat', type:'fill', source:'omt', 'source-layer':'building', minzoom: 14, paint:{'fill-color': C.bld, 'fill-opacity': .55}}, 'road-case'); }
+if(LOOK === 'app'){
+  const wR = ['interpolate',['exponential',1.7],['zoom'],10,['match',['get','class'],'motorway',1.8,'trunk',1.4,.5],15,['match',['get','class'],'motorway',9,'trunk',8,['primary','secondary'],6,3.5],19,['match',['get','class'],'motorway',90,'trunk',80,['primary','secondary'],64,['tertiary','minor'],48,30]];
+  const wC = ['interpolate',['exponential',1.7],['zoom'],10,['match',['get','class'],'motorway',2.8,'trunk',2.2,1],15,['match',['get','class'],'motorway',12,'trunk',11,['primary','secondary'],8.5,5.5],19,['match',['get','class'],'motorway',100,'trunk',90,['primary','secondary'],72,['tertiary','minor'],56,36]];
+  map.setPaintProperty('road', 'line-width', wR); map.setPaintProperty('road-case', 'line-width', wC);
+  map.setLayoutProperty('bld', 'visibility', 'none'); map.addLayer({id:'bld-flat', type:'fill', source:'omt', 'source-layer':'building', minzoom: 14, paint:{'fill-color': C.bld, 'fill-opacity': .55}}, 'road-case'); }
 map.setTerrain({source: 'dem', exaggeration: LOOK === 'app' ? 1.6 : 1.0});   // no estilo 'app' o relevo é acentuado para se ver subir e descer
 map.setSky(ATLAS ? {'sky-color': '#CFE3E0', 'horizon-color': '#EDE6D2', 'fog-color': '#E6DCC2', 'sky-horizon-blend': .5, 'horizon-fog-blend': .3, 'fog-ground-blend': .92} : LOOK === 'app' && MAPSTYLE === 'escuro' ? {'sky-color': '#0B1622', 'horizon-color': '#1F3247', 'fog-color': '#1C2733', 'sky-horizon-blend': .5, 'horizon-fog-blend': .5, 'fog-ground-blend': .6} : LOOK === 'app' && MAPSTYLE === 'vintage' ? {'sky-color': '#E9DCC0', 'horizon-color': '#F1E7D1', 'fog-color': '#E4D5B5', 'sky-horizon-blend': .5, 'horizon-fog-blend': .5, 'fog-ground-blend': .6} : LOOK === 'app' ? {'sky-color': '#8EC5F0', 'horizon-color': '#DCEEFB', 'fog-color': '#EEF2F4', 'sky-horizon-blend': .5, 'horizon-fog-blend': .5, 'fog-ground-blend': .6} : {'sky-color': '#16243A', 'horizon-color': '#2F4766', 'fog-color': '#2B3A55', 'sky-horizon-blend': .6, 'horizon-fog-blend': .4, 'fog-ground-blend': .55});
 // "balões" de rua e de terra (fundo esticável, como no GPS)
@@ -151,6 +158,7 @@ const RC = LOOK === 'app' ? {done: RCOL, todo: 'rgba(0,0,0,0)', caseDone: MAPSTY
 if(RC.ghost) map.addLayer({id:'route-ghost', type:'line', source:'route', layout:{'line-cap':'round','line-join':'round'}, paint:{'line-color': RCOL, 'line-opacity': .35, 'line-dasharray': [1.2, 1.6], 'line-width':['interpolate',['linear'],['zoom'],9,2,16,6]}}, BEFORE);
 map.addLayer({id:'route-case', type:'line', source:'route', layout:{'line-cap':'round','line-join':'round'}, paint:{'line-width':['interpolate',['exponential',1.5],['zoom'],9, LOOK === 'app' ? 9 : 6,17,30], 'line-gradient':['step',['line-progress'],RC.caseDone,0,RC.caseTodo]}}, BEFORE);
 map.addLayer({id:'route', type:'line', source:'route', layout:{'line-cap':'round','line-join':'round'}, paint:{'line-width':['interpolate',['exponential',1.5],['zoom'],9, LOOK === 'app' ? 5.5 : 4,17,22], 'line-gradient':['step',['line-progress'],RC.done,0,RC.todo]}}, BEFORE);
+if(LOOK === 'app'){ map.setPaintProperty('route', 'line-width', ['interpolate',['exponential',1.6],['zoom'],10,4,15,8,19,26]); map.setPaintProperty('route-case', 'line-width', ['interpolate',['exponential',1.6],['zoom'],10,7,15,12,19,34]); }
 const setProgress = f => { const x = Math.max(1e-6, Math.min(.99999, f)); map.setPaintProperty('route', 'line-gradient', ['step', ['line-progress'], RC.done, x, RC.todo]); map.setPaintProperty('route-case', 'line-gradient', ['step', ['line-progress'], RC.caseDone, x, RC.caseTodo]); };
 // marcadores das paragens (desenhados no mapa, entram no vídeo)
 function pinImg(id, color, glyph){ const c = document.createElement('canvas'); c.width = 96; c.height = 120; const x = c.getContext('2d'); x.fillStyle = color; x.strokeStyle = '#fff'; x.lineWidth = 6; x.beginPath(); x.arc(48, 44, 38, Math.PI*.85, Math.PI*.15); x.lineTo(48, 114); x.closePath(); x.fill(); x.stroke(); x.fillStyle = '#fff'; x.font = '44px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(glyph, 48, 46); map.addImage(id, x.getImageData(0, 0, 96, 120), {pixelRatio: 2}); }
@@ -195,7 +203,7 @@ const carLayer = {
   render(gl, args){
     if(!this.ready) return;
     const el = map.queryTerrainElevation([carState.lng, carState.lat]); if(el != null) carState.alt = el;
-    const mc = maplibregl.MercatorCoordinate.fromLngLat([carState.lng, carState.lat], carState.alt), s = mc.meterInMercatorCoordinateUnits()*CAR_SCALE*Math.pow(2, (16.6 - map.getZoom())*(LOOK === 'app' ? .8 : 1));
+    const mc = maplibregl.MercatorCoordinate.fromLngLat([carState.lng, carState.lat], carState.alt), s = mc.meterInMercatorCoordinateUnits()*(LOOK === 'app' ? carScaleApp(map.getZoom()) : CAR_SCALE*Math.pow(2, 16.6 - map.getZoom()));
     this.holder.rotation.set(0, carState.yaw, 0); wheels.forEach(w => w.rotation.z = -carState.dist/.34/CAR_SCALE*3); steerPiv.forEach(p => p.rotation.y = carState.steer || 0);
     const M = new THREE.Matrix4().makeTranslation(mc.x, mc.y, mc.z).scale(new THREE.Vector3(s, -s, s)).multiply(new THREE.Matrix4().makeRotationX(Math.PI/2));
     this.camera.projectionMatrix = new THREE.Matrix4().fromArray(args.defaultProjectionData.mainMatrix).multiply(M);
@@ -249,18 +257,18 @@ function drawAppHud(d, u){
   x.fillStyle = DARK ? '#FFFFFF' : '#1F2328'; x.font = `800 ${15*k}px Inter`; x.textAlign = 'right'; x.fillText(`${(d/1000).toFixed(0)} / ${(TOTAL/1000).toFixed(0)} km`, W - 30*k, 46*k); x.textAlign = 'left';
   x.fillStyle = DARK ? 'rgba(255,255,255,.6)' : 'rgba(0,0,0,.55)'; x.font = `600 ${10*k}px Inter`; x.textAlign = 'right'; x.fillText('© OpenStreetMap · OpenMapTiles · OpenFreeMap', W - 30*k, H - 76*k); x.textAlign = 'left';
 }
-const visLenCam = () => 4.8*CAR_SCALE*Math.pow(2, (16.6 - (appZoom ?? 13))*.8);
+const visLenCam = () => 4.8*carScaleApp(appZoom ?? 13);
 function frame(u, first){
   const d = distAtTime(u); const {p} = posAt(d); const s = stepAt(d); const mw = isMotorway(s);
   const head = headingAt(d, LOOK === 'app' ? Math.max(120, visLenCam()*1.6) : mw ? 420 : 160); if(camBear === null || first) camBear = head; let db = ((head - camBear + 540) % 360) - 180; camBear = (camBear + db*(first ? 1 : LOOK === 'app' ? .06 + .06*twistAt(d) : .12) + 360) % 360;
-  carState.lng = p[0]; carState.lat = p[1]; carState.dist = d; carState.alt = (map.queryTerrainElevation(p) || 0); const visLen = 4.8*CAR_SCALE*Math.pow(2, (16.6 - (LOOK === 'app' ? (appZoom ?? 13) : map.getZoom()))*(LOOK === 'app' ? .8 : 1));   // comprimento do carro "no mapa" (m)
+  carState.lng = p[0]; carState.lat = p[1]; carState.dist = d; carState.alt = (map.queryTerrainElevation(p) || 0); const visLen = 4.8*(LOOK === 'app' ? carScaleApp(appZoom ?? 13) : CAR_SCALE*Math.pow(2, 16.6 - map.getZoom()));   // comprimento do carro "no mapa" (m)
   const carHead = headingAt(d, LOOK === 'app' ? Math.max(25, visLen*.35) : 25); carState.yaw = (90 - carHead)*rad;
   { const h0 = headingAt(d, Math.max(15, visLen*.15)), h1 = headingAt(d + Math.max(30, visLen*.5), Math.max(15, visLen*.15)); const turn = ((h1 - h0 + 540) % 360) - 180; const target = Math.max(-.55, Math.min(.55, -turn*rad*1.4)); carState.steer = (carState.steer || 0) + (target - (carState.steer || 0))*.25; }
   if(LOOK === 'app'){
     // vista de cima inclinada, mais afastada; aproxima nas paragens
     const near = STOPS.reduce((m, q) => Math.min(m, Math.abs(q.d - d)), 1e9), fuel = STOPS.filter(q => q.kind === 'fuel').reduce((m, q) => Math.min(m, Math.abs(q.d - d)), 1e9), tw = Math.max(twistAt(d), twistAt(d + 300)*.8);
-    let zt = (mw ? 12.9 : 13.6) + 2.0*tw + 2.4*Math.max(0, 1 - near/2500); if(fuel < 900) zt = Math.max(zt, 16.9 - fuel/900);
-    zt = Math.min(17.2, zt); appZoom = appZoom === null || first ? zt : appZoom + (zt - appZoom)*.05;
+    let zt = (mw ? 13.0 : 14.0) + 3.2*tw + 3.2*Math.max(0, 1 - near/2500); if(fuel < 1200) zt = Math.max(zt, 18.0 - 1.6*fuel/1200);
+    zt = Math.min(18.0, zt); appZoom = appZoom === null || first ? zt : appZoom + (zt - appZoom)*.05;
     map.jumpTo({center: p, zoom: appZoom, pitch: 56 + 6*tw, bearing: camBear, padding: {top: H0()*.3, bottom: 0, left: 0, right: 0}});
     setProgress(d/TOTAL); drawAppHud(d, u); map.triggerRepaint(); return;
   }
