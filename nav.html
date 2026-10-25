@@ -60,7 +60,10 @@ const cum = [0]; for(let i=1;i<line.length;i++) cum.push(cum[i-1] + hav(line[i-1
 const steps = (trip.steps || []).map(s => ({...s})); { let acc = 0; steps.forEach(s => { s.d0 = acc; acc += s.dist; s.d1 = acc; }); }
 const isMotorway = s => /^(A|AP|AG|IP|IC|E)[\s-]?\d/i.test((s.ref || '').split(';')[0]) || /auto(estrada|v[ií]a|pista)/i.test(s.name || '');
 const isSpain = s => /^(A|AP|AG|N|PO|EP|VG|OU|LU|AC)-\d/.test((s.ref || '').split(';')[0]) || /^(Autovía|Rúa |Estrada de Clara)/.test(s.name || '');   // estradas espanholas usam hífen (A-55, AP-9)
-const ES0 = (() => { const st = steps.find(s => isSpain(s)); return st ? st.d0 : null; })();
+const ES0 = (() => {   // fronteira: a meio entre o último ponto em Portugal e o primeiro em Espanha (ou a 1.ª estrada espanhola)
+  const P = trip.points || [], kOf = p => { let bi = 0, bd = 1e18; line.forEach((q, i) => { const dd = hav(q, [p.lon, p.lat]); if(dd < bd){ bd = dd; bi = i; } }); return cum[bi]; };
+  const iES = P.findIndex(p => p.country === 'ES'); if(iES > 0 && P[iES-1].country === 'PT') return (kOf(P[iES-1]) + kOf(P[iES]))/2;
+  const st = steps.find(s => isSpain(s)); return st ? st.d0 : null; })();
 const stepAt = d => steps.find(s => d >= s.d0 && d < s.d1) || steps.at(-1) || {name:'', ref:''};
 const speedAt = d => { const s = stepAt(d); const nearPt = (trip.points || []).some(p => hav([p.lon, p.lat], posAt(d).p) < 2500); return nearPt ? .45 : isMotorway(s) ? 1.55 : .8; };
 // tempo de vídeo → distância (integra 1/velocidade)
@@ -157,8 +160,8 @@ function hud(d, u){
   $('#bEta').textContent = eta.toTimeString().slice(0,5); $('#bMin').textContent = Math.round(secLeft/60); $('#bKm').textContent = (left/1000).toFixed(left > 10000 ? 0 : 1).replace('.', ',');
   // nome da localidade ao passar
   let pl = '', ps = '';
-  (trip.points || []).forEach((p, k) => { const dd = hav([p.lon, p.lat], posAt(d).p); if(dd < (k === 0 || k === trip.points.length-1 ? 1800 : 1500)) { pl = p.name; ps = /Espa|Spain|Pontevedra|Galicia/i.test(p.display || '') || k >= 2 ? 'Galiza · Espanha' : 'Portugal'; } });
-  if(!pl && ES0 !== null && d >= ES0 && d < ES0 + 3000) { pl = 'Bem-vindo a Espanha'; ps = 'Galiza · Espanha'; }
+  (trip.points || []).forEach((p, k) => { const dd = hav([p.lon, p.lat], posAt(d).p); if(dd < (k === 0 || k === trip.points.length-1 ? 1800 : 1500)) { pl = p.name; ps = p.country === 'ES' || (p.country == null && ES0 !== null && d > ES0) ? 'Galiza · Espanha' : 'Portugal'; } });
+  if(ES0 !== null && d >= ES0 - 200 && d < ES0 + 900) { pl = 'Bem-vindo a Espanha'; ps = 'Galiza · Espanha'; }
   if(pl){ $('#pT').textContent = pl; $('#pS').textContent = ps; $('#place').classList.add('on'); placeShown = pl === 'Bem-vindo a Espanha' ? 'ESP' : placeShown; } else $('#place').classList.remove('on');
 }
 function frame(u, first){
