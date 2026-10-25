@@ -221,7 +221,7 @@ $('#rec').addEventListener('click', () => {
   rec.onstop = () => { const blob = new Blob(chunks, {type: mime}); const file = new File([blob], `lr-rota-cinema-${trip.dest.name}.${mime.includes('mp4')?'mp4':'webm'}`, {type: mime}); if(navigator.canShare && navigator.canShare({files:[file]})) navigator.share({files:[file], title:'LR Rota'}).catch(()=>{}); else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click(); } $('#rec').disabled = false; status('Vídeo pronto.'); };
   $('#rec').disabled = true; rec.start(); play(() => rec.stop(), true);
 });
-window.__cinema = { drawFrame, overlay, play, get trip(){ return trip; } };
+window.__cinema = { drawFrame, overlay, play, THREE, get trip(){ return trip; }, get car(){ return car; }, get map(){ return map; }, get carL(){ return carL; } };
 setup().catch(e => { console.error(e); status('Erro: ' + e.message); });
 </script>
 </body>
