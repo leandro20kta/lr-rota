@@ -363,14 +363,17 @@ async function export4k(){
   const muxer = new Muxer({target, video: {codec: 'avc', width: W, height: H, frameRate: FPS}, fastStart: writable ? false : 'in-memory'});
   const enc = new VideoEncoder({output: (c, m) => muxer.addVideoChunk(c, m), error: e => status('Erro do codificador: ' + e.message)}); enc.configure(cfg);
   document.body.classList.add('recording'); const st = $('#stage'); st.style.width = W/2 + 'px'; st.style.height = H/2 + 'px'; st.style.transform = `scale(${Math.min(innerWidth/(W/2), innerHeight/(H/2))})`; HUDS = 2; map.setPixelRatio(2); map.resize();
-  rc.width = W; rc.height = H; const N = Math.round(DUR*FPS); camBear = null; appZoom = null; const raf = () => new Promise(r => requestAnimationFrame(r)); const t0 = performance.now();
+  rc.width = W; rc.height = H; const N = Math.round(DUR*FPS); camBear = null; appZoom = null; // não depende do requestAnimationFrame (o Chrome trava-o quando o ecrã apaga): desenha à força e mantém o ecrã ligado
+  let wake = null; try{ wake = await navigator.wakeLock?.request('screen'); }catch(e){}
+  document.addEventListener('visibilitychange', async () => { if(document.visibilityState === 'visible' && (!wake || wake.released)){ try{ wake = await navigator.wakeLock?.request('screen'); }catch(e){} } });
+  const raf = () => new Promise(r => { map.redraw(); setTimeout(r, 0); }); const t0 = performance.now();
   for(let i = 0; i < N; i++){
     frame(i/(N-1), i === 0); await raf(); const ts = performance.now(); const ok = () => map.isSourceLoaded('omt') && (!map.getSource('dem2') || map.isSourceLoaded('dem2')); while(!ok() && performance.now() - ts < 2500) await raf(); await raf();   // espera ruas e relevo colorido (a fonte do terreno 3D nunca fica 'carregada')
     drawRec(); const vf = new VideoFrame(rc, {timestamp: Math.round(i*1e6/FPS), duration: Math.round(1e6/FPS)}); enc.encode(vf, {keyFrame: i % (FPS*2) === 0}); vf.close();
     while(enc.encodeQueueSize > 6) await new Promise(r => setTimeout(r, 5));
     if(i % 15 === 0){ const el = (performance.now() - t0)/1000, left = el/(i+1)*(N-i-1); status(`A exportar 4K… ${Math.round(i/N*100)}% · faltam ~${Math.ceil(left/60)} min`); }
   }
-  await enc.flush(); muxer.finalize(); if(writable) await writable.close();
+  await enc.flush(); muxer.finalize(); if(writable) await writable.close(); try{ wake?.release(); }catch(e){}
   document.body.classList.remove('recording'); st.style.width = st.style.height = st.style.transform = ''; HUDS = Math.min(2, devicePixelRatio || 1); map.setPixelRatio(devicePixelRatio); map.resize();
   if(opfs){ const f = await opfs.getFile(); lastFile = new File([f], name, {type: 'video/mp4'}); $('#bSave').hidden = false; saveFile(lastFile); }
   else if(!writable){ lastFile = new File([target.buffer], name, {type: 'video/mp4'}); $('#bSave').hidden = false; saveFile(lastFile); }
