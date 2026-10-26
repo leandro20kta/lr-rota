@@ -292,12 +292,20 @@ async function wikiPhoto(s){
   }
   return null;
 }
+async function brandPhoto(s){
+  for(const q of [`${s.name} gasolinera`, `${s.name} petrol station`, `${s.name} estación de servicio`]){
+    try{ const j = await (await fetch('https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=6&gsrlimit=15&gsrsearch=' + encodeURIComponent(q) + '&prop=imageinfo&iiprop=url|extmetadata|size|mime&iiurlwidth=1600')).json();
+      const c = Object.values(j.query?.pages || {}).map(p => ({p, ii: p.imageinfo?.[0] || {}})).filter(o => /jpeg/.test(o.ii.mime) && o.ii.width >= 1600 && o.ii.width > o.ii.height && o.p.title.toLowerCase().includes(s.name.toLowerCase())).sort((a, b) => a.p.index - b.p.index)[0];
+      if(c){ const md = c.ii.extmetadata || {}; return {src: c.ii.thumburl, credit: `Foto ilustrativa: ${strip(md.Artist?.value).slice(0, 40) || 'Wikimedia Commons'} · ${strip(md.LicenseShortName?.value) || 'licença livre'} · Wikimedia Commons`}; } }catch(e){}
+  }
+  return null;
+}
 async function loadPhotos(){
   await Promise.all(STOPS.map(async s => {
     try{
       const mine = await idbGet(photoKey(s)); if(mine === 'none') return;
       let src = mine || s.photo || (s.photoId ? await idbGet('photo:' + s.photoId) : null), credit = '', from = 'tua';
-      if(!src && s.kind !== 'fuel'){ const w = await wikiPhoto(s); if(w){ src = w.src; credit = w.credit; from = 'wiki'; } }
+      if(!src){ const w = s.kind === 'fuel' ? await brandPhoto(s) : await wikiPhoto(s); if(w){ src = w.src; credit = w.credit; from = 'wiki'; } }
       if(src) PHOTOS.set(s, {img: await loadImg(src), credit, src: from});
     }catch(e){ console.warn('foto', s.name, e); }
   }));
@@ -329,10 +337,7 @@ function drawAppHud(d, u){
   x.font = `700 ${17*k}px Inter`; x.fillStyle = DARK ? '#C9D3DF' : '#3C4043'; { const names = STOPS.slice(1, -1).filter(s => s.kind !== 'fuel').map(s => s.name); let n = names.length, t = names.join(' · '); while(n > 1 && x.measureText(t).width > W - 300*k){ n--; t = names.slice(0, n).join(' · ') + ` · +${names.length - n}`; } x.fillText(t, 27*k, 130*k); }
   // cartão da paragem (ao chegar / na pausa) + foto
   STOPS.forEach(s => drawPhoto(x, k, W, H, s, d));
-  const near = STOPS.filter(s => Math.abs(s.d - d) < (s.pause || s.kind === 'fuel' ? 1200 : 1600)).sort((a, b) => Math.abs(a.d - d) - Math.abs(b.d - d))[0];   // a paragem mais próxima (a bomba não fica com o nome da vila ao lado)
-  if(near){ const ic = near.kind === 'fuel' ? '⛽' : near === STOPS.at(-1) ? '⚑' : near === STOPS[0] ? '🚗' : '📍'; x.font = `800 ${26*k}px Inter`; const tw = Math.max(x.measureText(near.name).width, (x.font = `700 ${16*k}px Inter`, x.measureText(near.sub || '').width)) + 96*k;
-    const bx = W/2 - tw/2, by = 150*k; x.shadowColor = 'rgba(0,0,0,.25)'; x.shadowBlur = 18*k; rr(bx, by, tw, 74*k, 18*k, '#FFFFFF'); x.shadowBlur = 0; rr(bx + 12*k, by + 13*k, 48*k, 48*k, 14*k, near.kind === 'fuel' ? '#F57C00' : '#E53935');
-    x.fillStyle = '#fff'; x.font = `${26*k}px sans-serif`; x.textAlign = 'center'; x.fillText(ic, bx + 36*k, by + 47*k); x.textAlign = 'left'; x.fillStyle = '#1F2328'; x.font = `800 ${26*k}px Inter`; x.fillText(near.name, bx + 74*k, by + 36*k); x.fillStyle = '#5F6368'; x.font = `700 ${16*k}px Inter`; x.fillText(near.sub || '', bx + 74*k, by + 60*k); }
+  // (o cartão branco com o ícone foi retirado: ficam só as fotos)
   // barra de progresso com as paragens
   const px = 40*k, pw = W - 80*k, py = H - 46*k; rr(px - 24*k, py - 40*k, pw + 48*k, 74*k, 16*k, DARK ? 'rgba(16,22,30,.92)' : MAPSTYLE === 'vintage' || ATLAS ? 'rgba(240,229,205,.94)' : 'rgba(255,255,255,.94)');
   rr(px, py - 3*k, pw, 6*k, 3*k, DARK ? '#3A4656' : '#E3DED6'); rr(px, py - 3*k, pw*d/TOTAL, 6*k, 3*k, RCOL);
