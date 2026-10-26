@@ -177,9 +177,10 @@ async function loadCarGLB(){
   const m = g.scene; const box = new THREE.Box3().setFromObject(m), sz = box.getSize(new THREE.Vector3()); m.scale.setScalar(4.8/Math.max(sz.x, sz.z)); box.setFromObject(m); m.position.y -= box.min.y;
   wheels = WHEELS.map(n => m.getObjectByName(n)).filter(Boolean); steerPiv = ['roda_FE_pivot', 'roda_FD_pivot'].map(n => m.getObjectByName(n)).filter(Boolean);
   m.traverse(o => { if(!o.isMesh) return; (Array.isArray(o.material) ? o.material : [o.material]).forEach(mt => {
-    if(/^(Paint|Coloured|GrelhaPreta)$/.test(mt.name)){ mt.color.set('#000000'); mt.metalness = .05; mt.roughness = .28; if('clearcoat' in mt){ mt.clearcoat = .8; mt.clearcoatRoughness = .06; } mt.envMapIntensity = .45; }
+    if(/^(Paint|Coloured|GrelhaPreta)$/.test(mt.name)){ mt.color.set('#000000'); mt.metalness = 0; mt.roughness = .38; if('clearcoat' in mt){ mt.clearcoat = .35; mt.clearcoatRoughness = .18; } mt.envMapIntensity = .18;   // preto de brinquedo: só brilhos pequenos, sem reflexo cinzento do céu }
     if(mt.name === 'GlassRed'){ mt.emissive.set('#FF0000'); mt.emissiveIntensity = 1.8; mt.color.set('#FF0000'); mt.toneMapped = false; }   // sem tone mapping: vermelho puro, não alaranjado
-    if(mt.name === 'GlassMtl'){ mt.color.set('#050608'); mt.envMapIntensity = 1.1; }
+    if(mt.name === 'GlassMtl'){ mt.color.set('#020203'); mt.envMapIntensity = .35; }
+    if(/^(Carbon1|Base|CaliperAZone)$/.test(mt.name)){ mt.color.set('#050505'); mt.envMapIntensity = .2; }
   }); });
   // brilho vermelho dos farolins (visível de cima) — atrás do carro (frente = +X)
   box.setFromObject(m); const glow = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); const r = g.createRadialGradient(32,32,1,32,32,31); r.addColorStop(0,'rgba(255,0,0,1)'); r.addColorStop(.35,'rgba(255,0,0,.5)'); r.addColorStop(1,'rgba(255,0,0,0)'); g.fillStyle = r; g.fillRect(0,0,64,64); return new THREE.CanvasTexture(c); })();
