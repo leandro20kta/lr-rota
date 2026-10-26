@@ -102,18 +102,27 @@ const TW = []; { const step = 50; for(let d = 0; d <= TOTAL + step; d += step){ 
   for(let k = 0; k < 6; k++) for(let i = 1; i < TW.length - 1; i++) TW[i] = Math.max(TW[i]*.9, (TW[i-1] + TW[i] + TW[i+1])/3); }
 const twistAt = d => { const v = TW[Math.max(0, Math.min(TW.length-1, Math.round(d/50)))] || 0; return Math.max(0, Math.min(1, (v - 20)/70)); };
 const speedAt = d => { const s = stepAt(d); if(LOOK === 'app' && STOPS.some(p => p.kind === 'fuel' && Math.abs(p.d - d) < 700)) return .25; const nearPt = STOPS.some(p => Math.abs(p.d - d) < 2500); const base = nearPt ? (LOOK === 'app' ? .6 : .45) : isMotorway(s) ? (LOOK === 'app' ? 1.35 : 1.55) : .85; return LOOK === 'app' ? base*(1 - .6*twistAt(d)) : base; };
-// tempo de vídeo (s) → distância (m): integra 1/velocidade e acrescenta as pausas (ex.: abastecimento)
-const T = [0], D = [0]; { const NS = 2000, sp = []; for(let i = 0; i <= NS; i++) sp.push(speedAt(TOTAL*i/NS));
-  for(let k = 0; k < 4; k++){ const c = sp.slice(); for(let i = 0; i <= NS; i++){ let a = 0, n = 0; for(let j = -8; j <= 8; j++){ const q = c[i+j]; if(q != null){ a += q; n++; } } sp[i] = a/n; } }
-  STOPS.forEach(p => { if(!(p.pause || p.kind === 'fuel')) return; for(let i = 0; i <= NS; i++){ const g = Math.abs(p.d - TOTAL*i/NS); if(g < 500) sp[i] *= Math.max(.05, Math.pow(g/500, .75)); } });
-  // curvas e rotundas: trava o suficiente para o carro nunca rodar mais de ~110°/s no vídeo (o tempo recupera-se nas retas)
-  { const pz = STOPS.filter(p => p.pause || p.kind === 'fuel').reduce((acc, p) => acc + Math.max(+p.pause || 0, p.kind === 'fuel' ? 4 : 0), 0), twv = i => TW[Math.min(TW.length - 1, Math.round(TOTAL*i/NS/50))] || 0;
-    for(let it = 0; it < 5; it++){ let r = 0; for(let i = 1; i <= NS; i++) r += 2/(sp[i-1] + sp[i]); const kk = Math.max(5, DUR - pz)/r;
-      for(let i = 0; i <= NS; i++){ const v = twv(i); if(v > 12){ const cap = 110*240/v*kk*NS/TOTAL; if(sp[i] > cap) sp[i] = cap; } }
-      const c = sp.slice(); for(let i = 0; i <= NS; i++){ let a2 = 0, n = 0; for(let j = -3; j <= 3; j++){ const q = c[i+j]; if(q != null){ a2 += Math.min(q, c[i]*1.6); n++; } } sp[i] = Math.min(c[i], a2/n*1.05) || c[i]; } } }
+// tempo de vídeo (s) → distância (m). Amostras a cada ~8 m (as rotundas cabem entre amostras de 50 m).
+const T = [0], D = [0]; { const NS = Math.min(20000, Math.max(2000, Math.round(TOTAL/8))), SD = TOTAL/NS, sp = [], W = n => Math.max(1, Math.round(n/SD));
+  const box = (arr, r) => { const c = arr.slice(), pre = [0]; for(let i = 0; i < c.length; i++) pre.push(pre[i] + c[i]); for(let i = 0; i < c.length; i++){ const a = Math.max(0, i - r), b = Math.min(c.length - 1, i + r); arr[i] = (pre[b + 1] - pre[a])/(b - a + 1); } };
+  for(let i = 0; i <= NS; i++) sp.push(speedAt(i*SD));
+  for(let k = 0; k < 4; k++) box(sp, W(420));                  // velocidade sem saltos
+  // curvatura real (graus por metro) no trajeto suavizado, com margem antes/depois da curva
+  const cv = []; for(let i = 0; i <= NS; i++){ const d = i*SD, a = bearingOf(posAt(d - 12).p, posAt(d).p), b = bearingOf(posAt(d).p, posAt(d + 12).p); cv.push(Math.abs(((b - a + 540) % 360) - 180)/12); }
+  { const c = cv.slice(), r = W(30); for(let i = 0; i <= NS; i++){ let m = 0; for(let j = Math.max(0, i - r); j <= Math.min(NS, i + r); j++) if(c[j] > m) m = c[j]; cv[i] = m; } }
+  const pauses = STOPS.filter(p => p.pause || p.kind === 'fuel').map(p => ({d: p.d, s: Math.max(+p.pause || 0, p.kind === 'fuel' ? 4 : 0)})).sort((a, b) => a.d - b.d), pz = pauses.reduce((a, b) => a + b.s, 0);
+  // travagem e arranque suaves nas paragens com pausa (abastecimento)
+  pauses.forEach(p => { for(let i = 0; i <= NS; i++){ const g = Math.abs(p.d - i*SD); if(g < 500) sp[i] *= Math.max(.04, Math.pow(g/500, .75)); } });
+  // curvas e rotundas: o carro nunca roda mais de ~100°/s no vídeo; o tempo recupera-se nas retas
+  for(let it = 0; it < 6; it++){ let r = 0; for(let i = 1; i <= NS; i++) r += 2/(sp[i-1] + sp[i]); const kk = Math.max(5, DUR - pz)/r;
+    for(let i = 0; i <= NS; i++){ const cap = 100/Math.max(cv[i], 1e-4)*kk/SD; if(sp[i] > cap) sp[i] = cap; }
+    const c = sp.slice(); box(c, W(60)); for(let i = 0; i <= NS; i++) sp[i] = Math.min(sp[i], c[i]*1.08); }
   const raw = [0]; for(let i = 1; i <= NS; i++) raw.push(raw[i-1] + 2/(sp[i-1] + sp[i]));
-  const pauses = STOPS.filter(p => p.pause || p.kind === 'fuel').map(p => ({d: p.d, s: Math.max(+p.pause || 0, p.kind === 'fuel' ? 4 : 0)})).sort((a, b) => a.d - b.d); const k = Math.max(5, DUR - pauses.reduce((a, b) => a + b.s, 0))/raw.at(-1); let extra = 0, pi = 0;
-  for(let i=1;i<=NS;i++){ const d = TOTAL*i/NS; while(pi < pauses.length && pauses[pi].d <= d){ T.push(raw[i-1]*k + extra); D.push(pauses[pi].d); extra += pauses[pi].s; T.push(raw[i-1]*k + extra); D.push(pauses[pi].d); pi++; } T.push(raw[i]*k + extra); D.push(d); } }
+  const k = Math.max(5, DUR - pz)/raw.at(-1); let extra = 0, pi = 0;
+  for(let i = 1; i <= NS; i++){ const d = i*SD, d0 = (i - 1)*SD;
+    while(pi < pauses.length && pauses[pi].d <= d){ const pd = Math.max(d0, pauses[pi].d), tp = raw[i-1] + (raw[i] - raw[i-1])*(pd - d0)/SD;   // hora exata da chegada (sem saltos)
+      T.push(tp*k + extra); D.push(pd); extra += pauses[pi].s; T.push(tp*k + extra); D.push(pd); pi++; }
+    T.push(raw[i]*k + extra); D.push(d); } }
 const distAtTime = u => { const t = u*T.at(-1); let lo = 0, hi = T.length-1; while(hi-lo > 1){ const m = (lo+hi) >> 1; T[m] <= t ? lo = m : hi = m; } const f = (t - T[lo])/((T[hi]-T[lo]) || 1); return D[lo] + (D[hi]-D[lo])*f; };
 
 /* ---------- mapa (estilo navegação escuro, edifícios 3D, relevo) ---------- */
