@@ -40,7 +40,7 @@ body.recording #stage{width:1280px;height:720px;transform-origin:0 0}
   <div class="credit" id="credit">© OpenStreetMap · OpenMapTiles · OpenFreeMap</div>
   <div id="status"></div>
 </div>
-<div id="ctl"><button id="bCloud">☁ Nuvem</button><button id="bVids">📁 Vídeos exportados</button><button id="bOpen">📂 Abrir viagem</button><button id="bPlay">▶ Ver viagem</button><button id="bRec" class="rec">● Gravar vídeo (MP4)</button><button id="b1080" class="rec">⬇ Exportar 1080p (rápido)</button><button id="b4k" class="rec">⬇ Exportar 4K (DaVinci)</button><button id="bSave" hidden>⬇ Guardar vídeo</button><input type="file" id="fOpen" accept=".json,.gpx,application/json,application/gpx+xml" hidden></div>
+<div id="ctl"><button id="bCloud">☁ Nuvem</button><button id="bVids">📁 Vídeos exportados</button><button id="bOpen">📂 Abrir viagem</button><button id="bCam">🎥 Zoom: automático</button><button id="bPlay">▶ Ver viagem</button><button id="bRec" class="rec">● Gravar vídeo (MP4)</button><button id="b1080" class="rec">⬇ Exportar 1080p (rápido)</button><button id="b4k" class="rec">⬇ Exportar 4K (DaVinci)</button><button id="bSave" hidden>⬇ Guardar vídeo</button><input type="file" id="fOpen" accept=".json,.gpx,application/json,application/gpx+xml" hidden></div>
 <canvas id="rec" width="1280" height="720" hidden></canvas>
 <script src="vendor/maplibre/maplibre-gl.js"></script>
 <script src="cloud.js"></script>
@@ -53,6 +53,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 const Q = new URLSearchParams(location.search), $ = s => document.querySelector(s), status = t => $('#status').textContent = t || '';
 const PACK = Q.get('pack');                  // pacote offline (ex.: studio/packs/pontedelima-vigo) — senão usa a rede
 const CAR_SCALE = +(Q.get('carscale') || 11);
+const CAMS = {perto: .8, normal: 0, longe: -.8}; let CAM = Q.get('cam') || (()=>{ try{ return localStorage.getItem('lr-nav-cam'); }catch(e){ return null; } })() || 'normal'; if(!(CAM in CAMS)) CAM = 'normal';
 // estilo 'app': o carro tem ~80 px na autoestrada (vista alta) e encolhe para caber na faixa quando a câmara desce às ruas
 const CAR_K = +(Q.get('carsize') || 1);
 const carScaleApp = z => 7.5*CAR_K*Math.pow(2, (17.5 - z)*1.1);  // carro ampliado para ser visível (tamanho real ficaria com poucos píxeis)
@@ -244,7 +245,7 @@ function drawAppHud(d, u){
   const rr = (X, Y, w, h, r, c) => { x.fillStyle = c; x.beginPath(); x.roundRect(X, Y, w, h, r); x.fill(); };
   if(ATLAS && !GPU_FX){ x.save(); x.globalAlpha = .13; x.globalCompositeOperation = 'multiply'; x.fillStyle = x.createPattern(GRAIN, 'repeat'); x.fillRect(0, 0, W, H); x.restore(); const v = x.createRadialGradient(W/2, H/2, H*.45, W/2, H/2, H*.95); v.addColorStop(0, 'rgba(60,40,20,0)'); v.addColorStop(1, 'rgba(60,40,20,.32)'); x.fillStyle = v; x.fillRect(0, 0, W, H); }
   // título (com fundo suave para não se misturar com os nomes do mapa)
-  { const g = x.createLinearGradient(0, 0, 0, 160*k); const P = DARK ? '14,22,32' : MAPSTYLE === 'vintage' || ATLAS ? '242,233,208' : '255,255,255'; g.addColorStop(0, `rgba(${P},.92)`); g.addColorStop(.75, `rgba(${P},.6)`); g.addColorStop(1, `rgba(${P},0)`); x.fillStyle = g; x.fillRect(0, 0, W, 160*k); }
+  { const g = x.createLinearGradient(0, 0, 0, 140*k); const P = DARK ? '14,22,32' : MAPSTYLE === 'vintage' || ATLAS ? '242,233,208' : '255,255,255'; g.addColorStop(0, `rgba(${P},.85)`); g.addColorStop(.7, `rgba(${P},.35)`); g.addColorStop(1, `rgba(${P},0)`); x.fillStyle = g; x.fillRect(0, 0, W, 140*k); }
   rr(24*k, 22*k, 214*k, 40*k, 20*k, '#0A5BD6'); x.fillStyle = '#fff'; x.font = `800 ${17*k}px Inter`; x.fillText('LEANDRO NA ROTA', 44*k, 48*k);
   x.shadowColor = 'rgba(0,0,0,.35)'; x.shadowBlur = 10*k; x.fillStyle = DARK ? '#FFFFFF' : MAPSTYLE === 'vintage' ? '#3B2A18' : '#1F2328'; x.font = `800 ${34*k}px Inter`; x.fillText(TITLE, 26*k, 104*k); x.shadowBlur = 0;
   x.font = `700 ${17*k}px Inter`; x.fillStyle = DARK ? '#C9D3DF' : '#3C4043'; { const names = STOPS.slice(1, -1).filter(s => s.kind !== 'fuel').map(s => s.name); let n = names.length, t = names.join(' · '); while(n > 1 && x.measureText(t).width > W - 300*k){ n--; t = names.slice(0, n).join(' · ') + ` · +${names.length - n}`; } x.fillText(t, 27*k, 130*k); }
@@ -277,8 +278,8 @@ function frame(u, first){
     // vista de cima inclinada, mais afastada; aproxima nas paragens
     const near = STOPS.reduce((m, q) => Math.min(m, Math.abs(q.d - d)), 1e9), fuel = STOPS.filter(q => q.kind === 'fuel').reduce((m, q) => Math.min(m, Math.abs(q.d - d)), 1e9), tw = Math.max(twistAt(d), twistAt(d + 300)*.8);
     let zt = (mw ? 13.0 : 14.0) + 3.2*tw + 3.2*Math.max(0, 1 - near/2500); if(fuel < 1200) zt = Math.max(zt, 18.0 - 1.6*fuel/1200);
-    zt = Math.min(18.0, zt); appZoom = appZoom === null || first ? zt : appZoom + (zt - appZoom)*.05;
-    map.jumpTo({center: p, zoom: appZoom, pitch: 56 + 6*tw, bearing: camBear, padding: {top: H0()*.3, bottom: 0, left: 0, right: 0}});
+    zt = Math.min(18.0, zt + CAMS[CAM]); appZoom = appZoom === null || first ? zt : appZoom + (zt - appZoom)*.05;
+    map.jumpTo({center: p, zoom: appZoom, pitch: 52 + 6*tw, bearing: camBear, padding: {top: H0()*.46, bottom: 0, left: 0, right: 0}});
     setProgress(d/TOTAL); drawAppHud(d, u); map.triggerRepaint(); return;
   }
   const z = mw ? 15.8 : 16.3; const near = (trip.points || []).some(q => hav([q.lon, q.lat], p) < 2500);
@@ -334,6 +335,9 @@ function drawRec(){
 }
 let lastFile = null;
 $('#bPlay').onclick = () => run(null);
+{ const CAM_PT = {normal: 'automático', perto: 'automático, mais perto', longe: 'automático, mais longe'}, NEXT = {normal: 'perto', perto: 'longe', longe: 'normal'};
+  const lab = () => $('#bCam').textContent = '🎥 Zoom: ' + CAM_PT[CAM]; lab();
+  $('#bCam').onclick = () => { CAM = NEXT[CAM]; try{ localStorage.setItem('lr-nav-cam', CAM); }catch(e){} lab(); appZoom = null; status('Zoom ' + CAM_PT[CAM] + ': aproxima sozinho nas vilas, curvas e no abastecimento'); setTimeout(() => status(''), 3500); }; }
 $('#bRec').onclick = () => {
   if(!('MediaRecorder' in window) || !rc.captureStream){ status('Este browser não grava vídeo — use a gravação de ecrã do iPhone durante "Ver viagem".'); return; }
   document.body.classList.add('recording'); const fit = Math.min(innerWidth/1280, innerHeight/720); $('#stage').style.transform = `scale(${fit})`; map.setPixelRatio(1); map.resize();
@@ -382,7 +386,7 @@ function makeGPUComposer(W, H){
   void main(){
     vec3 c = texture(M, uv).rgb;
     if(atlas > .5){
-      float b = smoothstep(.42, 0., uv.y)*7.;   // desfoque do horizonte (só no topo)
+      float b = smoothstep(.18, 0., uv.y)*3.;   // desfoque do horizonte (só no topo)
       if(b > .2){ vec3 a = vec3(0.); float n = 0.; for(int i=-3;i<=3;i++) for(int j=-3;j<=3;j++){ a += texture(M, uv + vec2(float(i), float(j))*px*b).rgb; n += 1.; } c = mix(c, a/n, clamp(b/3., 0., 1.)); }
       c *= vec3(.965, .905, .815);   // papel quente
       c = (c - .5)*1.08 + .5; float l = dot(c, vec3(.299, .587, .114)); c = mix(vec3(l), c, .92);   // contraste e cor de cinema
