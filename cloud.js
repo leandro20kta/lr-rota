@@ -3,7 +3,7 @@
    Privacidade: cada pedido leva a "chave da nuvem" do utilizador (cabeçalho x-lr-key); a base de dados só mostra
    as viagens cujo dono tem o mesmo resumo (SHA-256) dessa chave. Sem a chave, ninguém lê nem apaga nada. */
 (function(){
-  const CFG = { url: '', key: '' };   // preenchido quando o projeto da nuvem for criado
+  const CFG = { url: 'https://lohyozmuwckdbqfbfyei.supabase.co', key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxvaHlvem11d2NrZGJxZmJmeWVpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwMTMzMDAsImV4cCI6MjEwODU4OTMwMH0.405Gdyqgu-aU5YNrdmTtHU16_Y66_V3MUk9TD-AyEkI' };   // chave pública (anon): sem a chave pessoal x-lr-key não se lê nada
   const LS = 'lr.cloudKey';
   const hex = b => [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');
   async function sha(s){ return hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s))); }
