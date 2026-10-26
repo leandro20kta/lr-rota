@@ -281,7 +281,8 @@ async function wikiPhoto(s){
   const norm = x => (x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(), langs = s.country === 'ES' ? ['es', 'gl', 'pt'] : ['pt', 'es', 'en'];
   for(const L of langs){
     try{ const j = await (await fetch(`https://${L}.wikipedia.org/w/api.php?action=query&format=json&origin=*&generator=geosearch&ggscoord=${s.lat}|${s.lon}&ggsradius=10000&ggslimit=40&prop=pageimages&piprop=thumbnail|name&pithumbsize=1600`)).json();
-      const pages = Object.values(j.query?.pages || {}).filter(x => x.thumbnail && norm(x.title).startsWith(norm(s.name))).sort((a, b) => a.title.length - b.title.length);
+      const bad = /\.svg$|bandeira|bandera|flag|escudo|bras[aã]o|coat.of.arms|mapa|map|locator|localiza|logo|seal|selo/i;   // só fotografias (sem bandeiras, brasões, mapas)
+      const pages = Object.values(j.query?.pages || {}).filter(x => x.thumbnail && x.pageimage && !bad.test(x.pageimage) && norm(x.title).startsWith(norm(s.name))).sort((a, b) => a.title.length - b.title.length);
       if(!pages.length) continue; const pg = pages[0];
       const m = await (await fetch(`https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&titles=File:${encodeURIComponent(pg.pageimage)}&prop=imageinfo&iiprop=extmetadata`)).json();
       const ii = Object.values(m.query?.pages || {})[0]?.imageinfo?.[0]; if(!ii) continue;   // não está na Commons → pode não ser livre: não usar
