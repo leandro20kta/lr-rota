@@ -245,7 +245,7 @@ function drawAppHud(d, u){
   const rr = (X, Y, w, h, r, c) => { x.fillStyle = c; x.beginPath(); x.roundRect(X, Y, w, h, r); x.fill(); };
   if(ATLAS && !GPU_FX){ x.save(); x.globalAlpha = .13; x.globalCompositeOperation = 'multiply'; x.fillStyle = x.createPattern(GRAIN, 'repeat'); x.fillRect(0, 0, W, H); x.restore(); const v = x.createRadialGradient(W/2, H/2, H*.45, W/2, H/2, H*.95); v.addColorStop(0, 'rgba(60,40,20,0)'); v.addColorStop(1, 'rgba(60,40,20,.32)'); x.fillStyle = v; x.fillRect(0, 0, W, H); }
   // título (com fundo suave para não se misturar com os nomes do mapa)
-  { const g = x.createLinearGradient(0, 0, 0, 140*k); const P = DARK ? '14,22,32' : MAPSTYLE === 'vintage' || ATLAS ? '242,233,208' : '255,255,255'; g.addColorStop(0, `rgba(${P},.85)`); g.addColorStop(.7, `rgba(${P},.35)`); g.addColorStop(1, `rgba(${P},0)`); x.fillStyle = g; x.fillRect(0, 0, W, 140*k); }
+  { const g = x.createLinearGradient(0, 0, 0, 160*k); const P = DARK ? '14,22,32' : MAPSTYLE === 'vintage' || ATLAS ? '242,233,208' : '255,255,255'; g.addColorStop(0, `rgba(${P},.92)`); g.addColorStop(.75, `rgba(${P},.6)`); g.addColorStop(1, `rgba(${P},0)`); x.fillStyle = g; x.fillRect(0, 0, W, 160*k); }
   rr(24*k, 22*k, 214*k, 40*k, 20*k, '#0A5BD6'); x.fillStyle = '#fff'; x.font = `800 ${17*k}px Inter`; x.fillText('LEANDRO NA ROTA', 44*k, 48*k);
   x.shadowColor = 'rgba(0,0,0,.35)'; x.shadowBlur = 10*k; x.fillStyle = DARK ? '#FFFFFF' : MAPSTYLE === 'vintage' ? '#3B2A18' : '#1F2328'; x.font = `800 ${34*k}px Inter`; x.fillText(TITLE, 26*k, 104*k); x.shadowBlur = 0;
   x.font = `700 ${17*k}px Inter`; x.fillStyle = DARK ? '#C9D3DF' : '#3C4043'; { const names = STOPS.slice(1, -1).filter(s => s.kind !== 'fuel').map(s => s.name); let n = names.length, t = names.join(' · '); while(n > 1 && x.measureText(t).width > W - 300*k){ n--; t = names.slice(0, n).join(' · ') + ` · +${names.length - n}`; } x.fillText(t, 27*k, 130*k); }
@@ -277,9 +277,9 @@ function frame(u, first){
   if(LOOK === 'app'){
     // vista de cima inclinada, mais afastada; aproxima nas paragens
     const near = STOPS.reduce((m, q) => Math.min(m, Math.abs(q.d - d)), 1e9), fuel = STOPS.filter(q => q.kind === 'fuel').reduce((m, q) => Math.min(m, Math.abs(q.d - d)), 1e9), tw = Math.max(twistAt(d), twistAt(d + 300)*.8);
-    let zt = (mw ? 13.0 : 14.0) + 3.2*tw + 3.2*Math.max(0, 1 - near/2500); if(fuel < 1200) zt = Math.max(zt, 18.0 - 1.6*fuel/1200);
+    let zt = Math.min(16.0, (mw ? 13.2 : 14.0) + 2.0*tw + 1.2*Math.max(0, 1 - near/2500)); if(fuel < 1200) zt = Math.max(zt, 18.0 - 1.6*fuel/1200);
     zt = Math.min(18.0, zt + CAMS[CAM]); appZoom = appZoom === null || first ? zt : appZoom + (zt - appZoom)*.05;
-    map.jumpTo({center: p, zoom: appZoom, pitch: 52 + 6*tw, bearing: camBear, padding: {top: H0()*.46, bottom: 0, left: 0, right: 0}});
+    map.jumpTo({center: p, zoom: appZoom, pitch: 56 + 6*tw, bearing: camBear, padding: {top: H0()*.3, bottom: 0, left: 0, right: 0}});
     setProgress(d/TOTAL); drawAppHud(d, u); map.triggerRepaint(); return;
   }
   const z = mw ? 15.8 : 16.3; const near = (trip.points || []).some(q => hav([q.lon, q.lat], p) < 2500);
@@ -386,7 +386,7 @@ function makeGPUComposer(W, H){
   void main(){
     vec3 c = texture(M, uv).rgb;
     if(atlas > .5){
-      float b = smoothstep(.18, 0., uv.y)*3.;   // desfoque do horizonte (só no topo)
+      float b = smoothstep(.42, 0., uv.y)*7.;   // desfoque do horizonte (só no topo)
       if(b > .2){ vec3 a = vec3(0.); float n = 0.; for(int i=-3;i<=3;i++) for(int j=-3;j<=3;j++){ a += texture(M, uv + vec2(float(i), float(j))*px*b).rgb; n += 1.; } c = mix(c, a/n, clamp(b/3., 0., 1.)); }
       c *= vec3(.965, .905, .815);   // papel quente
       c = (c - .5)*1.08 + .5; float l = dot(c, vec3(.299, .587, .114)); c = mix(vec3(l), c, .92);   // contraste e cor de cinema
