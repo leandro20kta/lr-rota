@@ -313,7 +313,8 @@ textarea.note{width:100%;resize:none;padding:10px 12px;border:1px solid #D5DBE5;
     <div style="height:14px"></div>
     <button class="btn accent" data-go="script" style="margin-bottom:10px">🎬 Roteiro do vídeo</button>
     <div class="row"><button class="btn ghost" id="btn-ficha">Copiar ficha</button><button class="btn" id="btn-save-diary">Guardar viagem</button></div>
-    <div class="row"><button class="btn ghost" id="btn-3d">🎬 Ver em Viagem 3D</button><button class="btn ghost" id="btn-export">⬇ Enviar para o PC</button></div>
+    <div class="row"><button class="btn ghost" id="btn-3d">🎬 Ver em Viagem 3D</button><button class="btn ghost" id="btn-cloud">☁ Guardar na nuvem</button></div>
+    <div class="row"><button class="btn ghost" id="btn-export">📱 Guardar no telemóvel / PC</button><button class="btn ghost" id="btn-cloudkey">🔑 Chave da nuvem</button></div>
   </div>
 </section>
 
@@ -395,6 +396,7 @@ textarea.note{width:100%;resize:none;padding:10px 12px;border:1px solid #D5DBE5;
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script src="cloud.js"></script>
 <script>
 /* ===================== LR Rota — app ===================== */
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
@@ -731,8 +733,13 @@ function navTrip(t){ const gps = (t.track || []).length > 20; const route = gps 
 $('#btn-3d').addEventListener('click', () => { const t = current; if(!t) return; localStorage.setItem('lr-nav-trip', JSON.stringify(navTrip(t))); location.href = 'nav.html?look=app&map=atlas&dur=150'; });
 $('#btn-export').addEventListener('click', () => { const t = current; if(!t) return; const f = new File([JSON.stringify({lrNav: navTrip(t), trip: t})], `lr-rota-${(t.origin.name + '-' + t.dest.name).replace(/\W+/g, '-')}-${new Date(t.created).toISOString().slice(0, 10)}.json`, {type: 'application/json'});
   if(navigator.canShare && navigator.canShare({files: [f]})) navigator.share({files: [f], title: 'Viagem LR Rota'}).catch(() => {}); else { const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name; a.click(); } });
+async function cloudSave(t, quiet){ if(!window.LRCloud || !LRCloud.configured){ if(!quiet) toast('A nuvem ainda não está ligada'); return false; }
+  LRCloud.ensureKey(); const nt = navTrip(t); try{ await LRCloud.upload(`${t.origin.name} → ${t.dest.name} · ${new Date(t.created).toLocaleDateString('pt-PT')}`, Math.round((nt.distance || 0)/100)/10, {lrNav: nt, trip: t}); t.cloudSaved = Date.now(); store.set('current', t); toast('☁ Viagem guardada na nuvem', 3500); return true; }
+  catch(e){ if(!quiet) toast('Nuvem: ' + e.message, 5000); return false; } }
+$('#btn-cloud').addEventListener('click', () => current && cloudSave(current));
+$('#btn-cloudkey').addEventListener('click', () => { if(!window.LRCloud) return; const k = LRCloud.ensureKey(); const n = prompt('A sua chave da nuvem (escreva a mesma no computador, em Viagem 3D → ☁ Nuvem). Pode trocar por outra:', k); if(n && n.trim() && n.trim() !== k) LRCloud.setKey(n); });
 $('#btn-waze').addEventListener('click', () => { const next = current.stops.find(s => !s.done) || current.dest; location.href = `https://waze.com/ul?ll=${next.lat},${next.lon}&navigate=yes`; });
-$('#btn-finish').addEventListener('click', () => { if(!confirm('Terminar a viagem e passar ao vídeo e custos?')) return; const t = current; t.status = 'done'; t.endedAt = Date.now(); t.trackDistance = trackDist(t.track); if(watchId){ navigator.geolocation.clearWatch(watchId); watchId = null; } if(recTimer) clearInterval(recTimer); if(wakeLock){ wakeLock.release(); wakeLock = null; } store.set('current', t); go('diary'); });
+$('#btn-finish').addEventListener('click', () => { if(!confirm('Terminar a viagem e passar ao vídeo e custos?')) return; const t = current; t.status = 'done'; t.endedAt = Date.now(); t.trackDistance = trackDist(t.track); if(watchId){ navigator.geolocation.clearWatch(watchId); watchId = null; } if(recTimer) clearInterval(recTimer); if(wakeLock){ wakeLock.release(); wakeLock = null; } store.set('current', t); go('diary'); cloudSave(t, true); });
 
 /* ---------- diary ---------- */
 function renderDiary(){
