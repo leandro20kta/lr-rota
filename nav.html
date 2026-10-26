@@ -236,12 +236,13 @@ function hud(d, u){
 const hudC = document.createElement('canvas'); hudC.id = 'hud'; hudC.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2'; if(LOOK === 'app'){ $('#stage').appendChild(hudC); document.querySelectorAll('.top,.bottom,.place,.credit').forEach(e => e.style.display = 'none'); }
 const DARK = LOOK === 'app' && MAPSTYLE === 'escuro'; let HUDS = Math.min(2, devicePixelRatio || 1);
 const TITLE = Q.get('title') || `${STOPS[0]?.name || ''} → ${STOPS.at(-1)?.name || ''}`;
+let GPU_FX = false;
 const GRAIN = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'); const id = g.createImageData(256, 256); for(let i = 0; i < id.data.length; i += 4){ const v = 120 + Math.random()*90; id.data[i] = v; id.data[i+1] = v*.96; id.data[i+2] = v*.88; id.data[i+3] = 255; } g.putImageData(id, 0, 0); return c; })();
 function drawAppHud(d, u){
   const st = $('#stage'), W = Math.round(st.clientWidth*HUDS), H = Math.round(st.clientHeight*HUDS); if(hudC.width !== W || hudC.height !== H){ hudC.width = W; hudC.height = H; }
   const x = hudC.getContext('2d'), k = W/1280; x.clearRect(0, 0, W, H);
   const rr = (X, Y, w, h, r, c) => { x.fillStyle = c; x.beginPath(); x.roundRect(X, Y, w, h, r); x.fill(); };
-  if(ATLAS){ x.save(); x.globalAlpha = .13; x.globalCompositeOperation = 'multiply'; x.fillStyle = x.createPattern(GRAIN, 'repeat'); x.fillRect(0, 0, W, H); x.restore(); const v = x.createRadialGradient(W/2, H/2, H*.45, W/2, H/2, H*.95); v.addColorStop(0, 'rgba(60,40,20,0)'); v.addColorStop(1, 'rgba(60,40,20,.32)'); x.fillStyle = v; x.fillRect(0, 0, W, H); }
+  if(ATLAS && !GPU_FX){ x.save(); x.globalAlpha = .13; x.globalCompositeOperation = 'multiply'; x.fillStyle = x.createPattern(GRAIN, 'repeat'); x.fillRect(0, 0, W, H); x.restore(); const v = x.createRadialGradient(W/2, H/2, H*.45, W/2, H/2, H*.95); v.addColorStop(0, 'rgba(60,40,20,0)'); v.addColorStop(1, 'rgba(60,40,20,.32)'); x.fillStyle = v; x.fillRect(0, 0, W, H); }
   // título (com fundo suave para não se misturar com os nomes do mapa)
   { const g = x.createLinearGradient(0, 0, 0, 160*k); const P = DARK ? '14,22,32' : MAPSTYLE === 'vintage' || ATLAS ? '242,233,208' : '255,255,255'; g.addColorStop(0, `rgba(${P},.92)`); g.addColorStop(.75, `rgba(${P},.6)`); g.addColorStop(1, `rgba(${P},0)`); x.fillStyle = g; x.fillRect(0, 0, W, 160*k); }
   rr(24*k, 22*k, 214*k, 40*k, 20*k, '#0A5BD6'); x.fillStyle = '#fff'; x.font = `800 ${17*k}px Inter`; x.fillText('LEANDRO NA ROTA', 44*k, 48*k);
@@ -352,6 +353,36 @@ $('#bCloud').onclick = async () => {
     status(''); }catch(e){ status(e.message); } };
 $('#fOpen').onchange = async e => { const f = e.target.files[0]; if(!f) return; try{ const txt = await f.text(); const t = /\.gpx$/i.test(f.name) || txt.trim().startsWith('<') ? fromGPX(txt) : fromJSON(JSON.parse(txt)); localStorage.setItem('lr-nav-trip', JSON.stringify(t)); location.href = location.pathname + `?look=${LOOK}&map=${MAPSTYLE}&dur=${DUR}`; }catch(err){ status('Não consegui abrir: ' + err.message); } };
 // exportação 4K imagem a imagem (WebCodecs): sem saltos, 30 fps exatos, alta qualidade para editar no DaVinci Resolve
+/* compositor na placa gráfica: mapa + grade de cinema + horizonte desfocado + vinheta + grão + HUD, sem passar pela CPU */
+function makeGPUComposer(W, H){
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('webgl2', {premultipliedAlpha: true, preserveDrawingBuffer: true, antialias: false}); if(!g) return null;
+  const vs = `#version 300 es
+  in vec2 p; out vec2 uv; void main(){ uv = vec2(p.x*.5+.5, .5-p.y*.5); gl_Position = vec4(p, 0., 1.); }`;
+  const fs = `#version 300 es
+  precision highp float; in vec2 uv; out vec4 o; uniform sampler2D M, U; uniform float atlas, t; uniform vec2 px;
+  float h(vec2 q){ return fract(sin(dot(q, vec2(12.9898, 78.233)) + t)*43758.5453); }
+  void main(){
+    vec3 c = texture(M, uv).rgb;
+    if(atlas > .5){
+      float b = smoothstep(.42, 0., uv.y)*7.;   // desfoque do horizonte (só no topo)
+      if(b > .2){ vec3 a = vec3(0.); float n = 0.; for(int i=-3;i<=3;i++) for(int j=-3;j<=3;j++){ a += texture(M, uv + vec2(float(i), float(j))*px*b).rgb; n += 1.; } c = mix(c, a/n, clamp(b/3., 0., 1.)); }
+      c *= vec3(.965, .905, .815);   // papel quente
+      c = (c - .5)*1.08 + .5; float l = dot(c, vec3(.299, .587, .114)); c = mix(vec3(l), c, .92);   // contraste e cor de cinema
+      float v = distance(uv, vec2(.5)); c *= mix(1., .72, smoothstep(.35, .78, v));   // vinheta
+      c *= .93 + .1*h(floor(uv/px));   // grão de papel
+    }
+    vec4 u = texture(U, uv); o = vec4(c*(1. - u.a) + u.rgb, 1.);
+  }`;
+  const sh = (t, src) => { const x = g.createShader(t); g.shaderSource(x, src); g.compileShader(x); if(!g.getShaderParameter(x, g.COMPILE_STATUS)) throw new Error(g.getShaderInfoLog(x)); return x; };
+  const pr = g.createProgram(); g.attachShader(pr, sh(g.VERTEX_SHADER, vs)); g.attachShader(pr, sh(g.FRAGMENT_SHADER, fs)); g.linkProgram(pr); g.useProgram(pr);
+  const b = g.createBuffer(); g.bindBuffer(g.ARRAY_BUFFER, b); g.bufferData(g.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), g.STATIC_DRAW); const loc = g.getAttribLocation(pr, 'p'); g.enableVertexAttribArray(loc); g.vertexAttribPointer(loc, 2, g.FLOAT, false, 0, 0);
+  const tex = unit => { const x = g.createTexture(); g.activeTexture(g.TEXTURE0 + unit); g.bindTexture(g.TEXTURE_2D, x); g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MIN_FILTER, g.LINEAR); g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MAG_FILTER, g.LINEAR); g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_S, g.CLAMP_TO_EDGE); g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE); return x; };
+  const tM = tex(0), tU = tex(1); g.uniform1i(g.getUniformLocation(pr, 'M'), 0); g.uniform1i(g.getUniformLocation(pr, 'U'), 1);
+  g.uniform1f(g.getUniformLocation(pr, 'atlas'), ATLAS ? 1 : 0); g.uniform2f(g.getUniformLocation(pr, 'px'), 1/W, 1/H); const uT = g.getUniformLocation(pr, 't'); g.viewport(0, 0, W, H);
+  g.pixelStorei(g.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+  return { canvas: cv, draw(mapCanvas, hudCanvas, i){ g.activeTexture(g.TEXTURE0); g.bindTexture(g.TEXTURE_2D, tM); g.texImage2D(g.TEXTURE_2D, 0, g.RGBA, g.RGBA, g.UNSIGNED_BYTE, mapCanvas);
+    g.activeTexture(g.TEXTURE1); g.bindTexture(g.TEXTURE_2D, tU); g.texImage2D(g.TEXTURE_2D, 0, g.RGBA, g.RGBA, g.UNSIGNED_BYTE, hudCanvas); g.uniform1f(uT, i % 97); g.drawArrays(g.TRIANGLE_STRIP, 0, 4); } };
+}
 $('#b4k').onclick = () => exportVideo(3840).catch(e => { status('Erro na exportação: ' + e.message); console.error(e); });
 $('#b1080').onclick = () => exportVideo(1920).catch(e => { status('Erro na exportação: ' + e.message); console.error(e); });
 async function exportVideo(W0){
@@ -361,7 +392,7 @@ async function exportVideo(W0){
   const BENCH = +(Q.get('bench') || 0), U0 = +(Q.get('from') || 0);
   const cfg = {codec: W >= 3840 ? 'avc1.640034' : W >= 2560 ? 'avc1.640033' : 'avc1.640028', width: W, height: H, bitrate: BR, framerate: FPS, hardwareAcceleration: 'prefer-hardware', avc: {format: 'avc'}};
   if(!(await VideoEncoder.isConfigSupported(cfg)).supported){ delete cfg.hardwareAcceleration; if(!(await VideoEncoder.isConfigSupported(cfg)).supported){ status('Este computador não codifica este tamanho em H.264.'); return; } }
-  const tag = W >= 3840 ? '4K' : W + 'p', name = `lr-rota-${(STOPS[0]?.name || 'viagem').replace(/\W+/g, '-')}-${(STOPS.at(-1)?.name || '').replace(/\W+/g, '-')}-${tag}.mp4`;
+  const tag = W >= 3840 ? '4K' : H + 'p', name = `lr-rota-${(STOPS[0]?.name || 'viagem').replace(/\W+/g, '-')}-${(STOPS.at(-1)?.name || '').replace(/\W+/g, '-')}-${tag}.mp4`;
   let target, writable = null, opfs = null;
   if(!BENCH && window.showSaveFilePicker && navigator.userActivation?.isActive){ try{ const h = await showSaveFilePicker({suggestedName: name, types: [{description: 'Vídeo MP4', accept: {'video/mp4': ['.mp4']}}]}); writable = await h.createWritable(); target = new FileSystemWritableFileStreamTarget(writable); }catch(e){ if(e.name === 'AbortError') return; } }
   if(!target && !BENCH){ try{ const root = await navigator.storage.getDirectory(); opfs = await root.getFileHandle('export-' + Date.now() + '.mp4', {create: true}); writable = await opfs.createWritable(); target = new FileSystemWritableFileStreamTarget(writable); }catch(e){ console.warn('OPFS', e); } }
@@ -370,6 +401,7 @@ async function exportVideo(W0){
   const enc = new VideoEncoder({output: (c, m) => muxer.addVideoChunk(c, m), error: e => status('Erro do codificador: ' + e.message)}); enc.configure(cfg);
   document.body.classList.add('recording'); const st = $('#stage'); st.style.width = '1920px'; st.style.height = '1080px'; st.style.transform = `scale(${Math.min(innerWidth/1920, innerHeight/1080)})`; HUDS = W/1920; map.setPixelRatio(PR); map.resize();
   rc.width = W; rc.height = H; const N = BENCH || Math.round(DUR*FPS); camBear = null; appZoom = null;
+  let GC = null; if(LOOK === 'app' && !Q.get('cpu')){ try{ GC = makeGPUComposer(W, H); }catch(e){ console.warn('compositor', e); } } GPU_FX = !!GC;
   // mantém o ecrã ligado e não depende do requestAnimationFrame (o Chrome trava-o quando o ecrã apaga)
   let wake = null; const getWake = async () => { try{ wake = await navigator.wakeLock?.request('screen'); }catch(e){} }; await getWake();
   const onVis = () => { if(document.visibilityState === 'visible' && (!wake || wake.released)) getWake(); }; document.addEventListener('visibilitychange', onVis);
@@ -379,12 +411,12 @@ async function exportVideo(W0){
     const u = BENCH ? U0 + i*0.0004 : i/(N-1);
     tA = performance.now(); frame(u, i === 0); await draw(); T.frame += performance.now() - tA;
     tA = performance.now(); let w = 0; while(!ready() && w++ < 60) await new Promise(r => setTimeout(r, 15)); if(w) await draw(); T.wait += performance.now() - tA;   // no máx. ~1 s à espera de tiles
-    tA = performance.now(); drawRec(); const vf = new VideoFrame(rc, {timestamp: Math.round(i*1e6/FPS), duration: Math.round(1e6/FPS)}); T.draw += performance.now() - tA;
+    tA = performance.now(); let src = rc; if(GC){ GC.draw(map.getCanvas(), hudC, i); src = GC.canvas; } else drawRec(); const vf = new VideoFrame(src, {timestamp: Math.round(i*1e6/FPS), duration: Math.round(1e6/FPS)}); T.draw += performance.now() - tA;
     tA = performance.now(); enc.encode(vf, {keyFrame: i % (FPS*2) === 0}); vf.close(); while(enc.encodeQueueSize > 4) await new Promise(r => setTimeout(r, 2)); T.enc += performance.now() - tA;
     if(i % 15 === 0 || i === N-1){ const el = (performance.now() - t0)/1000, left = el/(i+1)*(N-i-1); status(`A exportar ${tag}… ${Math.round((i+1)/N*100)}% · faltam ~${left > 90 ? Math.ceil(left/60) + ' min' : Math.ceil(left) + ' s'}`); }
   }
   await enc.flush(); muxer.finalize(); if(writable) await writable.close(); try{ wake?.release(); }catch(e){} document.removeEventListener('visibilitychange', onVis);
-  const per = k => (T[k]/N).toFixed(0); window.__exp = {tag, N, ms: {frame: per('frame'), wait: per('wait'), draw: per('draw'), enc: per('enc')}, total_s: ((performance.now() - t0)/1000).toFixed(1)};
+  GPU_FX = false; const per = k => (T[k]/N).toFixed(0); window.__exp = {tag, N, ms: {frame: per('frame'), wait: per('wait'), draw: per('draw'), enc: per('enc')}, total_s: ((performance.now() - t0)/1000).toFixed(1)};
   document.body.classList.remove('recording'); st.style.width = st.style.height = st.style.transform = ''; HUDS = Math.min(2, devicePixelRatio || 1); map.setPixelRatio(devicePixelRatio); map.resize();
   if(BENCH){ status(`Teste ${tag}: ${(N/window.__exp.total_s).toFixed(1)} imagens/s`); return; }
   if(opfs){ const f = await opfs.getFile(); lastFile = new File([f], name, {type: 'video/mp4'}); $('#bSave').hidden = false; saveFile(lastFile); }
