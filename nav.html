@@ -40,7 +40,7 @@ body.recording #stage{width:1280px;height:720px;transform-origin:0 0}
   <div class="credit" id="credit">© OpenStreetMap · OpenMapTiles · OpenFreeMap</div>
   <div id="status"></div>
 </div>
-<div id="ctl"><button id="bCloud">☁ Nuvem</button><button id="bVids">📁 Vídeos exportados</button><button id="bOpen">📂 Abrir viagem</button><button id="bCam">🎥 Zoom: automático</button><button id="bPlay">▶ Ver viagem</button><button id="bRec" class="rec">● Gravar vídeo (MP4)</button><button id="b1080" class="rec">⬇ Exportar 1080p (rápido)</button><button id="b4k" class="rec">⬇ Exportar 4K (DaVinci)</button><button id="bSave" hidden>⬇ Guardar vídeo</button><input type="file" id="fOpen" accept=".json,.gpx,application/json,application/gpx+xml" hidden></div>
+<div id="ctl"><button id="bCloud">☁ Nuvem</button><button id="bVids">📁 Vídeos exportados</button><button id="bOpen">📂 Abrir viagem</button><button id="bCam">🎥 Zoom: automático</button><button id="bPhotos">🖼 Fotos das paragens</button><button id="bPlay">▶ Ver viagem</button><button id="bRec" class="rec">● Gravar vídeo (MP4)</button><button id="b1080" class="rec">⬇ Exportar 1080p (rápido)</button><button id="b4k" class="rec">⬇ Exportar 4K (DaVinci)</button><button id="bSave" hidden>⬇ Guardar vídeo</button><input type="file" id="fOpen" accept=".json,.gpx,application/json,application/gpx+xml" hidden></div>
 <canvas id="rec" width="1280" height="720" hidden></canvas>
 <script src="vendor/maplibre/maplibre-gl.js"></script>
 <script src="cloud.js"></script>
@@ -268,6 +268,51 @@ function hud(d, u){
 }
 const hudC = document.createElement('canvas'); hudC.id = 'hud'; hudC.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2'; if(LOOK === 'app'){ $('#stage').appendChild(hudC); document.querySelectorAll('.top,.bottom,.place,.credit').forEach(e => e.style.display = 'none'); }
 const DARK = LOOK === 'app' && MAPSTYLE === 'escuro'; let HUDS = Math.min(2, devicePixelRatio || 1);
+/* ---------- fotos das paragens: a tua foto (telemóvel ou escolhida aqui) ou, nas vilas e monumentos, uma foto livre da Wikimedia com crédito ---------- */
+const idb = (mode, fn) => new Promise(res => { const r = indexedDB.open('lr-rota', 1); r.onupgradeneeded = () => r.result.createObjectStore('files'); r.onsuccess = () => { try{ const tx = r.result.transaction('files', mode), q = fn(tx.objectStore('files')); q.onsuccess = () => res(q.result ?? null); q.onerror = () => res(null); }catch(e){ res(null); } }; r.onerror = () => res(null); });
+const idbGet = k => idb('readonly', st => st.get(k)), idbSet = (k, v) => idb('readwrite', st => v == null ? st.delete(k) : st.put(v, k));
+const TRIP_SIG = `${STOPS[0]?.name}|${STOPS.at(-1)?.name}|${Math.round(TOTAL/100)}`;
+const photoKey = s => 'navphoto:' + TRIP_SIG + ':' + s.name;
+const PHOTOS = new Map();   // paragem → {img, credit, src: 'tua'|'wiki'}
+const loadImg = src => new Promise((res, rej) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => res(im); im.onerror = () => rej(new Error('foto')); im.src = src; });
+const strip = h => (h || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+async function wikiPhoto(s){
+  // procura a página da Wikipédia mais próxima com o mesmo nome (pt para Portugal, es para Espanha) e usa a foto só se for da Wikimedia Commons (licença livre)
+  const norm = x => (x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(), langs = s.country === 'ES' ? ['es', 'gl', 'pt'] : ['pt', 'es', 'en'];
+  for(const L of langs){
+    try{ const j = await (await fetch(`https://${L}.wikipedia.org/w/api.php?action=query&format=json&origin=*&generator=geosearch&ggscoord=${s.lat}|${s.lon}&ggsradius=10000&ggslimit=40&prop=pageimages&piprop=thumbnail|name&pithumbsize=1600`)).json();
+      const pages = Object.values(j.query?.pages || {}).filter(x => x.thumbnail && norm(x.title).startsWith(norm(s.name))).sort((a, b) => a.title.length - b.title.length);
+      if(!pages.length) continue; const pg = pages[0];
+      const m = await (await fetch(`https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&titles=File:${encodeURIComponent(pg.pageimage)}&prop=imageinfo&iiprop=extmetadata`)).json();
+      const ii = Object.values(m.query?.pages || {})[0]?.imageinfo?.[0]; if(!ii) continue;   // não está na Commons → pode não ser livre: não usar
+      const md = ii.extmetadata || {}, lic = strip(md.LicenseShortName?.value), who = strip(md.Artist?.value).slice(0, 40);
+      return {src: pg.thumbnail.source, credit: `Foto: ${who || 'Wikimedia Commons'} · ${lic || 'licença livre'} · Wikimedia Commons`};
+    }catch(e){}
+  }
+  return null;
+}
+async function loadPhotos(){
+  await Promise.all(STOPS.map(async s => {
+    try{
+      const mine = await idbGet(photoKey(s)); if(mine === 'none') return;
+      let src = mine || s.photo || (s.photoId ? await idbGet('photo:' + s.photoId) : null), credit = '', from = 'tua';
+      if(!src && s.kind !== 'fuel'){ const w = await wikiPhoto(s); if(w){ src = w.src; credit = w.credit; from = 'wiki'; } }
+      if(src) PHOTOS.set(s, {img: await loadImg(src), credit, src: from});
+    }catch(e){ console.warn('foto', s.name, e); }
+  }));
+}
+let PHOTOS_READY = loadPhotos();
+// polaroide da paragem (entra ao aproximar, fica na paragem, sai ao afastar) — desenhada no vídeo
+function drawPhoto(x, k, W, H, s, d){
+  const P = PHOTOS.get(s); if(!P) return; const R = s.pause || s.kind === 'fuel' ? 1200 : 1600, g = Math.abs(s.d - d); if(g >= R) return;
+  const a = Math.min(1, (R - g)/(R*.3)), e = a*a*(3 - 2*a), pw = 400*k, ph = 270*k, fw = pw + 24*k, fh = ph + 74*k;
+  const cx = W - 60*k - fw/2, cy = H*.47 + (1 - e)*40*k; x.save(); x.globalAlpha = e; x.translate(cx, cy); x.rotate((-3 + 2*(1 - e))*Math.PI/180); x.scale(.85 + .15*e, .85 + .15*e);
+  x.shadowColor = 'rgba(0,0,0,.35)'; x.shadowBlur = 24*k; x.shadowOffsetY = 8*k; x.fillStyle = '#FBF8F1'; x.fillRect(-fw/2, -fh/2, fw, fh); x.shadowColor = 'transparent';
+  const im = P.img, sc = Math.max(pw/im.width, ph/im.height), sw = pw/sc, sh = ph/sc; x.drawImage(im, (im.width - sw)/2, (im.height - sh)/2, sw, sh, -pw/2, -fh/2 + 12*k, pw, ph);
+  x.fillStyle = '#1F2328'; x.font = `800 ${24*k}px Inter`; x.textAlign = 'center'; x.fillText(s.name, 0, fh/2 - 26*k);
+  if(P.credit){ x.font = `600 ${8.5*k}px Inter`; x.fillStyle = 'rgba(255,255,255,.9)'; x.shadowColor = 'rgba(0,0,0,.8)'; x.shadowBlur = 3*k; x.textAlign = 'right'; x.fillText(P.credit.slice(0, 90), pw/2 - 6*k, -fh/2 + 12*k + ph - 6*k); }
+  x.restore(); x.textAlign = 'left';
+}
 const TITLE = Q.get('title') || `${STOPS[0]?.name || ''} → ${STOPS.at(-1)?.name || ''}`;
 let GPU_FX = false;
 const GRAIN = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'); const id = g.createImageData(256, 256); for(let i = 0; i < id.data.length; i += 4){ const v = 120 + Math.random()*90; id.data[i] = v; id.data[i+1] = v*.96; id.data[i+2] = v*.88; id.data[i+3] = 255; } g.putImageData(id, 0, 0); return c; })();
@@ -281,7 +326,8 @@ function drawAppHud(d, u){
   rr(24*k, 22*k, 214*k, 40*k, 20*k, '#0A5BD6'); x.fillStyle = '#fff'; x.font = `800 ${17*k}px Inter`; x.fillText('LEANDRO NA ROTA', 44*k, 48*k);
   x.shadowColor = 'rgba(0,0,0,.35)'; x.shadowBlur = 10*k; x.fillStyle = DARK ? '#FFFFFF' : MAPSTYLE === 'vintage' ? '#3B2A18' : '#1F2328'; x.font = `800 ${34*k}px Inter`; if(ATLAS){ x.save(); x.shadowBlur = 0; x.lineJoin = 'round'; x.lineWidth = 7*k; x.strokeStyle = 'rgba(250,246,236,.9)'; x.strokeText(TITLE, 26*k, 104*k); x.restore(); } x.fillText(TITLE, 26*k, 104*k); x.shadowBlur = 0;
   x.font = `700 ${17*k}px Inter`; x.fillStyle = DARK ? '#C9D3DF' : '#3C4043'; { const names = STOPS.slice(1, -1).filter(s => s.kind !== 'fuel').map(s => s.name); let n = names.length, t = names.join(' · '); while(n > 1 && x.measureText(t).width > W - 300*k){ n--; t = names.slice(0, n).join(' · ') + ` · +${names.length - n}`; } x.fillText(t, 27*k, 130*k); }
-  // cartão da paragem (ao chegar / na pausa)
+  // cartão da paragem (ao chegar / na pausa) + foto
+  STOPS.forEach(s => drawPhoto(x, k, W, H, s, d));
   const near = STOPS.filter(s => Math.abs(s.d - d) < (s.pause || s.kind === 'fuel' ? 1200 : 1600)).sort((a, b) => Math.abs(a.d - d) - Math.abs(b.d - d))[0];   // a paragem mais próxima (a bomba não fica com o nome da vila ao lado)
   if(near){ const ic = near.kind === 'fuel' ? '⛽' : near === STOPS.at(-1) ? '⚑' : near === STOPS[0] ? '🚗' : '📍'; x.font = `800 ${26*k}px Inter`; const tw = Math.max(x.measureText(near.name).width, (x.font = `700 ${16*k}px Inter`, x.measureText(near.sub || '').width)) + 96*k;
     const bx = W/2 - tw/2, by = 150*k; x.shadowColor = 'rgba(0,0,0,.25)'; x.shadowBlur = 18*k; rr(bx, by, tw, 74*k, 18*k, '#FFFFFF'); x.shadowBlur = 0; rr(bx + 12*k, by + 13*k, 48*k, 48*k, 14*k, near.kind === 'fuel' ? '#F57C00' : '#E53935');
@@ -384,6 +430,19 @@ function drawRec(){
 }
 let lastFile = null;
 $('#bPlay').onclick = () => run(null);
+async function photosPanel(){
+  await PHOTOS_READY; const box = document.createElement('div'); box.style.cssText = 'position:fixed;inset:0;z-index:20;background:rgba(10,14,20,.7);display:flex;align-items:center;justify-content:center;padding:16px';
+  const draw = () => { box.innerHTML = `<div style="background:#fff;color:#1F2328;border-radius:16px;padding:18px;width:min(620px,100%);max-height:85vh;overflow:auto;font:600 15px Inter,system-ui"><b style="font-size:18px">🖼 Fotos das paragens</b><p style="font-weight:500;color:#5F6368;margin:6px 0 12px">Aparecem no vídeo quando o carro chega a cada ponto. Usa as tuas fotos; nas vilas, se não puseres nenhuma, entra uma foto livre da Wikimedia com o crédito no canto.</p>` +
+      STOPS.map((s, i) => { const P = PHOTOS.get(s); return `<div style="display:flex;gap:12px;align-items:center;padding:8px 0;border-top:1px solid #eee"><div style="width:96px;height:64px;border-radius:8px;background:#EEE center/cover no-repeat ${P ? `url('${P.img.src}')` : ''};flex:none"></div><div style="flex:1"><div>${s.kind === 'fuel' ? '⛽ ' : ''}${s.name}</div><div style="font-weight:500;color:#5F6368;font-size:13px">${P ? (P.src === 'wiki' ? 'Wikimedia (automática)' : 'a tua foto') : 'sem foto'}</div></div><button data-pick="${i}" style="font:700 14px Inter;padding:8px 10px;border-radius:10px;border:1px solid #ccc;background:#fff">Escolher foto</button>${P ? `<button data-rm="${i}" style="font:700 14px Inter;padding:8px 10px;border-radius:10px;border:1px solid #ccc;background:#fff">Tirar</button>` : ''}</div>`; }).join('') +
+      `<div style="text-align:right;margin-top:12px"><button id="phClose" style="font:800 15px Inter;padding:10px 16px;border-radius:12px;border:0;background:#0A5BD6;color:#fff">Feito</button></div></div>`;
+    box.querySelector('#phClose').onclick = () => box.remove();
+    box.querySelectorAll('[data-rm]').forEach(b => b.onclick = async () => { const s = STOPS[+b.dataset.rm]; await idbSet(photoKey(s), 'none'); PHOTOS.delete(s); draw(); });
+    box.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => { const s = STOPS[+b.dataset.pick], f = document.createElement('input'); f.type = 'file'; f.accept = 'image/*';
+      f.onchange = async () => { const file = f.files[0]; if(!file) return; const im = await loadImg(URL.createObjectURL(file)); const sc = Math.min(1, 1600/Math.max(im.width, im.height)), c = document.createElement('canvas'); c.width = Math.round(im.width*sc); c.height = Math.round(im.height*sc); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+        const url = c.toDataURL('image/jpeg', .86); await idbSet(photoKey(s), url); PHOTOS.set(s, {img: await loadImg(url), credit: '', src: 'tua'}); draw(); }; f.click(); }); };
+  draw(); document.body.appendChild(box);
+}
+$('#bPhotos').onclick = photosPanel;
 { const CAM_PT = {normal: 'automático', perto: 'automático, mais perto', longe: 'automático, mais longe'}, NEXT = {normal: 'perto', perto: 'longe', longe: 'normal'};
   const lab = () => $('#bCam').textContent = '🎥 Zoom: ' + CAM_PT[CAM]; lab();
   $('#bCam').onclick = () => { CAM = NEXT[CAM]; try{ localStorage.setItem('lr-nav-cam', CAM); }catch(e){} lab(); appZoom = null; status('Zoom ' + CAM_PT[CAM] + ': aproxima sozinho nas vilas, curvas e no abastecimento'); setTimeout(() => status(''), 3500); }; }
@@ -466,6 +525,7 @@ async function exportVideo(W0){
   const W_ = +(Q.get('w') || W0), tag0 = W_ >= 3840 ? '4K' : Math.round(W_*9/16) + 'p', stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
   const name = `lr-rota-${(STOPS[0]?.name || 'viagem').replace(/\W+/g, '-')}-${(STOPS.at(-1)?.name || '').replace(/\W+/g, '-')}-${tag0}-${stamp}.mp4`;
   let picked = null; if(!+(Q.get('bench') || 0) && window.showSaveFilePicker && navigator.userActivation?.isActive){ try{ picked = await showSaveFilePicker({suggestedName: name, startIn: 'downloads', types: [{description: 'Vídeo MP4', accept: {'video/mp4': ['.mp4']}}]}); }catch(e){ if(e.name === 'AbortError'){ status('Exportação cancelada.'); return; } } }
+  status('A preparar as fotos das paragens…'); await Promise.race([PHOTOS_READY, new Promise(r => setTimeout(r, 10000))]);
   const { Muxer, ArrayBufferTarget, FileSystemWritableFileStreamTarget } = await import('./vendor/mp4-muxer/mp4-muxer.mjs');
   const W = +(Q.get('w') || W0), H = Math.round(W*9/16), FPS = +(Q.get('fps') || 30), BR = +(Q.get('br') || (W >= 3840 ? 35e6 : W >= 2560 ? 20e6 : 12e6)), PR = W >= 2560 ? W/1920 : 1;
   const BENCH = +(Q.get('bench') || 0), U0 = +(Q.get('from') || 0);
