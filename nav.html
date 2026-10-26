@@ -204,7 +204,14 @@ const carLayer = {
   async onAdd(mp, gl){
     this.camera = new THREE.Camera(); this.scene = new THREE.Scene();
     this.renderer = new THREE.WebGLRenderer({canvas: mp.getCanvas(), context: gl, antialias: true}); this.renderer.autoClear = false; this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    const pm = new THREE.PMREMGenerator(this.renderer); this.scene.environment = pm.fromScene(new RoomEnvironment(), .04).texture; this.scene.environmentIntensity = .4;
+    const pm = new THREE.PMREMGenerator(this.renderer); // estúdio escuro com tiras de luz (como se fotografa um carro preto): a pintura fica preta e as tiras desenham as linhas e os detalhes
+    const studio = new THREE.Scene(); studio.add(new THREE.Mesh(new THREE.SphereGeometry(60, 32, 16), new THREE.MeshBasicMaterial({color: '#060607', side: THREE.BackSide})));
+    const strip = (w, h, pos, k) => { const mm = new THREE.MeshBasicMaterial({side: THREE.DoubleSide}); mm.color.setRGB(k, k, k); const q = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mm); q.position.set(...pos); q.lookAt(0, 0, 0); studio.add(q); };
+    strip(26, 2.2, [0, 22, 3], 5); strip(26, 1.4, [0, 20, -6], 3);        // tiras por cima (reflexo no tejadilho e no capô)
+    strip(4, 14, [24, 8, 0], 2.2); strip(4, 14, [-24, 8, 0], 1.6);        // luzes à frente e atrás
+    strip(30, 3, [0, 4, 26], 1.2); strip(30, 3, [0, 4, -26], 1.2);        // faixas laterais baixas (contorno das portas)
+    const hz = new THREE.MeshBasicMaterial({side: THREE.BackSide}); hz.color.setRGB(.05, .05, .055); studio.add(new THREE.Mesh(new THREE.CylinderGeometry(58, 58, 6, 32, 1, true), hz));
+    this.scene.environment = pm.fromScene(studio, .02).texture; this.scene.environmentIntensity = 1;
     const sun = new THREE.DirectionalLight('#FFF6EC', 2.2); sun.position.set(-.5, 1, .6); this.scene.add(sun); this.scene.add(new THREE.HemisphereLight('#DDE8F5', '#3A3D42', .12));   // luz neutra: o preto fica preto
     try{ carModel = await loadCarGLB(); }catch(e){ console.warn('carro:', e); window.__carErr = String(e); const b = new THREE.Mesh(new THREE.BoxGeometry(4.6, 1.4, 1.9), new THREE.MeshStandardMaterial({color:'#111'})); b.position.y = .7; carModel = new THREE.Group(); carModel.add(b); }
     // sombra de contacto
