@@ -53,7 +53,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 const Q = new URLSearchParams(location.search), $ = s => document.querySelector(s), status = t => $('#status').textContent = t || '';
 const PACK = Q.get('pack');                  // pacote offline (ex.: studio/packs/pontedelima-vigo) — senão usa a rede
 const CAR_SCALE = +(Q.get('carscale') || 11);
-const CAMS = {perto: .8, normal: 0, longe: -.8}; let CAM = Q.get('cam') || (()=>{ try{ return localStorage.getItem('lr-nav-cam'); }catch(e){ return null; } })() || 'normal'; if(!(CAM in CAMS)) CAM = 'normal';
+const CAMS = {perto: .8, normal: 0, longe: -.8}; let CAM = Q.get('cam') || (()=>{ try{ return localStorage.getItem('lr-nav-cam'); }catch(e){ return null; } })() || 'perto'; if(!(CAM in CAMS)) CAM = 'perto';
 // estilo 'app': o carro tem ~80 px na autoestrada (vista alta) e encolhe para caber na faixa quando a câmara desce às ruas
 const CAR_K = +(Q.get('carsize') || 1);
 const carScaleApp = z => 7.5*CAR_K*Math.pow(2, (17.5 - z)*1.1);  // carro ampliado para ser visível (tamanho real ficaria com poucos píxeis)
@@ -116,7 +116,7 @@ const T = [0], D = [0]; { const NS = Math.min(20000, Math.max(2000, Math.round(T
   // curvas e rotundas: o carro nunca roda mais de ~220°/s no vídeo (7° por imagem); o tempo recupera-se nas retas
   const sp0 = sp.slice();
   for(let it = 0; it < 10; it++){ let r = 0; for(let i = 1; i <= NS; i++) r += 2/(sp[i-1] + sp[i]); const kk = Math.max(5, DUR - pz)/r;
-    for(let i = 0; i <= NS; i++){ const cap = 220/Math.max(cv[i], 1e-4)*kk/SD; sp[i] = Math.min(sp[i], cap, sp0[i]*3); }
+    for(let i = 0; i <= NS; i++){ const cap = 380/Math.max(cv[i], 1e-4)*kk/SD; sp[i] = Math.min(sp[i], Math.max(cap, sp0[i]*.45), sp0[i]*3); }
     box(sp, W(it < 9 ? 150 : 60)); }                              // trava antes da curva e acelera depois, sempre de forma progressiva
   pauses.forEach(p => { for(let i = 0; i <= NS; i++){ const g = Math.abs(p.d - i*SD); if(g < 350) sp[i] *= Math.max(.12, Math.pow(g/350, .6)); } });   // chega à bomba a travar até parar
   const raw = [0]; for(let i = 1; i <= NS; i++) raw.push(raw[i-1] + 2/(sp[i-1] + sp[i]));
@@ -206,7 +206,7 @@ async function loadCarGLB(){
   const m = g.scene; const box = new THREE.Box3().setFromObject(m), sz = box.getSize(new THREE.Vector3()); m.scale.setScalar(4.8/Math.max(sz.x, sz.z)); box.setFromObject(m); m.position.y -= box.min.y;
   wheels = WHEELS.map(n => m.getObjectByName(n)).filter(Boolean); steerPiv = ['roda_FE_pivot', 'roda_FD_pivot'].map(n => m.getObjectByName(n)).filter(Boolean);
   m.traverse(o => { if(!o.isMesh) return; (Array.isArray(o.material) ? o.material : [o.material]).forEach(mt => {
-    if(/^(Paint|Coloured|GrelhaPreta)$/.test(mt.name)){ mt.color.set('#000000'); mt.metalness = 0; mt.roughness = .12; if('clearcoat' in mt){ mt.clearcoat = .5; mt.clearcoatRoughness = .04; } mt.envMapIntensity = .22; /* preto de brinquedo: só brilhos pequenos */ }
+    if(/^(Paint|Coloured|GrelhaPreta)$/.test(mt.name)){ mt.color.set('#000000'); mt.metalness = 0; mt.roughness = .2; if('clearcoat' in mt){ mt.clearcoat = .5; mt.clearcoatRoughness = .06; } mt.envMapIntensity = .22; mt.color.set('#050506'); /* preto de brinquedo: só brilhos pequenos */ }
     if(mt.name === 'GlassRed'){ mt.emissive.set('#FF0000'); mt.emissiveIntensity = 1.8; mt.color.set('#FF0000'); mt.toneMapped = false; }   // sem tone mapping: vermelho puro, não alaranjado
     if(mt.name === 'GlassMtl'){ mt.color.set('#020203'); mt.envMapIntensity = .35; }
     if(/^(Carbon1|Base|CaliperAZone)$/.test(mt.name)){ mt.color.set('#050505'); mt.envMapIntensity = .2; }
@@ -225,7 +225,7 @@ const carLayer = {
     const pm = new THREE.PMREMGenerator(this.renderer); // estúdio escuro com tiras de luz (como se fotografa um carro preto): a pintura fica preta e as tiras desenham as linhas e os detalhes
     const studio = new THREE.Scene(); studio.add(new THREE.Mesh(new THREE.SphereGeometry(60, 32, 16), new THREE.MeshBasicMaterial({color: '#060607', side: THREE.BackSide})));
     const strip = (w, h, pos, k) => { const mm = new THREE.MeshBasicMaterial({side: THREE.DoubleSide}); mm.color.setRGB(k, k, k); const q = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mm); q.position.set(...pos); q.lookAt(0, 0, 0); studio.add(q); };
-    strip(26, 2.2, [0, 22, 3], 10); strip(26, 1.4, [0, 20, -6], 6);        // tiras por cima (reflexo no tejadilho e no capô)
+    strip(26, 2.2, [0, 22, 3], 10); strip(26, 1.4, [0, 20, -6], 6); strip(40, 30, [0, 30, 0], .55);   // + caixa grande e suave por cima: vê-se a forma do tejadilho        // tiras por cima (reflexo no tejadilho e no capô)
     strip(4, 14, [24, 8, 0], 4); strip(4, 14, [-24, 8, 0], 3);        // luzes à frente e atrás
     strip(30, 3, [0, 4, 26], 3); strip(30, 3, [0, 4, -26], 3);        // faixas laterais baixas (contorno das portas)
     const hz = new THREE.MeshBasicMaterial({side: THREE.BackSide}); hz.color.setRGB(.1, .1, .11); studio.add(new THREE.Mesh(new THREE.CylinderGeometry(58, 58, 6, 32, 1, true), hz));
@@ -312,13 +312,13 @@ const SHOT = {
   cima:   p => ({pitch: 6, dz: -.1, rot: 0, pad: .03, big: 1.3}),                                                      // drone a pique: o carro visto de cima
   humano: p => ({pitch: 70, dz: 1.1, rot: 0, pad: .32, big: 1.8}),                                                     // atrás do carro, como quem o segue
   grua:   p => ({pitch: 64 - 50*ease(p), dz: .7 - 1.5*ease(p), rot: 0, pad: .28 - .22*ease(p), big: 1.6 - .6*ease(p)}),             // drone a subir e a inclinar
-  orbita: (p, n, dir) => ({pitch: 50, dz: .5, rot: dir*360*n*ease(p), pad: .1, big: 2.4}),                           // volta completa à volta do carro
+  orbita: (p, n, dir) => ({pitch: 50, dz: .5, rot: 0, pad: .1, big: 2.4}),                                // paragem: aproxima do carro (sem rodar)                           // volta completa à volta do carro
   sobe:   p => ({pitch: 52 - 48*ease(p), dz: -2.8*ease(p), rot: 0, pad: .18 - .15*ease(p), big: 1})                  // fim: sobe e afasta
 };
 const SHOTS = (() => {
   const L = [], add = (t0, t1, kind, extra) => L.push({t0, t1, kind, ...(extra || {})});
   const intro = Math.min(6, TEND*.08), outro = Math.min(7, TEND*.09), cyc = ['alto', 'humano', 'cima', 'grua']; let ci = 0, dir = 1, cur = intro;
-  const fill = (a, b) => { const len = b - a; if(len <= 0) return; if(len < 3 && L.length){ L.at(-1).t1 = b; return; } const n = Math.max(1, Math.round(len/9));
+  const fill = (a, b) => { const len = b - a; if(len <= 0) return; if(len < 3 && L.length){ L.at(-1).t1 = b; return; } const n = Math.max(1, Math.round(len/14));
     for(let i = 0; i < n; i++){ const t0 = a + len*i/n, t1 = a + len*(i+1)/n; let k = cyc[ci++ % cyc.length]; if(twistAt(distAtTime((t0 + t1)/2/TEND)) > .55 && k !== 'grua') k = 'cima'; add(t0, t1, k); } };
   const st = []; STOPS.slice(1, -1).forEach(s => { const ta = timeAtD(s.d), pz = Math.max(+s.pause || 0, s.kind === 'fuel' ? 4 : 0), a = ta - 4, b = ta + pz + 3, last = st.at(-1); if(last && a < last.t1 + 2) last.t1 = Math.max(last.t1, b); else st.push({t0: a, t1: b}); });
   add(0, intro, 'revela');
@@ -331,10 +331,10 @@ let cam = null;
 const visLenCam = () => 4.8*carScaleApp(appZoom ?? 13);
 function frame(u, first){
   const d = distAtTime(u); const {p} = posAt(d); const s = stepAt(d); const mw = isMotorway(s);
-  const head = headingAt(d, LOOK === 'app' ? Math.max(120, visLenCam()*1.6) : mw ? 420 : 160); if(camBear === null || first) camBear = head; let db = ((head - camBear + 540) % 360) - 180; camBear = (camBear + db*(first ? 1 : LOOK === 'app' ? .06 + .06*twistAt(d) : .12) + 360) % 360;
+  const head = headingAt(d, LOOK === 'app' ? Math.max(350, visLenCam()*3) : mw ? 420 : 160); if(camBear === null || first) camBear = head; let db = ((head - camBear + 540) % 360) - 180; camBear = (camBear + (LOOK === 'app' ? Math.max(-1.2, Math.min(1.2, db*.025)) : db*.12) + 360) % 360;   // roda devagar (máx. ~36°/s): não baloiça
   carState.lng = p[0]; carState.lat = p[1]; carState.dist = d; carState.alt = (map.queryTerrainElevation(p) || 0); const visLen = 4.8*(LOOK === 'app' ? carScaleApp(appZoom ?? 13) : CAR_SCALE*Math.pow(2, 16.6 - map.getZoom()));   // comprimento do carro "no mapa" (m)
   const carHead = headingAt(d, LOOK === 'app' ? Math.max(25, visLen*.35) : 25), yawT = (90 - carHead)*rad;
-  if(first || carState.yawS == null) carState.yawS = yawT; else { const dy = (yawT - carState.yawS + 3*Math.PI) % (2*Math.PI) - Math.PI; carState.yawS += Math.max(-.12, Math.min(.12, dy*.25)); } carState.yaw = carState.yawS;
+  if(first || carState.yawS == null) carState.yawS = yawT; else { const dy = (yawT - carState.yawS + 3*Math.PI) % (2*Math.PI) - Math.PI; carState.yawS += Math.max(-.16, Math.min(.16, dy*.25)); } carState.yaw = carState.yawS;
   { const dd = first || carState.lastD == null ? 0 : Math.max(0, d - carState.lastD); carState.lastD = d; carState.wheel = (carState.wheel || 0) + Math.min(.3, dd/.34/CAR_SCALE*3); }
   { const h0 = headingAt(d, Math.max(15, visLen*.15)), h1 = headingAt(d + Math.max(30, visLen*.5), Math.max(15, visLen*.15)); const turn = ((h1 - h0 + 540) % 360) - 180; const target = Math.max(-.55, Math.min(.55, -turn*rad*1.4)); carState.steer = (carState.steer || 0) + (target - (carState.steer || 0))*.25; }
   if(LOOK === 'app'){
@@ -342,7 +342,7 @@ function frame(u, first){
     const near = STOPS.reduce((m, q) => Math.min(m, Math.abs(q.d - d)), 1e9), fuel = STOPS.filter(q => q.kind === 'fuel').reduce((m, q) => Math.min(m, Math.abs(q.d - d)), 1e9), tw = Math.max(twistAt(d), twistAt(d + 300)*.8);
     let zt = Math.min(16.0, (mw ? 13.2 : 14.0) + 2.0*tw + 1.2*Math.max(0, 1 - near/2500)); if(fuel < 1200) zt = Math.max(zt, 18.0 - 1.6*fuel/1200);
     zt = Math.min(18.0, zt + CAMS[CAM]); appZoom = appZoom === null || first ? zt : appZoom + (zt - appZoom)*.05;
-    const sh = shotAt(u*TEND); if(!cam || first) cam = {...sh}; else { for(const k of ['pitch', 'dz', 'pad', 'big']) cam[k] += (sh[k] - cam[k])*.045; cam.rot = sh.rot; } carState.big = cam.big;
+    const sh = shotAt(u*TEND); if(!cam || first) cam = {...sh}; else { for(const k of ['pitch', 'dz', 'pad', 'big']) cam[k] += (sh[k] - cam[k])*.02; cam.rot = sh.rot; } carState.big = cam.big;
     map.jumpTo({center: p, zoom: Math.min(18.6, appZoom + cam.dz), pitch: Math.min(76, cam.pitch + 4*tw), bearing: (camBear + cam.rot + 360) % 360, padding: {top: H0()*cam.pad, bottom: 0, left: 0, right: 0}});
     setProgress(d/TOTAL); drawAppHud(d, u); map.triggerRepaint(); return;
   }
@@ -356,14 +356,15 @@ frame(0, true);
 /* reprodução: o tempo só avança com o mapa carregado (sem saltos); na gravação o gravador pausa enquanto carrega */
 let playing = false;
 function run(rec){
-  if(playing) return; playing = true; let u = 0, last = null; camBear = null; cam = null; carState.yawS = null; carState.lastD = null;
+  if(playing) return; playing = true; let u = 0, last = null, acc = 0; camBear = null; cam = null; carState.yawS = null; carState.lastD = null;
   let waitSince = null;
   const tick = t => {
     const dt = last === null ? 0 : Math.min(.1, (t - last)/1000); last = t;
     let loaded = map.isSourceLoaded('omt') && carLayer.ready;   // espera só pelas ruas e prédios; o relevo pode chegar depois
     if(!loaded){ waitSince = waitSince ?? t; if(t - waitSince > 4000) loaded = true; } else waitSince = null;
     if(rec){ if(!loaded && rec.state === 'recording') rec.pause(); if(loaded && rec.state === 'paused') rec.resume(); }
-    if(loaded) u = Math.min(1, u + dt/DUR);
+    if(!rec){ acc = (acc || 0) + dt; if(acc < 1/30 - .004 && u > 0){ requestAnimationFrame(tick); return; } acc = Math.max(0, Math.min(1/30, acc - 1/30)); if(loaded) u = Math.min(1, u + 1/30/DUR); }
+    else if(loaded) u = Math.min(1, u + dt/DUR);
     frame(u, u === 0); if(rec){ drawRec(); status(`A gravar… ${Math.round(u*100)}%`); }
     if(u < 1) requestAnimationFrame(tick); else { playing = false; if(rec) setTimeout(() => rec.stop(), 600); else status(''); }
   };
