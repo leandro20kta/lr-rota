@@ -74,7 +74,13 @@ else { try{ trip = JSON.parse(localStorage.getItem('lr-nav-trip')); }catch(e){} 
 if(!trip && !PACK){ location.replace(location.pathname + '?pack=studio/packs/pontedelima-vigo'); }
 if(!trip){ status('Sem viagem. Planeie uma rota na app.'); throw new Error('sem viagem'); }
 if(trip.gps && !trip.smoothed){ trip.route = smoothTrack(trip.route); trip.smoothed = true; }
-const line = trip.route.map(([la, lo]) => [lo, la]);
+function smoothLine(L){   // o carro e a câmara seguem uma curva contínua, não uma linha partida
+  if(L.length < 3) return L; const out = [L[0]], STEP = 4; let carry = 0;
+  for(let i = 1; i < L.length; i++){ const a = L[i-1], b = L[i], seg = hav(a, b); if(!(seg > 0)) continue; let t = STEP - carry; while(t <= seg){ const f = t/seg; out.push([a[0] + (b[0]-a[0])*f, a[1] + (b[1]-a[1])*f]); t += STEP; } carry = seg - (t - STEP); }
+  out.push(L.at(-1)); const R = 5, w = []; for(let k = -R; k <= R; k++) w.push(Math.exp(-k*k/(2*2.5*2.5)));
+  return out.map((q, i) => { if(i < R || i >= out.length - R) return q; let x = 0, y = 0, sw = 0; for(let k = -R; k <= R; k++){ const r = out[i+k], ww = w[k+R]; x += r[0]*ww; y += r[1]*ww; sw += ww; } return [x/sw, y/sw]; });
+}
+const line = smoothLine(trip.route.map(([la, lo]) => [lo, la]));
 const cum = [0]; for(let i=1;i<line.length;i++) cum.push(cum[i-1] + hav(line[i-1], line[i])); const TOTAL = cum.at(-1);
 // classe de estrada por troço (autoestrada mais rápida no vídeo, vilas mais devagar)
 const steps = (trip.steps || []).map(s => ({...s})); { let acc = 0; steps.forEach(s => { s.d0 = acc; acc += s.dist; s.d1 = acc; }); }
@@ -97,7 +103,10 @@ const TW = []; { const step = 50; for(let d = 0; d <= TOTAL + step; d += step){ 
 const twistAt = d => { const v = TW[Math.max(0, Math.min(TW.length-1, Math.round(d/50)))] || 0; return Math.max(0, Math.min(1, (v - 20)/70)); };
 const speedAt = d => { const s = stepAt(d); if(LOOK === 'app' && STOPS.some(p => p.kind === 'fuel' && Math.abs(p.d - d) < 700)) return .25; const nearPt = STOPS.some(p => Math.abs(p.d - d) < 2500); const base = nearPt ? (LOOK === 'app' ? .6 : .45) : isMotorway(s) ? (LOOK === 'app' ? 1.35 : 1.55) : .85; return LOOK === 'app' ? base*(1 - .6*twistAt(d)) : base; };
 // tempo de vídeo (s) → distância (m): integra 1/velocidade e acrescenta as pausas (ex.: abastecimento)
-const T = [0], D = [0]; { const NS = 2000, raw = [0]; for(let i=1;i<=NS;i++) raw.push(raw[i-1] + 1/speedAt(TOTAL*i/NS));
+const T = [0], D = [0]; { const NS = 2000, sp = []; for(let i = 0; i <= NS; i++) sp.push(speedAt(TOTAL*i/NS));
+  for(let k = 0; k < 4; k++){ const c = sp.slice(); for(let i = 0; i <= NS; i++){ let a = 0, n = 0; for(let j = -8; j <= 8; j++){ const q = c[i+j]; if(q != null){ a += q; n++; } } sp[i] = a/n; } }
+  STOPS.forEach(p => { if(!(p.pause || p.kind === 'fuel')) return; for(let i = 0; i <= NS; i++){ const g = Math.abs(p.d - TOTAL*i/NS); if(g < 500) sp[i] *= Math.max(.05, Math.pow(g/500, .75)); } });
+  const raw = [0]; for(let i = 1; i <= NS; i++) raw.push(raw[i-1] + 2/(sp[i-1] + sp[i]));
   const pauses = STOPS.filter(p => p.pause || p.kind === 'fuel').map(p => ({d: p.d, s: Math.max(+p.pause || 0, p.kind === 'fuel' ? 4 : 0)})).sort((a, b) => a.d - b.d); const k = Math.max(5, DUR - pauses.reduce((a, b) => a + b.s, 0))/raw.at(-1); let extra = 0, pi = 0;
   for(let i=1;i<=NS;i++){ const d = TOTAL*i/NS; while(pi < pauses.length && pauses[pi].d <= d){ T.push(raw[i-1]*k + extra); D.push(pauses[pi].d); extra += pauses[pi].s; T.push(raw[i-1]*k + extra); D.push(pauses[pi].d); pi++; } T.push(raw[i]*k + extra); D.push(d); } }
 const distAtTime = u => { const t = u*T.at(-1); let lo = 0, hi = T.length-1; while(hi-lo > 1){ const m = (lo+hi) >> 1; T[m] <= t ? lo = m : hi = m; } const f = (t - T[lo])/((T[hi]-T[lo]) || 1); return D[lo] + (D[hi]-D[lo])*f; };
@@ -179,7 +188,7 @@ async function loadCarGLB(){
   const m = g.scene; const box = new THREE.Box3().setFromObject(m), sz = box.getSize(new THREE.Vector3()); m.scale.setScalar(4.8/Math.max(sz.x, sz.z)); box.setFromObject(m); m.position.y -= box.min.y;
   wheels = WHEELS.map(n => m.getObjectByName(n)).filter(Boolean); steerPiv = ['roda_FE_pivot', 'roda_FD_pivot'].map(n => m.getObjectByName(n)).filter(Boolean);
   m.traverse(o => { if(!o.isMesh) return; (Array.isArray(o.material) ? o.material : [o.material]).forEach(mt => {
-    if(/^(Paint|Coloured|GrelhaPreta)$/.test(mt.name)){ mt.color.set('#000000'); mt.metalness = 0; mt.roughness = .38; if('clearcoat' in mt){ mt.clearcoat = .35; mt.clearcoatRoughness = .18; } mt.envMapIntensity = .18; /* preto de brinquedo: só brilhos pequenos */ }
+    if(/^(Paint|Coloured|GrelhaPreta)$/.test(mt.name)){ mt.color.set('#000000'); mt.metalness = 0; mt.roughness = .12; if('clearcoat' in mt){ mt.clearcoat = .5; mt.clearcoatRoughness = .04; } mt.envMapIntensity = .22; /* preto de brinquedo: só brilhos pequenos */ }
     if(mt.name === 'GlassRed'){ mt.emissive.set('#FF0000'); mt.emissiveIntensity = 1.8; mt.color.set('#FF0000'); mt.toneMapped = false; }   // sem tone mapping: vermelho puro, não alaranjado
     if(mt.name === 'GlassMtl'){ mt.color.set('#020203'); mt.envMapIntensity = .35; }
     if(/^(Carbon1|Base|CaliperAZone)$/.test(mt.name)){ mt.color.set('#050505'); mt.envMapIntensity = .2; }
@@ -205,9 +214,9 @@ const carLayer = {
   },
   render(gl, args){
     if(!this.ready) return;
-    const el = map.queryTerrainElevation([carState.lng, carState.lat]); if(el != null) carState.alt = el;
-    const mc = maplibregl.MercatorCoordinate.fromLngLat([carState.lng, carState.lat], carState.alt), s = mc.meterInMercatorCoordinateUnits()*(LOOK === 'app' ? carScaleApp(map.getZoom()) : CAR_SCALE*Math.pow(2, 16.6 - map.getZoom()));
-    this.holder.rotation.set(0, carState.yaw, 0); wheels.forEach(w => w.rotation.z = -carState.dist/.34/CAR_SCALE*3); steerPiv.forEach(p => p.rotation.y = carState.steer || 0);
+    const el = map.queryTerrainElevation([carState.lng, carState.lat]); if(el != null) carState.alt = el; carState.altS = carState.altS == null || Math.abs(carState.alt - carState.altS) > 60 ? carState.alt : carState.altS + (carState.alt - carState.altS)*.25;
+    const mc = maplibregl.MercatorCoordinate.fromLngLat([carState.lng, carState.lat], carState.altS), s = mc.meterInMercatorCoordinateUnits()*(LOOK === 'app' ? carScaleApp(map.getZoom()) : CAR_SCALE*Math.pow(2, 16.6 - map.getZoom()));
+    this.holder.rotation.set(0, carState.yaw, 0); wheels.forEach(w => w.rotation.z = -(carState.wheel || 0)); steerPiv.forEach(p => p.rotation.y = carState.steer || 0);
     const M = new THREE.Matrix4().makeTranslation(mc.x, mc.y, mc.z).scale(new THREE.Vector3(s, -s, s)).multiply(new THREE.Matrix4().makeRotationX(Math.PI/2));
     this.camera.projectionMatrix = new THREE.Matrix4().fromArray(args.defaultProjectionData.mainMatrix).multiply(M);
     this.renderer.resetState(); gl.clear(gl.DEPTH_BUFFER_BIT);   // o carro desenha-se sempre por cima do mapa (não se enterra no relevo)
@@ -267,19 +276,49 @@ function drawAppHud(d, u){
   x.fillStyle = DARK ? '#FFFFFF' : '#1F2328'; x.font = `800 ${15*k}px Inter`; x.textAlign = 'right'; x.fillText(`${(d/1000).toFixed(0)} / ${(TOTAL/1000).toFixed(0)} km`, W - 30*k, 46*k); x.textAlign = 'left';
   x.fillStyle = DARK ? 'rgba(255,255,255,.6)' : 'rgba(0,0,0,.55)'; x.font = `600 ${10*k}px Inter`; x.textAlign = 'right'; x.fillText('© OpenStreetMap · OpenMapTiles · OpenFreeMap', W - 30*k, H - 76*k); x.textAlign = 'left';
 }
+/* ---------- realizador: planos de drone que mudam ao longo do vídeo (de cima, volta de 360°, atrás do carro, a subir) ---------- */
+const TEND = T.at(-1);
+const timeAtD = dd => { let lo = 0, hi = D.length-1; while(hi-lo > 1){ const m = (lo+hi) >> 1; D[m] < dd ? lo = m : hi = m; } return T[hi]; };
+const ease = x => x <= 0 ? 0 : x >= 1 ? 1 : x*x*(3 - 2*x);
+// pitch: 0 = câmara a pique (de cima); dz: zoom extra; rot: volta à volta do carro (graus); pad: onde fica o carro no ecrã (0 = ao centro)
+const SHOT = {
+  revela: p => ({pitch: 4 + 48*ease(p), dz: -2.6*(1 - ease(p)), rot: 0, pad: .04 + .14*ease(p)}),          // começo: desce do céu até ao carro
+  alto:   p => ({pitch: 40, dz: -.9, rot: 0, pad: .18}),                                                     // drone alto: paisagem
+  cima:   p => ({pitch: 6, dz: -.1, rot: 0, pad: .03}),                                                      // drone a pique: o carro visto de cima
+  humano: p => ({pitch: 70, dz: 1.1, rot: 0, pad: .32}),                                                     // atrás do carro, como quem o segue
+  grua:   p => ({pitch: 64 - 50*ease(p), dz: .7 - 1.5*ease(p), rot: 0, pad: .28 - .22*ease(p)}),             // drone a subir e a inclinar
+  orbita: (p, n, dir) => ({pitch: 50, dz: .5, rot: dir*360*n*ease(p), pad: .1}),                           // volta completa à volta do carro
+  sobe:   p => ({pitch: 52 - 48*ease(p), dz: -2.8*ease(p), rot: 0, pad: .18 - .15*ease(p)})                  // fim: sobe e afasta
+};
+const SHOTS = (() => {
+  const L = [], add = (t0, t1, kind, extra) => L.push({t0, t1, kind, ...(extra || {})});
+  const intro = Math.min(6, TEND*.08), outro = Math.min(7, TEND*.09), cyc = ['alto', 'humano', 'cima', 'grua']; let ci = 0, dir = 1, cur = intro;
+  const fill = (a, b) => { const len = b - a; if(len <= 0) return; if(len < 3 && L.length){ L.at(-1).t1 = b; return; } const n = Math.max(1, Math.round(len/9));
+    for(let i = 0; i < n; i++){ const t0 = a + len*i/n, t1 = a + len*(i+1)/n; let k = cyc[ci++ % cyc.length]; if(twistAt(distAtTime((t0 + t1)/2/TEND)) > .55 && k !== 'grua') k = 'cima'; add(t0, t1, k); } };
+  const st = []; STOPS.slice(1, -1).forEach(s => { const ta = timeAtD(s.d), pz = Math.max(+s.pause || 0, s.kind === 'fuel' ? 4 : 0), a = ta - 4, b = ta + pz + 3, last = st.at(-1); if(last && a < last.t1 + 2) last.t1 = Math.max(last.t1, b); else st.push({t0: a, t1: b}); });
+  add(0, intro, 'revela');
+  st.forEach(o => { const a = Math.max(o.t0, cur), b = Math.min(o.t1, TEND - outro); if(b - a < 2.5) return; fill(cur, a); add(a, b, 'orbita', {n: Math.max(1, Math.round((b - a)/12)), dir}); dir = -dir; cur = b; });
+  fill(cur, TEND - outro); add(TEND - outro, TEND, 'sobe');
+  return L;
+})();
+const shotAt = t => { const o = SHOTS.find(q => t >= q.t0 && t < q.t1) || SHOTS.at(-1); return SHOT[o.kind](Math.max(0, Math.min(1, (t - o.t0)/((o.t1 - o.t0) || 1))), o.n || 1, o.dir || 1); };
+let cam = null;
 const visLenCam = () => 4.8*carScaleApp(appZoom ?? 13);
 function frame(u, first){
   const d = distAtTime(u); const {p} = posAt(d); const s = stepAt(d); const mw = isMotorway(s);
   const head = headingAt(d, LOOK === 'app' ? Math.max(120, visLenCam()*1.6) : mw ? 420 : 160); if(camBear === null || first) camBear = head; let db = ((head - camBear + 540) % 360) - 180; camBear = (camBear + db*(first ? 1 : LOOK === 'app' ? .06 + .06*twistAt(d) : .12) + 360) % 360;
   carState.lng = p[0]; carState.lat = p[1]; carState.dist = d; carState.alt = (map.queryTerrainElevation(p) || 0); const visLen = 4.8*(LOOK === 'app' ? carScaleApp(appZoom ?? 13) : CAR_SCALE*Math.pow(2, 16.6 - map.getZoom()));   // comprimento do carro "no mapa" (m)
-  const carHead = headingAt(d, LOOK === 'app' ? Math.max(25, visLen*.35) : 25); carState.yaw = (90 - carHead)*rad;
+  const carHead = headingAt(d, LOOK === 'app' ? Math.max(25, visLen*.35) : 25), yawT = (90 - carHead)*rad;
+  if(first || carState.yawS == null) carState.yawS = yawT; else carState.yawS += ((yawT - carState.yawS + 3*Math.PI) % (2*Math.PI) - Math.PI)*.3; carState.yaw = carState.yawS;
+  { const dd = first || carState.lastD == null ? 0 : Math.max(0, d - carState.lastD); carState.lastD = d; carState.wheel = (carState.wheel || 0) + Math.min(.3, dd/.34/CAR_SCALE*3); }
   { const h0 = headingAt(d, Math.max(15, visLen*.15)), h1 = headingAt(d + Math.max(30, visLen*.5), Math.max(15, visLen*.15)); const turn = ((h1 - h0 + 540) % 360) - 180; const target = Math.max(-.55, Math.min(.55, -turn*rad*1.4)); carState.steer = (carState.steer || 0) + (target - (carState.steer || 0))*.25; }
   if(LOOK === 'app'){
     // vista de cima inclinada, mais afastada; aproxima nas paragens
     const near = STOPS.reduce((m, q) => Math.min(m, Math.abs(q.d - d)), 1e9), fuel = STOPS.filter(q => q.kind === 'fuel').reduce((m, q) => Math.min(m, Math.abs(q.d - d)), 1e9), tw = Math.max(twistAt(d), twistAt(d + 300)*.8);
     let zt = Math.min(16.0, (mw ? 13.2 : 14.0) + 2.0*tw + 1.2*Math.max(0, 1 - near/2500)); if(fuel < 1200) zt = Math.max(zt, 18.0 - 1.6*fuel/1200);
     zt = Math.min(18.0, zt + CAMS[CAM]); appZoom = appZoom === null || first ? zt : appZoom + (zt - appZoom)*.05;
-    map.jumpTo({center: p, zoom: appZoom, pitch: 56 + 6*tw, bearing: camBear, padding: {top: H0()*.3, bottom: 0, left: 0, right: 0}});
+    const sh = shotAt(u*TEND); if(!cam || first) cam = {...sh}; else { for(const k of ['pitch', 'dz', 'pad']) cam[k] += (sh[k] - cam[k])*.045; cam.rot = sh.rot; }
+    map.jumpTo({center: p, zoom: Math.min(18.6, appZoom + cam.dz), pitch: Math.min(76, cam.pitch + 4*tw), bearing: (camBear + cam.rot + 360) % 360, padding: {top: H0()*cam.pad, bottom: 0, left: 0, right: 0}});
     setProgress(d/TOTAL); drawAppHud(d, u); map.triggerRepaint(); return;
   }
   const z = mw ? 15.8 : 16.3; const near = (trip.points || []).some(q => hav([q.lon, q.lat], p) < 2500);
@@ -287,12 +326,12 @@ function frame(u, first){
   setProgress(d/TOTAL); hud(d, u); map.triggerRepaint();
 }
 const uOfKm = km => { let lo = 0, hi = 1; for(let k=0;k<40;k++){ const m = (lo+hi)/2; distAtTime(m) < km*1000 ? lo = m : hi = m; } return (lo+hi)/2; };
-window.__nav = {frame, uOfKm, STOPS, map, TOTAL, ready: () => carLayer.ready && map.loaded() && map.areTilesLoaded(), trip, dbg: () => ({ready: carLayer.ready, car: carState, model: !!carModel, wheels: wheels.length, err: window.__carErr || null})};
+window.__nav = {frame, uOfKm, STOPS, SHOTS, TEND, map, TOTAL, ready: () => carLayer.ready && map.loaded() && map.areTilesLoaded(), trip, dbg: () => ({ready: carLayer.ready, car: carState, model: !!carModel, wheels: wheels.length, err: window.__carErr || null})};
 frame(0, true);
 /* reprodução: o tempo só avança com o mapa carregado (sem saltos); na gravação o gravador pausa enquanto carrega */
 let playing = false;
 function run(rec){
-  if(playing) return; playing = true; let u = 0, last = null; camBear = null;
+  if(playing) return; playing = true; let u = 0, last = null; camBear = null; cam = null; carState.yawS = null; carState.lastD = null;
   let waitSince = null;
   const tick = t => {
     const dt = last === null ? 0 : Math.min(.1, (t - last)/1000); last = t;
@@ -425,7 +464,7 @@ async function exportVideo(W0){
   const muxer = new Muxer({target, video: {codec: 'avc', width: W, height: H, frameRate: FPS}, fastStart: writable ? false : 'in-memory'});
   const enc = new VideoEncoder({output: (c, m) => muxer.addVideoChunk(c, m), error: e => status('Erro do codificador: ' + e.message)}); enc.configure(cfg);
   document.body.classList.add('recording'); const st = $('#stage'); st.style.width = '1920px'; st.style.height = '1080px'; st.style.transform = `scale(${Math.min(innerWidth/1920, innerHeight/1080)})`; HUDS = W/1920; map.setPixelRatio(PR); map.resize();
-  rc.width = W; rc.height = H; const N = BENCH || Math.round(DUR*FPS); camBear = null; appZoom = null;
+  rc.width = W; rc.height = H; const N = BENCH || Math.round(DUR*FPS); camBear = null; appZoom = null; cam = null; carState.yawS = null; carState.lastD = null;
   let GC = null; if(LOOK === 'app' && !Q.get('cpu')){ try{ GC = makeGPUComposer(W, H); }catch(e){ console.warn('compositor', e); } } GPU_FX = !!GC;
   // mantém o ecrã ligado e não depende do requestAnimationFrame (o Chrome trava-o quando o ecrã apaga)
   let wake = null; const getWake = async () => { try{ wake = await navigator.wakeLock?.request('screen'); }catch(e){} }; await getWake();
