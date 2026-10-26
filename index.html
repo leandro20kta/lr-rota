@@ -772,7 +772,7 @@ async function enrichPlace(name, wiki, wd, city){
   return out;
 }
 function scriptStops(t){
-  const vis = (t.stops || []).filter(s => !['restaurant', 'hotel'].includes(s.kind));
+  const vis = (t.stops || []).filter(s => !['restaurant', 'hotel', 'fuel'].includes(s.kind));
   return vis.length ? vis : (t.pois || []).filter(p => ['attraction', 'viewpoint', 'museum', 'beach'].includes(p.kind)).slice(0, 4);
 }
 async function gatherFacts(t, force){
@@ -807,9 +807,9 @@ function buildScript(t){
   B.push({h:'Onde comi', t: d.rest ? `Para mim, o melhor restaurante aqui foi o ${d.rest}${d.restWhy ? ', porque ' + d.restWhy : ''}. Gastei ${eur(food)}${d.r1 && d.r1 !== '–' ? `; comida ${d.r1}/5` : ''}${d.r2 && d.r2 !== '–' ? `, atendimento ${d.r2}/5` : ''}.` : `${C} — preencher o restaurante e o porquê no diário depois da viagem.`});
   B.push({h:'Onde dormi', t: d.hotel ? `Para dormir, o melhor custo-benefício que encontrei foi ${d.hotel}${d.hotelWhy ? ': ' + d.hotelWhy : ''}. Paguei ${eur(sleep)}${d.r3 && d.r3 !== '–' ? ` — ${d.r3.toLowerCase()}` : ''}.` : `${C} — preencher o alojamento no diário (ou dizer que foi bate-volta).`});
   B.push({h:'Pequeno-almoço', t: d.breakfast ? d.breakfast : `${C} — opções de pequeno-almoço (incluído? café perto? preço?).`});
-  B.push({h:'Quanto custou', t:`A minha viagem, saindo de ${t.origin.name}${k === 2 ? ', ida e volta' : ''}: ${settings.fuel.toLowerCase()} ${eur(fuel*k)}${toll ? `, portagens ${eur(toll*k)}` : ', sem portagens'}, alimentação ${eur(food)}, alojamento ${eur(sleep)}${other ? `, outros ${eur(other)}` : ''}.\nNo total, este passeio ficou em cerca de ${eur(total)}.` + (d.total == null ? `\n${C} — valores estimados; atualize no diário com o que gastou de verdade.` : '')});
+  B.push({h:'Quanto custou', t:`A minha viagem, saindo de ${t.origin.name}${k === 2 ? ', ida e volta' : ''}: ${settings.fuel.toLowerCase()} ${eur(fuel*k)}${toll ? `, portagens ${eur(toll*k)}` : ', sem portagens'}, alimentação ${eur(food)}, alojamento ${eur(sleep)}${other ? `, outros ${eur(other)}` : ''}.\nNo total, este passeio ficou em cerca de ${eur(total)}.` + ((t.stops || []).some(x => x.kind === 'fuel') ? `\nAbasteci ${(t.stops || []).filter(x => x.kind === 'fuel').map(x => x.name === 'Abastecimento' ? 'pelo caminho' : 'na ' + x.name).join(' e ')}.` : '') + (d.total == null ? `\n${C} — valores estimados; atualize no diário com o que gastou de verdade.` : '')});
   if(d.book) B.push({h:'Como reservar', t:`Se quiseres ficar onde eu fiquei, reservei em ${d.book}.`});
-  const verdict = d.worth && d.worth !== '–' ? `Agora, o meu veredicto: ${d.worth === 'Valeu muito a pena' ? 'para mim valeu muito a pena' : d.worth === 'Não valeu' ? 'sinceramente, para mim não valeu a pena' : 'valeu, mas com algumas ressalvas'}${d.verdict ? '. ' + d.verdict : ''}. ` : '';
+  const verdict = d.worth && d.worth !== '–' ? `Agora, o meu veredicto: ${d.worth === 'Valeu muito a pena' ? 'para mim valeu muito a pena' : d.worth === 'Não valeu' ? 'sinceramente, para mim não valeu a pena' : 'valeu, mas com algumas ressalvas'}${d.verdict ? '. ' + d.verdict.charAt(0).toUpperCase() + d.verdict.slice(1).replace(/[.!]+$/, '') : ''}. ` : '';
   B.push({h:'Fecho', t: verdict + `E aí, vale a pena gastar cerca de ${eur(total)} para vir conhecer ${t.dest.name}? Comenta aqui em baixo! Diz-me também que outro lugar queres que eu visite e analise para ti — o próximo vídeo pode ser a tua sugestão. Se gostaste, subscreve o Leandro na Rota e ativa o sininho. Até à próxima!`});
   return B;
 }
