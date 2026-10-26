@@ -247,7 +247,7 @@ function drawAppHud(d, u){
   { const g = x.createLinearGradient(0, 0, 0, 160*k); const P = DARK ? '14,22,32' : MAPSTYLE === 'vintage' || ATLAS ? '242,233,208' : '255,255,255'; g.addColorStop(0, `rgba(${P},.92)`); g.addColorStop(.75, `rgba(${P},.6)`); g.addColorStop(1, `rgba(${P},0)`); x.fillStyle = g; x.fillRect(0, 0, W, 160*k); }
   rr(24*k, 22*k, 214*k, 40*k, 20*k, '#0A5BD6'); x.fillStyle = '#fff'; x.font = `800 ${17*k}px Inter`; x.fillText('LEANDRO NA ROTA', 44*k, 48*k);
   x.shadowColor = 'rgba(0,0,0,.35)'; x.shadowBlur = 10*k; x.fillStyle = DARK ? '#FFFFFF' : MAPSTYLE === 'vintage' ? '#3B2A18' : '#1F2328'; x.font = `800 ${34*k}px Inter`; x.fillText(TITLE, 26*k, 104*k); x.shadowBlur = 0;
-  x.font = `700 ${17*k}px Inter`; x.fillStyle = DARK ? '#C9D3DF' : '#3C4043'; x.fillText(STOPS.slice(1, -1).map(s => s.name).join(' · '), 27*k, 130*k);
+  x.font = `700 ${17*k}px Inter`; x.fillStyle = DARK ? '#C9D3DF' : '#3C4043'; { const names = STOPS.slice(1, -1).filter(s => s.kind !== 'fuel').map(s => s.name); let n = names.length, t = names.join(' · '); while(n > 1 && x.measureText(t).width > W - 300*k){ n--; t = names.slice(0, n).join(' · ') + ` · +${names.length - n}`; } x.fillText(t, 27*k, 130*k); }
   // cartão da paragem (ao chegar / na pausa)
   const near = STOPS.find(s => Math.abs(s.d - d) < (s.pause ? 1200 : 1600));
   if(near){ const ic = near.kind === 'fuel' ? '⛽' : near === STOPS.at(-1) ? '⚑' : near === STOPS[0] ? '🚗' : '📍'; x.font = `800 ${26*k}px Inter`; const tw = Math.max(x.measureText(near.name).width, (x.font = `700 ${16*k}px Inter`, x.measureText(near.sub || '').width)) + 96*k;
@@ -256,7 +256,13 @@ function drawAppHud(d, u){
   // barra de progresso com as paragens
   const px = 40*k, pw = W - 80*k, py = H - 46*k; rr(px - 24*k, py - 40*k, pw + 48*k, 74*k, 16*k, DARK ? 'rgba(16,22,30,.92)' : MAPSTYLE === 'vintage' || ATLAS ? 'rgba(240,229,205,.94)' : 'rgba(255,255,255,.94)');
   rr(px, py - 3*k, pw, 6*k, 3*k, DARK ? '#3A4656' : '#E3DED6'); rr(px, py - 3*k, pw*d/TOTAL, 6*k, 3*k, RCOL);
-  let lastLx = -1e9; STOPS.forEach((s, i) => { const sx = px + pw*s.d/TOTAL; const below = sx - lastLx < 90*k; if(!below) lastLx = sx; x.fillStyle = s.d <= d ? (s.kind === 'fuel' ? '#F57C00' : '#E53935') : '#BDB6AC'; x.beginPath(); x.arc(sx, py, 7*k, 0, 7); x.fill(); x.strokeStyle = '#fff'; x.lineWidth = 2.5*k; x.stroke(); x.fillStyle = DARK ? '#DDE5EE' : '#3C4043'; x.font = `700 ${12*k}px Inter`; x.textAlign = s === STOPS[0] ? 'left' : s === STOPS.at(-1) ? 'right' : 'center'; x.fillText(s.kind === 'fuel' ? '⛽ ' + s.name : s.name, sx, below ? py + 20*k : py - 16*k); x.textAlign = 'left'; });
+  // nomes sem se sobreporem: partida e chegada sempre; os outros em cima, senão em baixo, senão só o ponto
+  x.font = `700 ${12*k}px Inter`; const lab = s => s.kind === 'fuel' ? '⛽ ' + s.name : s.name, gap = 10*k;
+  const span = s => { const sx = px + pw*s.d/TOTAL, w = x.measureText(lab(s)).width; return s === STOPS[0] ? [sx, sx + w] : s === STOPS.at(-1) ? [sx - w, sx] : [sx - w/2, sx + w/2]; };
+  const rows = [[], []], free = (r, a) => rows[r].every(b => a[1] + gap < b[0] || a[0] > b[1] + gap);
+  const place = new Map(); [STOPS[0], STOPS.at(-1)].forEach(s => { place.set(s, 0); rows[0].push(span(s)); });
+  STOPS.forEach(s => { if(place.has(s)) return; const a = span(s); const r = free(0, a) ? 0 : free(1, a) ? 1 : -1; place.set(s, r); if(r >= 0) rows[r].push(a); });
+  STOPS.forEach(s => { const sx = px + pw*s.d/TOTAL; x.fillStyle = s.d <= d ? (s.kind === 'fuel' ? '#F57C00' : '#E53935') : '#BDB6AC'; x.beginPath(); x.arc(sx, py, 7*k, 0, 7); x.fill(); x.strokeStyle = '#fff'; x.lineWidth = 2.5*k; x.stroke(); const r = place.get(s); if(r < 0) return; x.fillStyle = DARK ? '#DDE5EE' : '#3C4043'; x.font = `700 ${12*k}px Inter`; x.textAlign = s === STOPS[0] ? 'left' : s === STOPS.at(-1) ? 'right' : 'center'; x.fillText(lab(s), sx, r ? py + 20*k : py - 16*k); x.textAlign = 'left'; });
   x.fillStyle = DARK ? '#FFFFFF' : '#1F2328'; x.font = `800 ${15*k}px Inter`; x.textAlign = 'right'; x.fillText(`${(d/1000).toFixed(0)} / ${(TOTAL/1000).toFixed(0)} km`, W - 30*k, 46*k); x.textAlign = 'left';
   x.fillStyle = DARK ? 'rgba(255,255,255,.6)' : 'rgba(0,0,0,.55)'; x.font = `600 ${10*k}px Inter`; x.textAlign = 'right'; x.fillText('© OpenStreetMap · OpenMapTiles · OpenFreeMap', W - 30*k, H - 76*k); x.textAlign = 'left';
 }
