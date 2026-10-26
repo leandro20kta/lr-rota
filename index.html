@@ -886,7 +886,8 @@ $('#btn-flag').addEventListener('click', () => { if(!pos) return; const name = p
 $('#btn-fuel').addEventListener('click', () => { if(!pos){ toast('Ainda sem GPS'); return; } const name = prompt('Posto (ex.: Repsol)', 'Repsol') || 'Abastecimento'; current.stops.push({name, lat: pos.latitude, lon: pos.longitude, note: 'Abastecimento', kind: 'fuel', pause: 4, done: true, t: Date.now()}); store.set('current', current); toast('⛽ Abastecimento marcado'); });
 // viagem → formato do "Viagem 3D" (trajeto real do GPS + paragens marcadas)
 function navTrip(t){ const gps = (t.track || []).length > 20; const route = gps ? t.track.map(p => [p.lat, p.lon]) : t.route;
-  const stops = (t.stops || []).filter(s => s.done || s.kind === 'fuel').map(s => ({name: s.name, sub: s.kind === 'fuel' ? 'Abastecimento' : (s.note || ''), kind: s.kind, pause: s.pause, lat: s.lat, lon: s.lon}));
+  const near = s => (t.track || []).some(p => dist(p.lat, p.lon, s.lat, s.lon) < 400);   // passou perto, mesmo sem a app marcar 'chegou'
+  const stops = (t.stops || []).filter(s => s.done || s.kind === 'fuel' || (gps && near(s))).map(s => ({name: s.name, sub: s.kind === 'fuel' ? 'Abastecimento' : (s.note || ''), kind: s.kind, pause: s.pause, lat: s.lat, lon: s.lon}));
   return {gps, route, distance: t.trackDistance || t.distance, duration: t.startedAt && t.endedAt ? (t.endedAt - t.startedAt)/1000 : t.duration, date: t.created,
     points: [{name: t.origin.name, sub: 'Partida', lat: route[0][0], lon: route[0][1]}, ...stops, {name: t.dest.name, sub: 'Chegada', lat: route.at(-1)[0], lon: route.at(-1)[1]}]}; }
 $('#btn-3d').addEventListener('click', () => { const t = current; if(!t) return; localStorage.setItem('lr-nav-trip', JSON.stringify(navTrip(t))); location.href = 'nav.html?look=app&map=atlas&dur=150'; });
