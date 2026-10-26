@@ -108,7 +108,8 @@ const T = [0], D = [0]; { const NS = Math.min(20000, Math.max(2000, Math.round(T
   for(let i = 0; i <= NS; i++) sp.push(speedAt(i*SD));
   for(let k = 0; k < 4; k++) box(sp, W(420));                  // velocidade sem saltos
   // curvatura real (graus por metro) no trajeto suavizado, com margem antes/depois da curva
-  const cv = []; for(let i = 0; i <= NS; i++){ const d = i*SD, a = bearingOf(posAt(d - 12).p, posAt(d).p), b = bearingOf(posAt(d).p, posAt(d + 12).p); cv.push(Math.abs(((b - a + 540) % 360) - 180)/12); }
+  const cv = []; for(let i = 0; i <= NS; i++){ const d = i*SD, a = bearingOf(posAt(d - 20).p, posAt(d).p), b = bearingOf(posAt(d).p, posAt(d + 20).p); cv.push(Math.abs(((b - a + 540) % 360) - 180)/20); }
+  box(cv, W(25));
   { const c = cv.slice(), r = W(30); for(let i = 0; i <= NS; i++){ let m = 0; for(let j = Math.max(0, i - r); j <= Math.min(NS, i + r); j++) if(c[j] > m) m = c[j]; cv[i] = m; } }
   const pauses = STOPS.filter(p => p.pause || p.kind === 'fuel').map(p => ({d: p.d, s: Math.max(+p.pause || 0, p.kind === 'fuel' ? 4 : 0)})).sort((a, b) => a.d - b.d), pz = pauses.reduce((a, b) => a + b.s, 0);
   // travagem e arranque suaves nas paragens com pausa (abastecimento)
@@ -117,6 +118,7 @@ const T = [0], D = [0]; { const NS = Math.min(20000, Math.max(2000, Math.round(T
   for(let it = 0; it < 6; it++){ let r = 0; for(let i = 1; i <= NS; i++) r += 2/(sp[i-1] + sp[i]); const kk = Math.max(5, DUR - pz)/r;
     for(let i = 0; i <= NS; i++){ const cap = 220/Math.max(cv[i], 1e-4)*kk/SD; if(sp[i] > cap) sp[i] = cap; }
     const c = sp.slice(); box(c, W(60)); for(let i = 0; i <= NS; i++) sp[i] = Math.min(sp[i], c[i]*1.08); }
+  for(let k = 0; k < 3; k++) box(sp, W(180));                 // acelera e trava de forma progressiva
   const raw = [0]; for(let i = 1; i <= NS; i++) raw.push(raw[i-1] + 2/(sp[i-1] + sp[i]));
   const k = Math.max(5, DUR - pz)/raw.at(-1); let extra = 0, pi = 0;
   for(let i = 1; i <= NS; i++){ const d = i*SD, d0 = (i - 1)*SD;
