@@ -86,7 +86,7 @@ const ES0 = (() => {   // fronteira: a meio entre o último ponto em Portugal e 
 const stepAt = d => steps.find(s => d >= s.d0 && d < s.d1) || steps.at(-1) || {name:'', ref:''};
 const LOOK = Q.get('look') || 'gps';   // 'gps' (navegação) | 'app' (mapa claro, vista de cima, como as apps de animação de viagens)
 const dOfPoint = p => { let bi = 0, bd = 1e18; line.forEach((q, i) => { const dd = hav(q, [p.lon, p.lat]); if(dd < bd){ bd = dd; bi = i; } }); return cum[bi]; };
-const STOPS = (trip.points || []).map(p => ({...p, d: dOfPoint(p)}));
+const STOPS = (trip.points || []).map(p => ({...p, d: dOfPoint(p)})).sort((a, b) => a.d - b.d);
 function posAt(d){ d = Math.max(0, Math.min(TOTAL-.01, d)); let lo = 0, hi = cum.length-1; while(hi-lo > 1){ const m = (lo+hi) >> 1; cum[m] <= d ? lo = m : hi = m; } const f = (d-cum[lo])/((cum[hi]-cum[lo]) || 1); return {p: [line[lo][0] + (line[hi][0]-line[lo][0])*f, line[lo][1] + (line[hi][1]-line[lo][1])*f], i: lo}; }
 const bearingOf = (a, b) => { const y = Math.sin((b[0]-a[0])*rad)*Math.cos(b[1]*rad), x = Math.cos(a[1]*rad)*Math.sin(b[1]*rad) - Math.sin(a[1]*rad)*Math.cos(b[1]*rad)*Math.cos((b[0]-a[0])*rad); return (Math.atan2(y, x)/rad + 360) % 360; };
 const headingAt = (d, look) => bearingOf(posAt(d - look*.3).p, posAt(d + look).p);
