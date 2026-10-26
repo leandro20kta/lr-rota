@@ -212,6 +212,7 @@ textarea.note{width:100%;resize:none;padding:10px 12px;border:1px solid #D5DBE5;
     <div class="chips" id="chips">
       <button class="pill on" data-k="attraction">Pontos turísticos</button><button class="pill on" data-k="restaurant">Restaurantes</button><button class="pill on" data-k="hotel">Hotéis</button><button class="pill" data-k="viewpoint">Miradouros</button><button class="pill" data-k="beach">Praias</button><button class="pill" data-k="museum">Museus</button>
     </div>
+    <button class="btn ghost" id="btn-snow" style="margin-top:12px">❄ Onde há neve esta semana?</button>
     <div class="label">Recentes</div>
     <div id="recent"></div>
     <div style="height:12px"></div>
@@ -323,6 +324,12 @@ textarea.note{width:100%;resize:none;padding:10px 12px;border:1px solid #D5DBE5;
       <div class="item"><div class="grow"><span class="t">Porquê este restaurante?</span><input type="text" id="di-rest-why" class="wide" placeholder="Dose farta, preço justo, polvo à lagareiro…" style="font-size:13px"></div></div>
       <div class="item"><div class="grow"><span class="t">Porquê este alojamento?</span><input type="text" id="di-hotel-why" class="wide" placeholder="Melhor custo-benefício, perto do centro, estacionamento…" style="font-size:13px"></div></div>
       <div class="item"><div class="grow"><span class="t">Pequeno-almoço</span><input type="text" id="di-break" class="wide" placeholder="Incluído no hotel / café X às 8h, 3,50 €…" style="font-size:13px"></div></div>
+    </div>
+    <div class="label">O meu veredicto (fecho do vídeo)</div>
+    <div class="card">
+      <div class="item"><div class="grow"><span class="t">A viagem valeu a pena?</span></div><select id="di-worth"><option>–</option><option>Valeu muito a pena</option><option>Valeu, com ressalvas</option><option>Não valeu</option></select></div>
+      <div class="item"><div class="grow"><span class="t">Onde reservei o alojamento</span><input type="text" id="di-book" class="wide" placeholder="Booking, site da cabana, telefone…" style="font-size:13px"></div></div>
+      <div class="item"><div class="grow"><span class="t">O que achei</span><input type="text" id="di-verdict" class="wide" placeholder="O melhor foi… · voltava por… · não recomendo…" style="font-size:13px"></div></div>
     </div>
     <div class="label">Nota para o vídeo</div>
     <textarea class="note" id="di-note" rows="3" placeholder="Dose farta, dá para dois. Chegar antes das 13h…"></textarea>
@@ -678,6 +685,41 @@ Não inventes nada: o que não estiver confirmado numa fonte fica [CONFIRMAR].`;
     store.set('current', t); stopInfo(p);
   }catch(e){ toast('Erro da IA: ' + e.message, 4000); b.disabled = false; b.textContent = '✨ Pesquisar e escrever com IA'; }
 }
+/* ---------- ❄ onde há neve (previsão Open-Meteo, gratuita) ---------- */
+// estâncias e serras com neve na Península Ibérica (coordenadas aproximadas da zona alta)
+const SNOW_SPOTS = [
+  {name: 'Serra da Estrela (Torre)', q: 'Torre, Serra da Estrela, Portugal', lat: 40.3217, lon: -7.6114, ele: 1993, pais: 'Portugal'},
+  {name: 'Manzaneda', q: 'Estación de Montaña de Manzaneda, Ourense', lat: 42.2611, lon: -7.2930, ele: 1600, pais: 'Galiza'},
+  {name: 'Leitariegos', q: 'Estación de Leitariegos', lat: 42.9934, lon: -6.4167, ele: 1600, pais: 'Astúrias/León'},
+  {name: 'Valgrande-Pajares', q: 'Valgrande-Pajares, Asturias', lat: 42.9875, lon: -5.7781, ele: 1500, pais: 'Astúrias'},
+  {name: 'San Isidro', q: 'Estación de San Isidro, León', lat: 43.0614, lon: -5.3636, ele: 1600, pais: 'León'},
+  {name: 'Alto Campoo', q: 'Alto Campoo, Cantabria', lat: 43.0400, lon: -4.3700, ele: 1800, pais: 'Cantábria'},
+  {name: 'La Pinilla', q: 'La Pinilla, Segovia', lat: 41.2056, lon: -3.4766, ele: 1800, pais: 'Segóvia'},
+  {name: 'Navacerrada', q: 'Puerto de Navacerrada', lat: 40.7853, lon: -4.0103, ele: 1900, pais: 'Madrid'},
+  {name: 'Sierra Nevada', q: 'Sierra Nevada estación de esquí, Granada', lat: 37.0956, lon: -3.3970, ele: 2300, pais: 'Granada'},
+  {name: 'Formigal', q: 'Formigal, Huesca', lat: 42.7717, lon: -0.3656, ele: 1800, pais: 'Aragão'},
+  {name: 'Candanchú', q: 'Candanchú, Huesca', lat: 42.7878, lon: -0.5277, ele: 1600, pais: 'Aragão'},
+  {name: 'Baqueira-Beret', q: 'Baqueira Beret', lat: 42.6963, lon: 0.9353, ele: 1800, pais: 'Catalunha'}
+];
+async function snowFinder(){
+  $('#info').hidden = false; const body = $('#info-body');
+  body.innerHTML = `<h3>❄ Onde há neve</h3><div class="k">Previsão para os próximos 7 dias</div><p class="hint"><span class="spin"></span> A consultar a previsão…</p>`;
+  try{
+    const qs = k => SNOW_SPOTS.map(s => s[k]).join(',');
+    const j = await jget(`https://api.open-meteo.com/v1/forecast?latitude=${qs('lat')}&longitude=${qs('lon')}&elevation=${qs('ele')}&daily=snowfall_sum,temperature_2m_min&current=snow_depth&timezone=auto&forecast_days=7`);
+    const arr = Array.isArray(j) ? j : [j]; const here = pos ? {lat: pos.latitude, lon: pos.longitude} : null;
+    const rows = SNOW_SPOTS.map((s, i) => { const r = arr[i] || {}; const fall = (r.daily?.snowfall_sum || []).reduce((a, b) => a + (b || 0), 0); const days = (r.daily?.snowfall_sum || []).map((v, k) => v > 0.5 ? r.daily.time[k] : null).filter(Boolean);
+      return {...s, fall, depth: Math.round((r.current?.snow_depth || 0)*100), tmin: Math.min(...(r.daily?.temperature_2m_min || [99])), days, km: here ? Math.round(dist(here.lat, here.lon, s.lat, s.lon)/1000) : null}; });
+    rows.sort((a, b) => (b.depth + b.fall) - (a.depth + a.fall) || (a.km ?? 0) - (b.km ?? 0));
+    const dia = d => new Date(d + 'T12:00').toLocaleDateString('pt-PT', {weekday: 'short', day: 'numeric'});
+    body.innerHTML = `<h3>❄ Onde há neve</h3><div class="k">Previsão Open-Meteo · 7 dias · confirme antes de ir (estradas e correntes)</div>` + rows.map((s, i) => `
+      <div class="sight ${s.depth + s.fall > 0 ? 'on' : ''}" style="cursor:default"><span class="ck">${s.depth + s.fall > 0 ? '❄' : ''}</span><div class="grow"><div class="t">${s.name} <span style="font-weight:500;color:var(--muted)">· ${s.pais} · ${s.ele} m</span></div>
+      <div class="s">${s.depth ? `neve no chão agora: ${s.depth} cm · ` : 'sem neve no chão agora · '}${s.fall >= 0.5 ? `vai nevar ~${Math.round(s.fall)} cm (${s.days.map(dia).join(', ')})` : 'sem neve prevista'} · mín. ${Math.round(s.tmin)} °C${s.km != null ? ` · a ${s.km} km` : ''}</div></div>
+      <button class="i" data-snow="${i}" aria-label="Planear viagem" style="width:auto;border-radius:10px;padding:0 10px">Ir</button></div>`).join('') + `<p class="src">Fonte: <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> (previsão; a neve no chão é uma estimativa do modelo).</p>`;
+    $$('#info-body [data-snow]').forEach(b => b.onclick = () => { const s = rows[+b.dataset.snow]; $('#info').hidden = true; go('home'); dest = {lat: s.lat, lon: s.lon, name: s.name, full: s.q}; $('#dest').value = s.name; toast('Destino: ' + s.name + '. Toque em "Planear rota".', 3500); });
+  }catch(e){ body.innerHTML = `<h3>❄ Onde há neve</h3><p class="hint">Não consegui obter a previsão agora (${e.message}). Tente daqui a pouco.</p>`; }
+}
+$('#btn-snow').addEventListener('click', snowFinder);
 $('#btn-addstop').addEventListener('click', async () => { const q = prompt('Nome do local a adicionar (ex.: Castelo de Monção)'); if(!q) return; try{ const r = (await geocode(q))[0]; if(!r) throw 0; current.stops.push({name: q, lat:+r.lat, lon:+r.lon, note:'Adicionado por mim'}); store.set('current', current); renderPlan(); }catch(e){ toast('Local não encontrado'); } });
 $('#btn-start').addEventListener('click', () => go('drive')); $('#btn-start2').addEventListener('click', () => go('drive'));
 
@@ -766,7 +808,9 @@ function buildScript(t){
   B.push({h:'Onde dormi', t: d.hotel ? `Para dormir, o melhor custo-benefício que encontrei foi ${d.hotel}${d.hotelWhy ? ': ' + d.hotelWhy : ''}. Paguei ${eur(sleep)}${d.r3 && d.r3 !== '–' ? ` — ${d.r3.toLowerCase()}` : ''}.` : `${C} — preencher o alojamento no diário (ou dizer que foi bate-volta).`});
   B.push({h:'Pequeno-almoço', t: d.breakfast ? d.breakfast : `${C} — opções de pequeno-almoço (incluído? café perto? preço?).`});
   B.push({h:'Quanto custou', t:`A minha viagem, saindo de ${t.origin.name}${k === 2 ? ', ida e volta' : ''}: ${settings.fuel.toLowerCase()} ${eur(fuel*k)}${toll ? `, portagens ${eur(toll*k)}` : ', sem portagens'}, alimentação ${eur(food)}, alojamento ${eur(sleep)}${other ? `, outros ${eur(other)}` : ''}.\nNo total, este passeio ficou em cerca de ${eur(total)}.` + (d.total == null ? `\n${C} — valores estimados; atualize no diário com o que gastou de verdade.` : '')});
-  B.push({h:'Fecho', t:`E aí, vale a pena gastar cerca de ${eur(total)} para vir conhecer ${t.dest.name}? Comenta aqui em baixo! Diz-me também que outro lugar queres que eu visite e analise para ti — o próximo vídeo pode ser a tua sugestão. Se gostaste, subscreve o Leandro na Rota e ativa o sininho. Até à próxima!`});
+  if(d.book) B.push({h:'Como reservar', t:`Se quiseres ficar onde eu fiquei, reservei em ${d.book}.`});
+  const verdict = d.worth && d.worth !== '–' ? `Agora, o meu veredicto: ${d.worth === 'Valeu muito a pena' ? 'para mim valeu muito a pena' : d.worth === 'Não valeu' ? 'sinceramente, para mim não valeu a pena' : 'valeu, mas com algumas ressalvas'}${d.verdict ? '. ' + d.verdict : ''}. ` : '';
+  B.push({h:'Fecho', t: verdict + `E aí, vale a pena gastar cerca de ${eur(total)} para vir conhecer ${t.dest.name}? Comenta aqui em baixo! Diz-me também que outro lugar queres que eu visite e analise para ti — o próximo vídeo pode ser a tua sugestão. Se gostaste, subscreve o Leandro na Rota e ativa o sininho. Até à próxima!`});
   return B;
 }
 function renderScriptBlocks(B){
@@ -862,13 +906,13 @@ function renderDiary(){
   $('#di-sub').textContent = `${t.dest.name} · ${new Date(t.created).toLocaleDateString('pt-PT', {day:'numeric', month:'short'})}`;
   $('#di-km').textContent = km(dd); $('#di-stops').textContent = t.stops.length + ' paradas';
   $('#di-fuel').value = d.fuel ?? fuelCost(dd).toFixed(2); $('#di-fuel-s').textContent = `GPS: ${km(dd)} · ${(dd/1000*settings.cons/100).toFixed(1)} L`;
-  $('#di-toll').value = d.toll ?? (t.tollM ? tollCost(t.tollM).toFixed(2) : ''); $('#di-rt').classList.toggle('on', d.rt !== false); $('#di-rest-why').value = d.restWhy || ''; $('#di-hotel-why').value = d.hotelWhy || ''; $('#di-break').value = d.breakfast || ''; $('#di-rest').value = d.rest || ''; $('#di-rest-v').value = d.restV || ''; $('#di-hotel').value = d.hotel || ''; $('#di-hotel-v').value = d.hotelV || ''; $('#di-other').value = d.other || ''; $('#di-note').value = d.note || ''; $('#di-r1').value = d.r1 || '–'; $('#di-r2').value = d.r2 || '–'; $('#di-r3').value = d.r3 || '–';
+  $('#di-toll').value = d.toll ?? (t.tollM ? tollCost(t.tollM).toFixed(2) : ''); $('#di-rt').classList.toggle('on', d.rt !== false); $('#di-rest-why').value = d.restWhy || ''; $('#di-hotel-why').value = d.hotelWhy || ''; $('#di-break').value = d.breakfast || ''; $('#di-rest').value = d.rest || ''; $('#di-rest-v').value = d.restV || ''; $('#di-hotel').value = d.hotel || ''; $('#di-hotel-v').value = d.hotelV || ''; $('#di-other').value = d.other || ''; $('#di-note').value = d.note || ''; $('#di-r1').value = d.r1 || '–'; $('#di-r2').value = d.r2 || '–'; $('#di-r3').value = d.r3 || '–'; $('#di-worth').value = d.worth || '–'; $('#di-book').value = d.book || ''; $('#di-verdict').value = d.verdict || '';
   diaryTotal();
 }
 function diaryTotal(){ const v = id => parseFloat($(id).value) || 0; const k = $('#di-rt').classList.contains('on') ? 2 : 1; const tot = (v('#di-fuel') + v('#di-toll'))*k + v('#di-rest-v') + v('#di-hotel-v') + v('#di-other'); $('#di-total').textContent = '€ ' + tot.toFixed(2).replace('.', ','); return tot; }
 ['#di-fuel','#di-toll','#di-rest-v','#di-hotel-v','#di-other'].forEach(s => $(s).addEventListener('input', diaryTotal));
 $('#di-rt').addEventListener('click', () => { $('#di-rt').classList.toggle('on'); diaryTotal(); });
-function collectDiary(){ const d = current.diary; const v = id => $(id).value; d.fuel = parseFloat(v('#di-fuel'))||0; d.toll = parseFloat(v('#di-toll'))||0; d.rest = v('#di-rest'); d.restV = parseFloat(v('#di-rest-v'))||0; d.hotel = v('#di-hotel'); d.hotelV = parseFloat(v('#di-hotel-v'))||0; d.other = parseFloat(v('#di-other'))||0; d.note = v('#di-note'); d.rt = $('#di-rt').classList.contains('on'); d.restWhy = v('#di-rest-why'); d.hotelWhy = v('#di-hotel-why'); d.breakfast = v('#di-break'); d.r1 = v('#di-r1'); d.r2 = v('#di-r2'); d.r3 = v('#di-r3'); d.total = diaryTotal(); }
+function collectDiary(){ const d = current.diary; const v = id => $(id).value; d.fuel = parseFloat(v('#di-fuel'))||0; d.toll = parseFloat(v('#di-toll'))||0; d.rest = v('#di-rest'); d.restV = parseFloat(v('#di-rest-v'))||0; d.hotel = v('#di-hotel'); d.hotelV = parseFloat(v('#di-hotel-v'))||0; d.other = parseFloat(v('#di-other'))||0; d.note = v('#di-note'); d.rt = $('#di-rt').classList.contains('on'); d.restWhy = v('#di-rest-why'); d.hotelWhy = v('#di-hotel-why'); d.breakfast = v('#di-break'); d.r1 = v('#di-r1'); d.r2 = v('#di-r2'); d.r3 = v('#di-r3'); d.worth = v('#di-worth'); d.book = v('#di-book'); d.verdict = v('#di-verdict'); d.total = diaryTotal(); }
 $('#btn-save-diary').addEventListener('click', () => { collectDiary(); const t = current; t.status = 'done'; const i = trips.findIndex(x => x.id === t.id); if(i >= 0) trips[i] = t; else trips.unshift(t); store.set('trips', trips); toast('Viagem guardada'); go('history'); });
 $('#btn-ficha').addEventListener('click', async () => { collectDiary(); const t = current, d = t.diary; const txt = `FICHA — ${t.origin.name} → ${t.dest.name} (${new Date(t.created).toLocaleDateString('pt-PT')})\nDistância: ${km(t.trackDistance || t.distance)} · ${mins(t.duration)}\n${settings.fuel}: ${eur(d.fuel)} · Portagens: ${eur(d.toll)}\nRestaurante: ${d.rest || '-'} · ${eur(d.restV)} · comida ${d.r1}/5 · atendimento ${d.r2}/5\nHotel: ${d.hotel || '-'} · ${eur(d.hotelV)} · ${d.r3}\nOutros: ${eur(d.other)}\nTOTAL: ${eur(d.total)}\nParadas: ${t.stops.map(s => s.name).join(', ')}\nNota: ${d.note || '-'}`; try{ await navigator.clipboard.writeText(txt); toast('Ficha copiada'); }catch(e){ alert(txt); } });
 
