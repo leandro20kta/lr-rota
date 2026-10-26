@@ -418,7 +418,7 @@ async function exportVideo(W0){
   await enc.flush(); muxer.finalize(); if(writable) await writable.close(); try{ wake?.release(); }catch(e){} document.removeEventListener('visibilitychange', onVis);
   GPU_FX = false; const per = k => (T[k]/N).toFixed(0); window.__exp = {tag, N, ms: {frame: per('frame'), wait: per('wait'), draw: per('draw'), enc: per('enc')}, total_s: ((performance.now() - t0)/1000).toFixed(1)};
   document.body.classList.remove('recording'); st.style.width = st.style.height = st.style.transform = ''; HUDS = Math.min(2, devicePixelRatio || 1); map.setPixelRatio(devicePixelRatio); map.resize();
-  if(BENCH){ status(`Teste ${tag}: ${(N/window.__exp.total_s).toFixed(1)} imagens/s`); return; }
+  if(BENCH){ status(`Teste ${tag}: ${(N/window.__exp.total_s).toFixed(1)} imagens/s`); if(GC && Q.get('peek')){ GC.canvas.style.cssText = 'position:fixed;inset:0;width:100vw;height:auto;z-index:50'; document.body.appendChild(GC.canvas); } return; }
   if(opfs){ const f = await opfs.getFile(); lastFile = new File([f], name, {type: 'video/mp4'}); $('#bSave').hidden = false; saveFile(lastFile); }
   else if(!writable){ lastFile = new File([target.buffer], name, {type: 'video/mp4'}); $('#bSave').hidden = false; saveFile(lastFile); }
   status(`Vídeo ${tag} pronto: ${name}` + (writable && !opfs ? ' (guardado onde escolheu)' : ' — está em Transferências'));
