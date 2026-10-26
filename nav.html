@@ -106,6 +106,11 @@ const speedAt = d => { const s = stepAt(d); if(LOOK === 'app' && STOPS.some(p =>
 const T = [0], D = [0]; { const NS = 2000, sp = []; for(let i = 0; i <= NS; i++) sp.push(speedAt(TOTAL*i/NS));
   for(let k = 0; k < 4; k++){ const c = sp.slice(); for(let i = 0; i <= NS; i++){ let a = 0, n = 0; for(let j = -8; j <= 8; j++){ const q = c[i+j]; if(q != null){ a += q; n++; } } sp[i] = a/n; } }
   STOPS.forEach(p => { if(!(p.pause || p.kind === 'fuel')) return; for(let i = 0; i <= NS; i++){ const g = Math.abs(p.d - TOTAL*i/NS); if(g < 500) sp[i] *= Math.max(.05, Math.pow(g/500, .75)); } });
+  // curvas e rotundas: trava o suficiente para o carro nunca rodar mais de ~110°/s no vídeo (o tempo recupera-se nas retas)
+  { const pz = STOPS.filter(p => p.pause || p.kind === 'fuel').reduce((acc, p) => acc + Math.max(+p.pause || 0, p.kind === 'fuel' ? 4 : 0), 0), twv = i => TW[Math.min(TW.length - 1, Math.round(TOTAL*i/NS/50))] || 0;
+    for(let it = 0; it < 5; it++){ let r = 0; for(let i = 1; i <= NS; i++) r += 2/(sp[i-1] + sp[i]); const kk = Math.max(5, DUR - pz)/r;
+      for(let i = 0; i <= NS; i++){ const v = twv(i); if(v > 12){ const cap = 110*240/v*kk*NS/TOTAL; if(sp[i] > cap) sp[i] = cap; } }
+      const c = sp.slice(); for(let i = 0; i <= NS; i++){ let a2 = 0, n = 0; for(let j = -3; j <= 3; j++){ const q = c[i+j]; if(q != null){ a2 += Math.min(q, c[i]*1.6); n++; } } sp[i] = Math.min(c[i], a2/n*1.05) || c[i]; } } }
   const raw = [0]; for(let i = 1; i <= NS; i++) raw.push(raw[i-1] + 2/(sp[i-1] + sp[i]));
   const pauses = STOPS.filter(p => p.pause || p.kind === 'fuel').map(p => ({d: p.d, s: Math.max(+p.pause || 0, p.kind === 'fuel' ? 4 : 0)})).sort((a, b) => a.d - b.d); const k = Math.max(5, DUR - pauses.reduce((a, b) => a + b.s, 0))/raw.at(-1); let extra = 0, pi = 0;
   for(let i=1;i<=NS;i++){ const d = TOTAL*i/NS; while(pi < pauses.length && pauses[pi].d <= d){ T.push(raw[i-1]*k + extra); D.push(pauses[pi].d); extra += pauses[pi].s; T.push(raw[i-1]*k + extra); D.push(pauses[pi].d); pi++; } T.push(raw[i]*k + extra); D.push(d); } }
@@ -316,7 +321,7 @@ function frame(u, first){
   const head = headingAt(d, LOOK === 'app' ? Math.max(120, visLenCam()*1.6) : mw ? 420 : 160); if(camBear === null || first) camBear = head; let db = ((head - camBear + 540) % 360) - 180; camBear = (camBear + db*(first ? 1 : LOOK === 'app' ? .06 + .06*twistAt(d) : .12) + 360) % 360;
   carState.lng = p[0]; carState.lat = p[1]; carState.dist = d; carState.alt = (map.queryTerrainElevation(p) || 0); const visLen = 4.8*(LOOK === 'app' ? carScaleApp(appZoom ?? 13) : CAR_SCALE*Math.pow(2, 16.6 - map.getZoom()));   // comprimento do carro "no mapa" (m)
   const carHead = headingAt(d, LOOK === 'app' ? Math.max(25, visLen*.35) : 25), yawT = (90 - carHead)*rad;
-  if(first || carState.yawS == null) carState.yawS = yawT; else carState.yawS += ((yawT - carState.yawS + 3*Math.PI) % (2*Math.PI) - Math.PI)*.3; carState.yaw = carState.yawS;
+  if(first || carState.yawS == null) carState.yawS = yawT; else { const dy = (yawT - carState.yawS + 3*Math.PI) % (2*Math.PI) - Math.PI; carState.yawS += Math.max(-.12, Math.min(.12, dy*.25)); } carState.yaw = carState.yawS;
   { const dd = first || carState.lastD == null ? 0 : Math.max(0, d - carState.lastD); carState.lastD = d; carState.wheel = (carState.wheel || 0) + Math.min(.3, dd/.34/CAR_SCALE*3); }
   { const h0 = headingAt(d, Math.max(15, visLen*.15)), h1 = headingAt(d + Math.max(30, visLen*.5), Math.max(15, visLen*.15)); const turn = ((h1 - h0 + 540) % 360) - 180; const target = Math.max(-.55, Math.min(.55, -turn*rad*1.4)); carState.steer = (carState.steer || 0) + (target - (carState.steer || 0))*.25; }
   if(LOOK === 'app'){
