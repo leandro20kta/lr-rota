@@ -60,6 +60,8 @@ const DUR = +(Q.get('dur') || 75);            // segundos de vídeo para a viage
 
 /* ---------- viagem ---------- */
 let trip;
+const R = 6371008.8, rad = Math.PI/180;
+const hav = (a, b) => { const dLa = (b[1]-a[1])*rad, dLo = (b[0]-a[0])*rad, x = Math.sin(dLa/2)**2 + Math.cos(a[1]*rad)*Math.cos(b[1]*rad)*Math.sin(dLo/2)**2; return 2*R*Math.asin(Math.sqrt(x)); };
 function smoothTrack(pts){   // GPS real: tira o "tremido" (média móvel) e pontos repetidos
   const out = []; for(let i = 0; i < pts.length; i++){ let la = 0, lo = 0, n = 0; for(let k = -3; k <= 3; k++){ const q = pts[i+k]; if(q){ la += q[0]; lo += q[1]; n++; } } const r = [la/n, lo/n]; if(!out.length || hav([out.at(-1)[1], out.at(-1)[0]], [r[1], r[0]]) > 6) out.push(r); } if(pts.length) out.push(pts.at(-1)); return out; }
 function fromGPX(txt){ const x = new DOMParser().parseFromString(txt, 'application/xml'); const pts = [...x.querySelectorAll('trkpt, rtept')].map(e => [+e.getAttribute('lat'), +e.getAttribute('lon')]); const wpt = [...x.querySelectorAll('wpt')].map(e => ({name: e.querySelector('name')?.textContent || 'Paragem', lat: +e.getAttribute('lat'), lon: +e.getAttribute('lon'), kind: /abastec|fuel|gas|repsol|galp|bp|cepsa|shell/i.test(e.textContent) ? 'fuel' : undefined}));
@@ -72,8 +74,6 @@ if(!trip && !PACK){ location.replace(location.pathname + '?pack=studio/packs/pon
 if(!trip){ status('Sem viagem. Planeie uma rota na app.'); throw new Error('sem viagem'); }
 if(trip.gps && !trip.smoothed){ trip.route = smoothTrack(trip.route); trip.smoothed = true; }
 const line = trip.route.map(([la, lo]) => [lo, la]);
-const R = 6371008.8, rad = Math.PI/180;
-const hav = (a, b) => { const dLa = (b[1]-a[1])*rad, dLo = (b[0]-a[0])*rad, x = Math.sin(dLa/2)**2 + Math.cos(a[1]*rad)*Math.cos(b[1]*rad)*Math.sin(dLo/2)**2; return 2*R*Math.asin(Math.sqrt(x)); };
 const cum = [0]; for(let i=1;i<line.length;i++) cum.push(cum[i-1] + hav(line[i-1], line[i])); const TOTAL = cum.at(-1);
 // classe de estrada por troço (autoestrada mais rápida no vídeo, vilas mais devagar)
 const steps = (trip.steps || []).map(s => ({...s})); { let acc = 0; steps.forEach(s => { s.d0 = acc; acc += s.dist; s.d1 = acc; }); }
