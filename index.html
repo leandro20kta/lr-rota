@@ -503,9 +503,9 @@ async function overpass(body){
   finally{ clearTimeout(to); ctl.abort(); }
 }
 // pontos turísticos com artigo na Wikipédia, por proximidade (rápido e fiável; traz o título para a história)
-const NOT_SIGHT = /freguesia|aldeia|lugar d|município|concelho|cidade|vila portuguesa|vila e |localidade|rio |ribeira|ribeiro|estação|escola|clube|futebol|estrada|autoestrada|empresa|hospital|bairro|serra |monte |paróquia/i;
+const NOT_SIGHT = /freguesia|aldeia|lugar d|município|concelho|distrito|cidade|vila portuguesa|vila e |localidade|rio |ribeira d[aeo]s? |curso de água|ribeiro|estação|escola|universidade|faculdade|agrupamento|clube|futebol|estrada|autoestrada|empresa|hospital|bairro|serra |monte |paróquia/i;
 async function wikiPlaces(p, radius=3000){
-  const u = `https://pt.wikipedia.org/w/api.php?action=query&generator=geosearch&ggscoord=${p.lat}|${p.lon}&ggsradius=${radius}&ggslimit=100&prop=coordinates|description|pageprops&colimit=max&ppprop=wikibase_item&format=json&origin=*`;
+  const u = `https://pt.wikipedia.org/w/api.php?action=query&generator=geosearch&ggscoord=${p.lat}|${p.lon}&ggsradius=${radius}&ggslimit=300&prop=coordinates|description|pageprops&colimit=max&ppprop=wikibase_item&format=json&origin=*`;
   const j = await (await fetch(u)).json(); const pages = Object.values(j.query?.pages || {});
   return pages.filter(g => g.coordinates && !NOT_SIGHT.test(g.description || '') && !NOT_SIGHT.test(g.title) && g.title.toLowerCase() !== (p.name||'').toLowerCase())
     .map(g => { const lat = g.coordinates[0].lat, lon = g.coordinates[0].lon, t = g.title, ds = g.description || '';
@@ -558,7 +558,7 @@ $('#btn-plan').addEventListener('click', async () => {
     trip.legs = legs; trip.route = legs.flatMap(l => l.coords);
     trip.distance = legs.reduce((s,l) => s + (l.type==='car' ? l.distance : 0), 0); trip.flightKm = legs.filter(l=>l.type==='plane').reduce((s,l)=> s+l.distance,0)/1000;
     trip.duration = legs.reduce((s,l) => s + l.duration, 0); trip.tollM = legs.reduce((s,l) => s + l.tollM, 0); trip.refs = legs.flatMap(l => l.refs);
-    try{ trip.pois = await pois(dest, kinds); }catch(e){ trip.pois = []; }
+    try{ trip.pois = await pois(dest, kinds); if(!trip.pois.length){ await new Promise(r => setTimeout(r, 1500)); trip.pois = await pois(dest, kinds); } }catch(e){ trip.pois = []; }   // 2.ª tentativa se os serviços falharem
     const notab = p => -(p.fame || 0)*0.25 + (p.wiki || p.wd ? 0 : 3) + (p.heritage ? 0 : 1) + p.d/4000;
     const seen = new Set(); trip.stops = trip.pois.filter(p => ['attraction','viewpoint','museum','beach'].includes(p.kind)).sort((a,b) => notab(a) - notab(b)).filter(p => { const k = p.name.toLowerCase(); if(seen.has(k)) return false; seen.add(k); return true; }).slice(0,4).map(p => ({...p, note: p.kind === 'viewpoint' ? 'Miradouro' : p.kind === 'museum' ? 'Museu' : p.kind === 'beach' ? 'Praia' : 'Ponto turístico'}));
     current = trip; store.set('current', current);
