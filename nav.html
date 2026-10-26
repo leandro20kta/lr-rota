@@ -40,7 +40,7 @@ body.recording #stage{width:1280px;height:720px;transform-origin:0 0}
   <div class="credit" id="credit">© OpenStreetMap · OpenMapTiles · OpenFreeMap</div>
   <div id="status"></div>
 </div>
-<div id="ctl"><button id="bCloud">☁ Nuvem</button><button id="bOpen">📂 Abrir viagem</button><button id="bPlay">▶ Ver viagem</button><button id="bRec" class="rec">● Gravar vídeo (MP4)</button><button id="b1080" class="rec">⬇ Exportar 1080p (rápido)</button><button id="b4k" class="rec">⬇ Exportar 4K (DaVinci)</button><button id="bSave" hidden>⬇ Guardar vídeo</button><input type="file" id="fOpen" accept=".json,.gpx,application/json,application/gpx+xml" hidden></div>
+<div id="ctl"><button id="bCloud">☁ Nuvem</button><button id="bVids">📁 Vídeos exportados</button><button id="bOpen">📂 Abrir viagem</button><button id="bPlay">▶ Ver viagem</button><button id="bRec" class="rec">● Gravar vídeo (MP4)</button><button id="b1080" class="rec">⬇ Exportar 1080p (rápido)</button><button id="b4k" class="rec">⬇ Exportar 4K (DaVinci)</button><button id="bSave" hidden>⬇ Guardar vídeo</button><input type="file" id="fOpen" accept=".json,.gpx,application/json,application/gpx+xml" hidden></div>
 <canvas id="rec" width="1280" height="720" hidden></canvas>
 <script src="vendor/maplibre/maplibre-gl.js"></script>
 <script src="cloud.js"></script>
@@ -340,6 +340,18 @@ $('#bRec').onclick = () => {
 const MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 function saveFile(f){ if(MOBILE && navigator.canShare && navigator.canShare({files: [f]})) return navigator.share({files: [f], title: 'LR Rota'}).catch(() => {}); const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 60000); }
 $('#bSave').onclick = () => { if(lastFile) saveFile(lastFile); };
+async function showExports(hl){
+  let files = []; try{ const root = await navigator.storage.getDirectory(); for await (const [n, h] of root.entries()) if(h.kind === 'file' && /\.mp4$/.test(n)){ const f = await h.getFile(); files.push({n, f, h}); } }catch(e){}
+  files.sort((a, b) => b.f.lastModified - a.f.lastModified);
+  const box = document.createElement('div'); box.style.cssText = 'position:fixed;inset:0;z-index:20;background:rgba(10,14,20,.7);display:flex;align-items:center;justify-content:center;padding:16px';
+  box.innerHTML = `<div style="background:#fff;color:#1F2328;border-radius:16px;padding:18px;width:min(560px,100%);max-height:85vh;overflow:auto;font:600 15px Inter,system-ui"><b style="font-size:18px">📁 Vídeos exportados</b><p style="font-weight:500;color:#5F6368;margin:6px 0 10px">Ficam guardados neste navegador até os guardar no computador ou apagar.</p>${files.map((x, i) => `<div style="display:flex;gap:8px;align-items:center;padding:10px;border-radius:10px;margin-top:6px;background:${x.n === hl ? '#EAF8F0' : '#F6F7F9'}"><div style="flex:1;min-width:0"><div style="font-weight:700;overflow-wrap:anywhere">${x.n}</div><div style="font-weight:500;color:#5F6368">${(x.f.size/1e6).toFixed(0)} MB · ${new Date(x.f.lastModified).toLocaleString('pt-PT')}</div></div><button data-save="${i}" style="padding:9px 12px;border-radius:9px;border:0;background:#0A5BD6;color:#fff;font:700 14px Inter">⬇ Guardar</button><button data-del="${i}" style="padding:9px 10px;border-radius:9px;border:0;background:#eee;font:700 14px Inter">🗑</button></div>`).join('') || '<p>Ainda não há vídeos exportados.</p>'}<button id="vX" style="margin-top:12px;padding:10px 14px;border-radius:10px;border:0;background:#1F2328;color:#fff;font:700 14px Inter">Fechar</button></div>`;
+  document.body.appendChild(box); box.querySelector('#vX').onclick = () => box.remove();
+  box.querySelectorAll('[data-save]').forEach(b => b.onclick = async () => { const x = files[+b.dataset.save];
+    if(window.showSaveFilePicker){ try{ const h = await showSaveFilePicker({suggestedName: x.n, startIn: 'downloads', types: [{description: 'Vídeo MP4', accept: {'video/mp4': ['.mp4']}}]}); const w = await h.createWritable(); b.textContent = 'A copiar…'; await x.f.stream().pipeTo(w); b.textContent = '✅ Guardado'; return; }catch(e){ if(e.name === 'AbortError') return; } }
+    saveFile(new File([x.f], x.n, {type: 'video/mp4'})); b.textContent = '✅ Enviado'; });
+  box.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => { const x = files[+b.dataset.del]; try{ const root = await navigator.storage.getDirectory(); await root.removeEntry(x.n); }catch(e){} box.remove(); showExports(); });
+}
+$('#bVids').onclick = () => showExports();
 // abrir uma viagem gravada (JSON da app no telemóvel, ou GPX)
 $('#bOpen').onclick = () => $('#fOpen').click();
 $('#bCloud').onclick = async () => {
@@ -387,15 +399,18 @@ $('#b4k').onclick = () => exportVideo(3840).catch(e => { status('Erro na exporta
 $('#b1080').onclick = () => exportVideo(1920).catch(e => { status('Erro na exportação: ' + e.message); console.error(e); });
 async function exportVideo(W0){
   if(!('VideoEncoder' in window)){ status('A exportação precisa do Chrome ou Edge no computador (no iPhone use "Gravar vídeo").'); return; }
+  const W_ = +(Q.get('w') || W0), tag0 = W_ >= 3840 ? '4K' : Math.round(W_*9/16) + 'p', stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+  const name = `lr-rota-${(STOPS[0]?.name || 'viagem').replace(/\W+/g, '-')}-${(STOPS.at(-1)?.name || '').replace(/\W+/g, '-')}-${tag0}-${stamp}.mp4`;
+  let picked = null; if(!+(Q.get('bench') || 0) && window.showSaveFilePicker && navigator.userActivation?.isActive){ try{ picked = await showSaveFilePicker({suggestedName: name, startIn: 'downloads', types: [{description: 'Vídeo MP4', accept: {'video/mp4': ['.mp4']}}]}); }catch(e){ if(e.name === 'AbortError'){ status('Exportação cancelada.'); return; } } }
   const { Muxer, ArrayBufferTarget, FileSystemWritableFileStreamTarget } = await import('./vendor/mp4-muxer/mp4-muxer.mjs');
   const W = +(Q.get('w') || W0), H = Math.round(W*9/16), FPS = +(Q.get('fps') || 30), BR = +(Q.get('br') || (W >= 3840 ? 35e6 : W >= 2560 ? 20e6 : 12e6)), PR = W >= 2560 ? W/1920 : 1;
   const BENCH = +(Q.get('bench') || 0), U0 = +(Q.get('from') || 0);
   const cfg = {codec: W >= 3840 ? 'avc1.640034' : W >= 2560 ? 'avc1.640033' : 'avc1.640028', width: W, height: H, bitrate: BR, framerate: FPS, hardwareAcceleration: 'prefer-hardware', avc: {format: 'avc'}};
   if(!(await VideoEncoder.isConfigSupported(cfg)).supported){ delete cfg.hardwareAcceleration; if(!(await VideoEncoder.isConfigSupported(cfg)).supported){ status('Este computador não codifica este tamanho em H.264.'); return; } }
-  const tag = W >= 3840 ? '4K' : H + 'p', name = `lr-rota-${(STOPS[0]?.name || 'viagem').replace(/\W+/g, '-')}-${(STOPS.at(-1)?.name || '').replace(/\W+/g, '-')}-${tag}.mp4`;
+  const tag = tag0;
   let target, writable = null, opfs = null;
-  if(!BENCH && window.showSaveFilePicker && navigator.userActivation?.isActive){ try{ const h = await showSaveFilePicker({suggestedName: name, types: [{description: 'Vídeo MP4', accept: {'video/mp4': ['.mp4']}}]}); writable = await h.createWritable(); target = new FileSystemWritableFileStreamTarget(writable); }catch(e){ if(e.name === 'AbortError') return; } }
-  if(!target && !BENCH){ try{ const root = await navigator.storage.getDirectory(); opfs = await root.getFileHandle('export-' + Date.now() + '.mp4', {create: true}); writable = await opfs.createWritable(); target = new FileSystemWritableFileStreamTarget(writable); }catch(e){ console.warn('OPFS', e); } }
+  if(picked){ writable = await picked.createWritable(); target = new FileSystemWritableFileStreamTarget(writable); }
+  if(!target && !BENCH){ try{ const root = await navigator.storage.getDirectory(); opfs = await root.getFileHandle(name, {create: true}); writable = await opfs.createWritable(); target = new FileSystemWritableFileStreamTarget(writable); }catch(e){ console.warn('OPFS', e); } }
   if(!target) target = new ArrayBufferTarget();
   const muxer = new Muxer({target, video: {codec: 'avc', width: W, height: H, frameRate: FPS}, fastStart: writable ? false : 'in-memory'});
   const enc = new VideoEncoder({output: (c, m) => muxer.addVideoChunk(c, m), error: e => status('Erro do codificador: ' + e.message)}); enc.configure(cfg);
@@ -419,9 +434,10 @@ async function exportVideo(W0){
   GPU_FX = false; const per = k => (T[k]/N).toFixed(0); window.__exp = {tag, N, ms: {frame: per('frame'), wait: per('wait'), draw: per('draw'), enc: per('enc')}, total_s: ((performance.now() - t0)/1000).toFixed(1)};
   document.body.classList.remove('recording'); st.style.width = st.style.height = st.style.transform = ''; HUDS = Math.min(2, devicePixelRatio || 1); map.setPixelRatio(devicePixelRatio); map.resize();
   if(BENCH){ status(`Teste ${tag}: ${(N/window.__exp.total_s).toFixed(1)} imagens/s`); if(GC && Q.get('peek')){ GC.canvas.style.cssText = 'position:fixed;inset:0;width:100vw;height:auto;z-index:50'; document.body.appendChild(GC.canvas); } return; }
-  if(opfs){ const f = await opfs.getFile(); lastFile = new File([f], name, {type: 'video/mp4'}); $('#bSave').hidden = false; saveFile(lastFile); }
-  else if(!writable){ lastFile = new File([target.buffer], name, {type: 'video/mp4'}); $('#bSave').hidden = false; saveFile(lastFile); }
-  status(`Vídeo ${tag} pronto: ${name}` + (writable && !opfs ? ' (guardado onde escolheu)' : ' — está em Transferências'));
+  if(picked){ status(`✅ Vídeo ${tag} guardado: ${picked.name}`); return; }
+  if(opfs){ lastFile = new File([await opfs.getFile()], name, {type: 'video/mp4'}); }
+  else { lastFile = new File([target.buffer], name, {type: 'video/mp4'}); }
+  $('#bSave').hidden = false; status(`Vídeo ${tag} pronto. Toque em "⬇ Guardar vídeo" para o pôr em Transferências.`); showExports(name);
 }
 if(Q.get('capture')) $('#ctl').style.display = 'none';
 </script></body></html>
