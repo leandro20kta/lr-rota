@@ -82,6 +82,20 @@ a{color:var(--brand)}
 .stop .grow{flex:1;min-width:0}
 .stop .t{font-size:14px;font-weight:600}.stop .s{font-size:12px;color:var(--muted)}
 .stop .x{border:0;background:transparent;color:var(--muted);font-size:18px;padding:4px 8px}
+.stop .i,.sight .i{border:0;background:var(--brand-tint);color:var(--brand);font-weight:800;border-radius:50%;width:30px;height:30px;flex:none}
+.sight{display:flex;align-items:center;gap:10px;padding:9px 10px;border:1.5px solid var(--line);border-radius:12px;margin-top:8px;background:#fff;cursor:pointer}
+.sight.on{border-color:#1E9E58;background:#EAF8F0}
+.sight .ck{width:24px;height:24px;border-radius:50%;border:2px solid var(--line);flex:none;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff}
+.sight.on .ck{background:#1E9E58;border-color:#1E9E58}
+.sight .grow{flex:1;min-width:0}.sight .t{font-size:14px;font-weight:700}.sight .s{font-size:12px;color:var(--muted)}
+.info{position:fixed;inset:0;z-index:60;background:rgba(15,23,42,.45);display:flex;align-items:flex-end;justify-content:center}
+.info[hidden]{display:none}
+.info-card{position:relative;background:#fff;width:100%;max-width:640px;max-height:86vh;overflow:auto;border-radius:22px 22px 0 0;padding:20px 18px calc(24px + var(--sab))}
+.info-x{position:absolute;right:12px;top:12px;border:0;background:var(--soft);border-radius:50%;width:34px;height:34px;font-size:16px}
+.info h3{margin:0 34px 2px 0;font-size:21px;letter-spacing:-.3px}.info .k{color:var(--muted);font-size:13px;font-weight:600}
+.info .facts{margin:12px 0;display:grid;gap:6px;font-size:14px}.info .facts b{font-weight:700}
+.info .say{background:var(--accent-tint);border-radius:14px;padding:12px 14px;font-size:15px;line-height:1.5;white-space:pre-wrap}
+.info .src{font-size:12px;color:var(--muted);margin-top:8px}
 .tabs{display:flex;justify-content:space-around;padding:8px 0 calc(var(--sab) + 8px);border-top:1px solid #EEF1F5;background:#fff}
 .tab{display:flex;flex-direction:column;align-items:center;gap:4px;width:72px;border:0;background:transparent;color:var(--muted);font-size:11px;font-weight:600}
 .tab.on{color:var(--brand);font-weight:700}
@@ -219,6 +233,8 @@ textarea.note{width:100%;resize:none;padding:10px 12px;border:1px solid #D5DBE5;
     <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:13px;font-weight:700">Paradas sugeridas</span><button class="pill" data-go="script" style="background:transparent;color:var(--accent);padding:0;margin-right:12px">Roteiro</button><button class="pill" data-go="guide" style="background:transparent;color:var(--brand);padding:0">Ver guia do destino</button></div>
     <div id="stops"></div>
     <button class="btn sm ghost" id="btn-addstop">+ Adicionar parada</button>
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-top:6px;gap:8px"><span style="font-size:13px;font-weight:700" id="sights-title">Pontos turísticos</span><span class="hint" style="margin:0;text-align:right" id="sights-hint">toque para escolher · ordem automática</span></div>
+    <div id="sights"></div>
     <div class="row"><button class="btn ghost" data-go="video">Vídeo</button><button class="btn accent" id="btn-start"><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M6 4l14 8-14 8z"/></svg>Iniciar viagem</button></div>
   </div>
 </section>
@@ -392,6 +408,7 @@ textarea.note{width:100%;resize:none;padding:10px 12px;border:1px solid #D5DBE5;
   </div>
 </section>
 
+<div id="info" class="info" hidden><div class="info-card"><button class="info-x" id="info-x" aria-label="Fechar">✕</button><div id="info-body"></div></div></div>
 <div class="toast" id="toast"></div>
 </div>
 
@@ -539,7 +556,7 @@ $('#btn-plan').addEventListener('click', async () => {
     const seen = new Set(); trip.stops = trip.pois.filter(p => ['attraction','viewpoint','museum','beach'].includes(p.kind)).sort((a,b) => notab(a) - notab(b)).filter(p => { const k = p.name.toLowerCase(); if(seen.has(k)) return false; seen.add(k); return true; }).slice(0,4).map(p => ({...p, note: p.kind === 'viewpoint' ? 'Miradouro' : p.kind === 'museum' ? 'Museu' : p.kind === 'beach' ? 'Praia' : 'Ponto turístico'}));
     current = trip; store.set('current', current);
     const rec = store.get('recent', []); rec.unshift({o: origin.name, d: dest.name, km: Math.round(trip.distance/1000), mode}); store.set('recent', rec.slice(0,5));
-    go('plan');
+    go('plan'); if(trip.mode === 'car' && trip.stops.length) reroute(trip);   // a rota passa pelas paragens, pela melhor ordem
   }catch(e){ console.error(e); toast('Não consegui calcular: ' + e.message); }
   btn.disabled = false; btn.innerHTML = 'Planear rota';
 });
@@ -553,8 +570,10 @@ function renderPlan(){
   $('#st-fuel-l').textContent = settings.fuel; $('#st-fuel').textContent = eur(fuelCost(t.distance)); $('#st-toll').textContent = t.tollM ? eur(tollCost(t.tollM)) : '€0';
   $('#plan-note').textContent = `Estimativa: ${settings.cons} L/100 km × ${eur(settings.price)}/L` + (t.refs.length ? ` · autoestradas: ${t.refs.join(', ')}` : ' · sem portagens detetadas');
   $('#plan-count').textContent = `${t.stops.length} paradas · 1 destino`;
-  $('#stops').innerHTML = t.stops.map((s,i) => `<div class="stop"><span class="n">${i+1}</span><div class="grow"><div class="t">${s.name}</div><div class="s">${s.note||''}</div></div><button class="x" data-rm="${i}">✕</button></div>`).join('') || '<p class="hint">Sem pontos turísticos encontrados no mapa. Adicione manualmente.</p>';
-  $$('#stops [data-rm]').forEach(b => b.addEventListener('click', () => { t.stops.splice(+b.dataset.rm,1); store.set('current', t); renderPlan(); }));
+  $('#stops').innerHTML = t.stops.map((s,i) => `<div class="stop"><span class="n">${i+1}</span><div class="grow"><div class="t">${s.name}</div><div class="s">${s.note||''}</div></div><button class="i" data-sinfo="${i}" aria-label="Resumo">i</button><button class="x" data-rm="${i}">✕</button></div>`).join('') || '<p class="hint">Sem pontos turísticos encontrados no mapa. Adicione manualmente.</p>';
+  $$('#stops [data-rm]').forEach(b => b.addEventListener('click', () => { t.stops.splice(+b.dataset.rm,1); store.set('current', t); renderPlan(); clearTimeout(rerouting); rerouting = setTimeout(() => reroute(t), 500); }));
+  $$('#stops [data-sinfo]').forEach(b => b.addEventListener('click', () => stopInfo(t.stops[+b.dataset.sinfo])));
+  renderSights();
   if(!mapPlan){ mapPlan = L.map('map-plan', {zoomControl:false, attributionControl:true}); mapPlan._tiles = tileLayer(isNight()).addTo(mapPlan); }
   if(planLayer) planLayer.remove(); planLayer = L.layerGroup().addTo(mapPlan);
   t.legs.forEach(l => L.polyline(l.coords, l.type === 'plane' ? {color:'#2F7CFF', weight:4, dashArray:'2 10'} : Object.assign({}, lineStyle())).addTo(planLayer));
@@ -562,6 +581,93 @@ function renderPlan(){
   t.stops.forEach((s,i) => L.marker([s.lat,s.lon], {icon: L.divIcon({className:'', html:`<div style="width:24px;height:24px;border-radius:50%;background:#0A5BD6;color:#fff;font:800 11px Inter;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3)">${i+1}</div>`, iconSize:[24,24], iconAnchor:[12,12]})}).bindPopup(s.name).addTo(planLayer));
   L.marker([t.dest.lat, t.dest.lon]).bindPopup(t.dest.name).addTo(planLayer);
   setTimeout(() => mapPlan.invalidateSize(), 50); setTimeout(() => mapPlan.fitBounds(L.latLngBounds(t.route), {paddingTopLeft:[30,110], paddingBottomRight:[30, 360]}), 120);
+}
+/* ---------- pontos turísticos: escolher, ordenar automaticamente e preparar as falas do vlog ---------- */
+const SIGHT_KINDS = ['attraction', 'viewpoint', 'museum', 'beach'];
+const KPT = {attraction:'ponto turístico', viewpoint:'miradouro', museum:'museu', beach:'praia', restaurant:'restaurante', hotel:'alojamento'};
+const sightsOf = t => (t.pois || []).filter(p => SIGHT_KINDS.includes(p.kind));
+const isSel = (t, p) => (t.stops || []).some(s => s.name === p.name);
+const fmtD = d => d < 1000 ? Math.round(d) + ' m' : (d/1000).toFixed(1).replace('.', ',') + ' km';
+function renderSights(){
+  const t = current; if(!t) return; const list = sightsOf(t);
+  $('#sights-title').textContent = `Pontos turísticos em ${t.dest.name}` + (list.length ? ` (${list.length})` : '');
+  $('#sights').innerHTML = list.map((p, i) => `<div class="sight ${isSel(t, p) ? 'on' : ''}" data-si="${i}"><span class="ck">${isSel(t, p) ? '✓' : ''}</span><div class="grow"><div class="t">${p.name}</div><div class="s">${KPT[p.kind] || 'local'} · ${fmtD(p.d || 0)} do centro${p.fee === 'no' ? ' · grátis' : p.fee === 'yes' ? ' · pago' : ''}${p.hours ? ' · tem horário' : ''}</div></div><button class="i" data-info="${i}" aria-label="Resumo">i</button></div>`).join('') || '<p class="hint">Sem pontos turísticos encontrados perto do destino.</p>';
+  $$('#sights [data-si]').forEach(el => el.addEventListener('click', e => { if(e.target.closest('[data-info]')) return; toggleSight(list[+el.dataset.si]); }));
+  $$('#sights [data-info]').forEach(b => b.addEventListener('click', () => stopInfo(list[+b.dataset.info])));
+}
+let rerouting = null;
+function toggleSight(p){
+  const t = current; if(isSel(t, p)) t.stops = t.stops.filter(s => s.name !== p.name);
+  else t.stops.push({name: p.name, lat: p.lat, lon: p.lon, kind: p.kind, wiki: p.wiki, wd: p.wd, hours: p.hours, fee: p.fee, website: p.website, heritage: p.heritage, d: p.d, note: KPT[p.kind] || ''});
+  store.set('current', t); renderPlan(); clearTimeout(rerouting); rerouting = setTimeout(() => reroute(t), 700);
+}
+// ordem ótima (OSRM "trip": saída fixa no início, destino fixo no fim) e rota a passar por todas as paragens
+async function reroute(t){
+  if(t.mode !== 'car') return;
+  $('#plan-count').textContent = 'A ordenar a rota…';
+  try{
+    if(t.stops.length > 1){ const pts = [t.origin, ...t.stops, t.dest].map(p => `${p.lon},${p.lat}`).join(';');
+      const j = await (await fetch(`https://router.project-osrm.org/trip/v1/driving/${pts}?roundtrip=false&source=first&destination=last&overview=false`)).json();
+      if(j.code === 'Ok') t.stops = j.waypoints.map((w, i) => ({i, k: w.waypoint_index})).filter(o => o.i > 0 && o.i <= t.stops.length).sort((a, b) => a.k - b.k).map(o => t.stops[o.i - 1]); }
+    const r = await route(t.origin, t.dest, t.stops); t.legs = [{type: 'car', ...r}]; t.route = r.coords; t.distance = r.distance; t.duration = r.duration; t.tollM = r.tollM; t.refs = r.refs;
+    store.set('current', t); if(current === t) renderPlan();
+  }catch(e){ toast('Não consegui reordenar: ' + e.message); if(current === t) renderPlan(); }
+}
+// resumo do local + falas para o vlog (dados reais da Wikipédia/OpenStreetMap; o que não se sabe fica marcado para confirmar)
+const LIKE = {viewpoint: 'paisagem e pôr do sol', museum: 'história e cultura', beach: 'praia e mar', attraction: 'história e lugares bonitos', restaurant: 'boa comida', hotel: 'conforto'};
+function vlogLines(p, E, city){
+  const L = [], k = KPT[p.kind] || 'lugar';
+  L.push(`Galera, chegamos em ${p.name}, ${k === 'praia' ? 'uma' : 'um'} ${k} aqui em ${city}.`);
+  if(E.extract) L.push(E.extract.split(/(?<=\.)\s+/).slice(0, 2).join(' '));
+  if(E.year && !(E.extract || '').includes(E.year)) L.push(`A história desse lugar começa lá em ${E.year}.`);
+  L.push(p.hours ? `Ele funciona ${fmtHours(p.hours)}.` : 'Horário: [CONFIRMAR antes de gravar].');
+  L.push(p.fee === 'no' ? 'E o melhor: a entrada é gratuita.' : p.fee === 'yes' ? 'A entrada é paga: [CONFIRMAR o preço].' : 'Entrada: [CONFIRMAR se é paga ou gratuita].');
+  L.push(`Se você curte ${LIKE[p.kind] || 'conhecer lugares novos'}, vale muito a pena vir conhecer. E aí, você já conhecia? Conta aqui nos comentários.`);
+  return L.join('\n');
+}
+async function stopInfo(p){
+  const t = current, city = t.dest.name; $('#info').hidden = false;
+  const body = $('#info-body'); body.innerHTML = `<h3>${p.name}</h3><div class="k">${KPT[p.kind] || 'local'} · ${city}</div><p class="hint"><span class="spin"></span> A recolher factos…</p>`;
+  const E = p.enrich || (p.enrich = await enrichPlace(p.name, p.wiki, p.wd, city).catch(() => ({}))); store.set('current', t);
+  const say = p.ai || vlogLines(p, E, city);
+  body.innerHTML = `<h3>${p.name}</h3><div class="k">${KPT[p.kind] || 'local'} · ${city}${p.d ? ' · ' + fmtD(p.d) + ' do centro' : ''}</div>
+    <div class="facts">${E.extract ? `<div><b>O que é:</b> ${E.extract}</div>` : ''}${E.year ? `<div><b>Desde:</b> ${E.year}</div>` : ''}
+    <div><b>Horário:</b> ${p.hours ? fmtHours(p.hours) : '<span style="color:var(--warn)">não está nos dados abertos: confirmar</span>'}</div>
+    <div><b>Entrada:</b> ${p.fee === 'no' ? 'gratuita' : p.fee === 'yes' ? 'paga (confirmar preço)' : '<span style="color:var(--warn)">confirmar</span>'}</div>
+    ${p.website ? `<div><b>Site:</b> <a href="${p.website}" target="_blank" rel="noopener">${p.website.replace(/^https?:\/\//, '').slice(0, 40)}</a></div>` : ''}</div>
+    <div class="label" style="margin:6px 0">🎙 Para dizer no vlog${p.ai ? ' · pesquisado com IA' : ''}</div><div class="say" id="info-say">${say.replace(/</g, '&lt;')}</div>
+    <div class="row" style="margin-top:10px"><button class="btn ghost" id="info-copy">Copiar falas</button><button class="btn accent" id="info-ai">✨ Pesquisar e escrever com IA</button></div>
+    <div class="src">Fontes: ${E.url ? `<a href="${E.url}" target="_blank" rel="noopener">${E.src || 'Wikipédia'}</a> · ` : ''}OpenStreetMap${p.aiSources ? ' · ' + p.aiSources : ''}. Confirme horários e preços antes de gravar.</div>
+    ${SIGHT_KINDS.includes(p.kind) ? `<div class="row" style="margin-top:6px"><button class="btn ${isSel(t, p) ? 'ghost' : ''}" id="info-sel">${isSel(t, p) ? 'Tirar da rota' : 'Pôr na rota'}</button></div>` : ''}`;
+  $('#info-copy').onclick = async () => { try{ await navigator.clipboard.writeText($('#info-say').innerText); toast('Falas copiadas'); }catch(e){ toast('Não deu para copiar'); } };
+  if($('#info-sel')) $('#info-sel').onclick = () => { $('#info').hidden = true; toggleSight(p); };
+  $('#info-ai').onclick = () => aiSpot(p, E);
+}
+$('#info-x').addEventListener('click', () => $('#info').hidden = true);
+$('#info').addEventListener('click', e => { if(e.target.id === 'info') $('#info').hidden = true; });
+// IA com pesquisa na internet: horário e preço atuais, melhor hora, eventos, onde comer por tipo de cozinha — sempre com fontes
+async function aiSpot(p, E){
+  if(!settings.ckey){ toast('Falta a chave Claude em Definições', 3000); return; }
+  const b = $('#info-ai'); b.disabled = true; b.innerHTML = '<span class="spin"></span> A pesquisar…'; const t = current;
+  const prompt = `Sou o Leandro, brasileiro a viver em Portugal, do canal de YouTube "Leandro na Rota" (vlog de viagens). Vou gravar em "${p.name}" (${KPT[p.kind] || 'local'}) em ${t.dest.full || t.dest.name}.
+Factos que já tenho: ${E.extract || 'nenhum'}${E.year ? ' Desde ' + E.year + '.' : ''} Horário no OpenStreetMap: ${p.hours || 'desconhecido'}. Entrada: ${p.fee === 'no' ? 'gratuita' : p.fee === 'yes' ? 'paga' : 'desconhecida'}.
+Pesquisa na internet e escreve em português do Brasil falado e natural (como eu falo no vlog), sem markdown, com estes títulos em maiúsculas:
+O QUE É E ONDE FICA (2 frases)
+HORÁRIO E PREÇO (o atual; se não encontrares em fonte, escreve [CONFIRMAR])
+MELHOR HORA E DICAS (fotos, pôr do sol, música ao vivo, eventos, estacionamento: só o que encontrares em fontes)
+ONDE COMER PERTO (3 a 5 opções por tipo de cozinha e faixa de preço, só se encontrares em fontes)
+FALAS PARA O VLOG (6 a 9 frases curtas para eu dizer em frente à câmara, a terminar a convidar quem assiste a comentar)
+Não inventes nada: o que não estiver confirmado numa fonte fica [CONFIRMAR].`;
+  const call = tools => fetch('https://api.anthropic.com/v1/messages', {method: 'POST', headers: {'content-type': 'application/json', 'x-api-key': settings.ckey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true'}, body: JSON.stringify({model: 'claude-sonnet-5-5', max_tokens: 1800, ...(tools ? {tools: [{type: 'web_search_20250305', name: 'web_search', max_uses: 4}]} : {}), messages: [{role: 'user', content: prompt}]})}).then(r => r.json());
+  try{
+    let j = await call(true), searched = true; if(j.error && /tool|web_search/i.test(j.error.message || '')){ j = await call(false); searched = false; } if(j.error) throw new Error(j.error.message);
+    const txt = j.content.filter(c => c.type === 'text').map(c => c.text).join('').trim();
+    const urls = [...new Set(j.content.flatMap(c => (c.citations || []).map(x => x.url)).filter(Boolean))];
+    p.ai = txt + (searched ? '' : '\n\n[Sem pesquisa na internet: confirmar tudo]');
+    p.aiSources = urls.slice(0, 6).map(u => { try{ return `<a href="${u}" target="_blank" rel="noopener">${new URL(u).hostname.replace(/^www\./, '')}</a>`; }catch(e){ return ''; } }).filter(Boolean).join(' · ');
+    const st = (t.stops || []).find(s => s.name === p.name); if(st && st !== p){ st.ai = p.ai; st.aiSources = p.aiSources; st.enrich = p.enrich; }
+    store.set('current', t); stopInfo(p);
+  }catch(e){ toast('Erro da IA: ' + e.message, 4000); b.disabled = false; b.textContent = '✨ Pesquisar e escrever com IA'; }
 }
 $('#btn-addstop').addEventListener('click', async () => { const q = prompt('Nome do local a adicionar (ex.: Castelo de Monção)'); if(!q) return; try{ const r = (await geocode(q))[0]; if(!r) throw 0; current.stops.push({name: q, lat:+r.lat, lon:+r.lon, note:'Adicionado por mim'}); store.set('current', current); renderPlan(); }catch(e){ toast('Local não encontrado'); } });
 $('#btn-start').addEventListener('click', () => go('drive')); $('#btn-start2').addEventListener('click', () => go('drive'));
