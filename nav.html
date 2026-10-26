@@ -118,7 +118,7 @@ const T = [0], D = [0]; { const NS = Math.min(20000, Math.max(2000, Math.round(T
   for(let it = 0; it < 10; it++){ let r = 0; for(let i = 1; i <= NS; i++) r += 2/(sp[i-1] + sp[i]); const kk = Math.max(5, DUR - pz)/r;
     for(let i = 0; i <= NS; i++){ const cap = 220/Math.max(cv[i], 1e-4)*kk/SD; sp[i] = Math.min(sp[i], cap, sp0[i]*3); }
     box(sp, W(it < 9 ? 150 : 60)); }                              // trava antes da curva e acelera depois, sempre de forma progressiva
-  pauses.forEach(p => { for(let i = 0; i <= NS; i++){ const g = Math.abs(p.d - i*SD); if(g < 600) sp[i] *= Math.max(.03, Math.pow(g/600, .8)); } });   // chega à bomba a travar até parar
+  pauses.forEach(p => { for(let i = 0; i <= NS; i++){ const g = Math.abs(p.d - i*SD); if(g < 350) sp[i] *= Math.max(.12, Math.pow(g/350, .6)); } });   // chega à bomba a travar até parar
   const raw = [0]; for(let i = 1; i <= NS; i++) raw.push(raw[i-1] + 2/(sp[i-1] + sp[i]));
   const k = Math.max(5, DUR - pz)/raw.at(-1); let extra = 0, pi = 0;
   for(let i = 1; i <= NS; i++){ const d = i*SD, d0 = (i - 1)*SD;
