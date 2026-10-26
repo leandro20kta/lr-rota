@@ -40,7 +40,7 @@ body.recording #stage{width:1280px;height:720px;transform-origin:0 0}
   <div class="credit" id="credit">© OpenStreetMap · OpenMapTiles · OpenFreeMap</div>
   <div id="status"></div>
 </div>
-<div id="ctl"><button id="bCloud">☁ Nuvem</button><button id="bVids">📁 Vídeos exportados</button><button id="bOpen">📂 Abrir viagem</button><button id="bCam">🎥 Zoom: automático</button><button id="bMap" hidden>🎨 Cor do mapa</button><button id="bPlay">▶ Ver viagem</button><button id="bRec" class="rec">● Gravar vídeo (MP4)</button><button id="b1080" class="rec">⬇ Exportar 1080p (rápido)</button><button id="b4k" class="rec">⬇ Exportar 4K (DaVinci)</button><button id="bSave" hidden>⬇ Guardar vídeo</button><input type="file" id="fOpen" accept=".json,.gpx,application/json,application/gpx+xml" hidden></div>
+<div id="ctl"><button id="bCloud">☁ Nuvem</button><button id="bVids">📁 Vídeos exportados</button><button id="bOpen">📂 Abrir viagem</button><button id="bCam">🎥 Zoom: automático</button><button id="bPlay">▶ Ver viagem</button><button id="bRec" class="rec">● Gravar vídeo (MP4)</button><button id="b1080" class="rec">⬇ Exportar 1080p (rápido)</button><button id="b4k" class="rec">⬇ Exportar 4K (DaVinci)</button><button id="bSave" hidden>⬇ Guardar vídeo</button><input type="file" id="fOpen" accept=".json,.gpx,application/json,application/gpx+xml" hidden></div>
 <canvas id="rec" width="1280" height="720" hidden></canvas>
 <script src="vendor/maplibre/maplibre-gl.js"></script>
 <script src="cloud.js"></script>
@@ -134,10 +134,8 @@ const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);   // pacote 
 const dem = PACK && LOCAL ? {type: 'raster-dem', tiles: [base + 'dem/{z}/{x}/{y}.png'], encoding: 'terrarium', tileSize: 256, minzoom: 8, maxzoom: 12} : {type: 'raster-dem', tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'], encoding: 'terrarium', tileSize: 256, maxzoom: 12};
 const glyphs = PACK ? base + 'glyphs/{fontstack}/{range}.pbf' : 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf';
 const MAPSTYLE = Q.get('map') || 'claro';   // claro (Google/Apple) | escuro (noite) | vintage (papel antigo) | atlas (mapa físico com relevo colorido)
-const TERRA = LOOK === 'app' && MAPSTYLE === 'terra';   // terra escura de cinema: sem névoa nem grão
-const ATLAS = LOOK === 'app' && (MAPSTYLE === 'atlas' || TERRA);
+const ATLAS = LOOK === 'app' && (MAPSTYLE === 'atlas' || MAPSTYLE === 'terra');   // 'terra' (antigo) abre o atlas
 const C = LOOK === 'app' && MAPSTYLE === 'escuro' ? {bg:'#1C2733', water:'#0E3352', park:'#1F3D36', wood:'#22443A', farm:'#22303F', res:'#283445', road:'#3C4A5E', roadHi:'#52627A', mway:'#D08A2E', case:'#111923', bld:'#33415A', label:'#E3E9F0', halo:'#0D141D', hsS:'#060C14', hsH:'#4A6180', hsA:'#141E2A'}
-  : TERRA ? {bg:'#363C25', water:'#1B3034', park:'rgba(0,0,0,0)', wood:'rgba(0,0,0,0)', farm:'rgba(0,0,0,0)', res:'rgba(70,52,38,.55)', road:'#B8A07A', roadHi:'#C9B08A', mway:'#9E4436', case:'#15120C', bld:'#4C402F', label:'#EADFC4', halo:'#16120C', hsS:'#060403', hsH:'#7E6E52', hsA:'#231B11'}
   : ATLAS ? {bg:'#A3C09B', water:'#AECAC1', park:'rgba(0,0,0,0)', wood:'rgba(0,0,0,0)', farm:'rgba(0,0,0,0)', res:'rgba(214,170,150,.45)', road:'#EFE3C6', roadHi:'#F2E6CA', mway:'#B5524A', case:'#8A6A55', bld:'#C9A98A', label:'#3B2F25', halo:'#F2E9D0', hsS:'#5B4A35', hsH:'#FFF8E6', hsA:'#8C7A5C'}
   : LOOK === 'app' && MAPSTYLE === 'vintage' ? {bg:'#DCC9A0', water:'#EEE3C8', park:'#CDBA8C', wood:'#C5B184', farm:'#D6C499', res:'#CFB88D', road:'#F2E8D2', roadHi:'#F5EBD5', mway:'#A9572F', case:'#A88F63', bld:'#C4AC80', label:'#4A3520', halo:'#EADBBE', hsS:'#8C7350', hsH:'#F4EAD2', hsA:'#C2AC82'}
   : LOOK === 'app'
@@ -161,8 +159,8 @@ await new Promise(r => map.on('load', r));
 if(ATLAS){
   map.addSource('dem2', {...dem});
   ['landuse', 'landcover', 'park'].forEach(id => map.setLayoutProperty(id, 'visibility', 'none'));
-  map.addLayer({id:'relief', type:'color-relief', source:'dem2', paint:{'color-relief-opacity': 1, 'color-relief-color': TERRA ? ['interpolate', ['linear'], ['elevation'], -50, '#1B3034', 0, '#2C3721', 50, '#333E25', 120, '#3D4529', 220, '#4A4A2F', 320, '#564E33', 450, '#615137', 600, '#664C36', 800, '#634432', 1100, '#5A3B2C', 1600, '#4E3226'] : ['interpolate', ['linear'], ['elevation'], -50, '#AECAC1', 0, '#93B79A', 50, '#A3C09B', 120, '#BDCB9F', 220, '#DAD5A8', 320, '#E7CEA2', 450, '#EAB894', 600, '#E4A286', 800, '#D98E77', 1100, '#C97B6B', 1600, '#B86B60']}}, 'hills');
-  map.setPaintProperty('hills', 'hillshade-exaggeration', .75); map.setPaintProperty('road', 'line-width', ['interpolate',['exponential',1.6],['zoom'],10,['match',['get','class'],'motorway',1.6,'trunk',1.3,.5],17,['match',['get','class'],'motorway',16,'trunk',14,['primary','secondary'],12,7]]); map.setPaintProperty('road-case', 'line-width', ['interpolate',['exponential',1.6],['zoom'],10,['match',['get','class'],'motorway',2.4,'trunk',2,.9],17,['match',['get','class'],'motorway',20,'trunk',18,['primary','secondary'],15,9]]); map.setPaintProperty('water', 'fill-color', TERRA ? C.water : '#AECAC1'); map.setPaintProperty('hills', 'hillshade-exaggeration', TERRA ? 1 : .85);
+  map.addLayer({id:'relief', type:'color-relief', source:'dem2', paint:{'color-relief-opacity': 1, 'color-relief-color': ['interpolate', ['linear'], ['elevation'], -50, '#AECAC1', 0, '#93B79A', 50, '#A3C09B', 120, '#BDCB9F', 220, '#DAD5A8', 320, '#E7CEA2', 450, '#EAB894', 600, '#E4A286', 800, '#D98E77', 1100, '#C97B6B', 1600, '#B86B60']}}, 'hills');
+  map.setPaintProperty('hills', 'hillshade-exaggeration', .75); map.setPaintProperty('road', 'line-width', ['interpolate',['exponential',1.6],['zoom'],10,['match',['get','class'],'motorway',1.6,'trunk',1.3,.5],17,['match',['get','class'],'motorway',16,'trunk',14,['primary','secondary'],12,7]]); map.setPaintProperty('road-case', 'line-width', ['interpolate',['exponential',1.6],['zoom'],10,['match',['get','class'],'motorway',2.4,'trunk',2,.9],17,['match',['get','class'],'motorway',20,'trunk',18,['primary','secondary'],15,9]]); map.setPaintProperty('water', 'fill-color', '#AECAC1'); map.setPaintProperty('hills', 'hillshade-exaggeration', .85);
 }
 if(LOOK === 'app'){
   const wR = ['interpolate',['exponential',1.7],['zoom'],10,['match',['get','class'],'motorway',1.8,'trunk',1.4,.5],15,['match',['get','class'],'motorway',7,'trunk',6,['primary','secondary'],5,3],19,['match',['get','class'],'motorway',42,'trunk',38,['primary','secondary'],32,['tertiary','minor'],26,18]];
@@ -170,7 +168,7 @@ if(LOOK === 'app'){
   map.setPaintProperty('road', 'line-width', wR); map.setPaintProperty('road-case', 'line-width', wC);
   map.setLayoutProperty('bld', 'visibility', 'none'); map.addLayer({id:'bld-flat', type:'fill', source:'omt', 'source-layer':'building', minzoom: 14, paint:{'fill-color': C.bld, 'fill-opacity': .55}}, 'road-case'); }
 map.setTerrain({source: 'dem', exaggeration: LOOK === 'app' ? 1.6 : 1.0});   // no estilo 'app' o relevo é acentuado para se ver subir e descer
-map.setSky(TERRA ? {'sky-color': '#241F18', 'horizon-color': '#332B21', 'fog-color': '#332B21', 'sky-horizon-blend': .3, 'horizon-fog-blend': 0, 'fog-ground-blend': 1} : ATLAS ? {'sky-color': '#CFE3E0', 'horizon-color': '#EDE6D2', 'fog-color': '#E6DCC2', 'sky-horizon-blend': .5, 'horizon-fog-blend': .3, 'fog-ground-blend': .92} : LOOK === 'app' && MAPSTYLE === 'escuro' ? {'sky-color': '#0B1622', 'horizon-color': '#1F3247', 'fog-color': '#1C2733', 'sky-horizon-blend': .5, 'horizon-fog-blend': .5, 'fog-ground-blend': .6} : LOOK === 'app' && MAPSTYLE === 'vintage' ? {'sky-color': '#E9DCC0', 'horizon-color': '#F1E7D1', 'fog-color': '#E4D5B5', 'sky-horizon-blend': .5, 'horizon-fog-blend': .5, 'fog-ground-blend': .6} : LOOK === 'app' ? {'sky-color': '#8EC5F0', 'horizon-color': '#DCEEFB', 'fog-color': '#EEF2F4', 'sky-horizon-blend': .5, 'horizon-fog-blend': .5, 'fog-ground-blend': .6} : {'sky-color': '#16243A', 'horizon-color': '#2F4766', 'fog-color': '#2B3A55', 'sky-horizon-blend': .6, 'horizon-fog-blend': .4, 'fog-ground-blend': .55});
+map.setSky(ATLAS ? {'sky-color': '#BFD9E6', 'horizon-color': '#DCE9EE', 'fog-color': '#DCE9EE', 'sky-horizon-blend': .3, 'horizon-fog-blend': 0, 'fog-ground-blend': 1} : LOOK === 'app' && MAPSTYLE === 'escuro' ? {'sky-color': '#0B1622', 'horizon-color': '#1F3247', 'fog-color': '#1C2733', 'sky-horizon-blend': .5, 'horizon-fog-blend': .5, 'fog-ground-blend': .6} : LOOK === 'app' && MAPSTYLE === 'vintage' ? {'sky-color': '#E9DCC0', 'horizon-color': '#F1E7D1', 'fog-color': '#E4D5B5', 'sky-horizon-blend': .5, 'horizon-fog-blend': .5, 'fog-ground-blend': .6} : LOOK === 'app' ? {'sky-color': '#8EC5F0', 'horizon-color': '#DCEEFB', 'fog-color': '#EEF2F4', 'sky-horizon-blend': .5, 'horizon-fog-blend': .5, 'fog-ground-blend': .6} : {'sky-color': '#16243A', 'horizon-color': '#2F4766', 'fog-color': '#2B3A55', 'sky-horizon-blend': .6, 'horizon-fog-blend': .4, 'fog-ground-blend': .55});
 // "balões" de rua e de terra (fundo esticável, como no GPS)
 function pill(id, fill, stroke){ const W = 48, H = 40, c = document.createElement('canvas'); c.width = W*2; c.height = (H+10)*2; const x = c.getContext('2d'); x.scale(2,2); x.fillStyle = fill; x.strokeStyle = stroke; x.lineWidth = 2;
   x.beginPath(); x.roundRect(1, 1, W-2, H-2, 10); x.fill(); if(stroke) x.stroke(); x.beginPath(); x.moveTo(W/2-7, H-2); x.lineTo(W/2, H+8); x.lineTo(W/2+7, H-2); x.fill();
@@ -269,7 +267,7 @@ function hud(d, u){
   if(pl){ $('#pT').textContent = pl; $('#pS').textContent = ps; $('#place').classList.add('on'); placeShown = pl === 'Bem-vindo a Espanha' ? 'ESP' : placeShown; } else $('#place').classList.remove('on');
 }
 const hudC = document.createElement('canvas'); hudC.id = 'hud'; hudC.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2'; if(LOOK === 'app'){ $('#stage').appendChild(hudC); document.querySelectorAll('.top,.bottom,.place,.credit').forEach(e => e.style.display = 'none'); }
-const DARK = LOOK === 'app' && (MAPSTYLE === 'escuro' || TERRA); let HUDS = Math.min(2, devicePixelRatio || 1);
+const DARK = LOOK === 'app' && MAPSTYLE === 'escuro'; let HUDS = Math.min(2, devicePixelRatio || 1);
 const TITLE = Q.get('title') || `${STOPS[0]?.name || ''} → ${STOPS.at(-1)?.name || ''}`;
 let GPU_FX = false;
 const GRAIN = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'); const id = g.createImageData(256, 256); for(let i = 0; i < id.data.length; i += 4){ const v = 120 + Math.random()*90; id.data[i] = v; id.data[i+1] = v*.96; id.data[i+2] = v*.88; id.data[i+3] = 255; } g.putImageData(id, 0, 0); return c; })();
@@ -277,56 +275,39 @@ function drawAppHud(d, u){
   const st = $('#stage'), W = Math.round(st.clientWidth*HUDS), H = Math.round(st.clientHeight*HUDS); if(hudC.width !== W || hudC.height !== H){ hudC.width = W; hudC.height = H; }
   const x = hudC.getContext('2d'), k = W/1280; x.clearRect(0, 0, W, H);
   const rr = (X, Y, w, h, r, c) => { x.fillStyle = c; x.beginPath(); x.roundRect(X, Y, w, h, r); x.fill(); };
-  if(ATLAS && !GPU_FX){ x.save(); x.globalAlpha = TERRA ? 0 : .13; x.globalCompositeOperation = 'multiply'; x.fillStyle = x.createPattern(GRAIN, 'repeat'); x.fillRect(0, 0, W, H); x.restore(); const v = x.createRadialGradient(W/2, H/2, H*.45, W/2, H/2, H*.95); v.addColorStop(0, 'rgba(60,40,20,0)'); v.addColorStop(1, 'rgba(60,40,20,.32)'); x.fillStyle = v; x.fillRect(0, 0, W, H); }
+  if(ATLAS && !GPU_FX){ x.save(); x.globalAlpha = 0; x.globalCompositeOperation = 'multiply'; x.fillStyle = x.createPattern(GRAIN, 'repeat'); x.fillRect(0, 0, W, H); x.restore(); const v = x.createRadialGradient(W/2, H/2, H*.45, W/2, H/2, H*.95); v.addColorStop(0, 'rgba(60,40,20,0)'); v.addColorStop(1, 'rgba(60,40,20,.32)'); x.fillStyle = v; x.fillRect(0, 0, W, H); }
   // título (com fundo suave para não se misturar com os nomes do mapa)
-  if(!TERRA){ const g = x.createLinearGradient(0, 0, 0, 160*k); const P = DARK ? '14,22,32' : MAPSTYLE === 'vintage' || ATLAS ? '242,233,208' : '255,255,255'; g.addColorStop(0, `rgba(${P},.92)`); g.addColorStop(.75, `rgba(${P},.6)`); g.addColorStop(1, `rgba(${P},0)`); x.fillStyle = g; x.fillRect(0, 0, W, 160*k); }
+  if(!ATLAS){ const g = x.createLinearGradient(0, 0, 0, 160*k); const P = DARK ? '14,22,32' : MAPSTYLE === 'vintage' || ATLAS ? '242,233,208' : '255,255,255'; g.addColorStop(0, `rgba(${P},.92)`); g.addColorStop(.75, `rgba(${P},.6)`); g.addColorStop(1, `rgba(${P},0)`); x.fillStyle = g; x.fillRect(0, 0, W, 160*k); }
   rr(24*k, 22*k, 214*k, 40*k, 20*k, '#0A5BD6'); x.fillStyle = '#fff'; x.font = `800 ${17*k}px Inter`; x.fillText('LEANDRO NA ROTA', 44*k, 48*k);
-  x.shadowColor = 'rgba(0,0,0,.35)'; x.shadowBlur = 10*k; x.fillStyle = DARK ? '#FFFFFF' : MAPSTYLE === 'vintage' ? '#3B2A18' : '#1F2328'; x.font = `800 ${34*k}px Inter`; x.fillText(TITLE, 26*k, 104*k); x.shadowBlur = 0;
-  x.font = `700 ${17*k}px Inter`; x.fillStyle = TERRA ? '#E6DCC4' : DARK ? '#C9D3DF' : '#3C4043'; { const names = STOPS.slice(1, -1).filter(s => s.kind !== 'fuel').map(s => s.name); let n = names.length, t = names.join(' · '); while(n > 1 && x.measureText(t).width > W - 300*k){ n--; t = names.slice(0, n).join(' · ') + ` · +${names.length - n}`; } x.fillText(t, 27*k, 130*k); }
+  x.shadowColor = 'rgba(0,0,0,.35)'; x.shadowBlur = 10*k; x.fillStyle = DARK ? '#FFFFFF' : MAPSTYLE === 'vintage' ? '#3B2A18' : '#1F2328'; x.font = `800 ${34*k}px Inter`; if(ATLAS){ x.save(); x.shadowBlur = 0; x.lineJoin = 'round'; x.lineWidth = 7*k; x.strokeStyle = 'rgba(250,246,236,.9)'; x.strokeText(TITLE, 26*k, 104*k); x.restore(); } x.fillText(TITLE, 26*k, 104*k); x.shadowBlur = 0;
+  x.font = `700 ${17*k}px Inter`; x.fillStyle = DARK ? '#C9D3DF' : '#3C4043'; { const names = STOPS.slice(1, -1).filter(s => s.kind !== 'fuel').map(s => s.name); let n = names.length, t = names.join(' · '); while(n > 1 && x.measureText(t).width > W - 300*k){ n--; t = names.slice(0, n).join(' · ') + ` · +${names.length - n}`; } x.fillText(t, 27*k, 130*k); }
   // cartão da paragem (ao chegar / na pausa)
   const near = STOPS.filter(s => Math.abs(s.d - d) < (s.pause || s.kind === 'fuel' ? 1200 : 1600)).sort((a, b) => Math.abs(a.d - d) - Math.abs(b.d - d))[0];   // a paragem mais próxima (a bomba não fica com o nome da vila ao lado)
   if(near){ const ic = near.kind === 'fuel' ? '⛽' : near === STOPS.at(-1) ? '⚑' : near === STOPS[0] ? '🚗' : '📍'; x.font = `800 ${26*k}px Inter`; const tw = Math.max(x.measureText(near.name).width, (x.font = `700 ${16*k}px Inter`, x.measureText(near.sub || '').width)) + 96*k;
     const bx = W/2 - tw/2, by = 150*k; x.shadowColor = 'rgba(0,0,0,.25)'; x.shadowBlur = 18*k; rr(bx, by, tw, 74*k, 18*k, '#FFFFFF'); x.shadowBlur = 0; rr(bx + 12*k, by + 13*k, 48*k, 48*k, 14*k, near.kind === 'fuel' ? '#F57C00' : '#E53935');
     x.fillStyle = '#fff'; x.font = `${26*k}px sans-serif`; x.textAlign = 'center'; x.fillText(ic, bx + 36*k, by + 47*k); x.textAlign = 'left'; x.fillStyle = '#1F2328'; x.font = `800 ${26*k}px Inter`; x.fillText(near.name, bx + 74*k, by + 36*k); x.fillStyle = '#5F6368'; x.font = `700 ${16*k}px Inter`; x.fillText(near.sub || '', bx + 74*k, by + 60*k); }
   // barra de progresso com as paragens
-  const px = 40*k, pw = W - 80*k, py = H - 46*k; rr(px - 24*k, py - 40*k, pw + 48*k, 74*k, 16*k, TERRA ? 'rgba(20,16,11,.86)' : DARK ? 'rgba(16,22,30,.92)' : MAPSTYLE === 'vintage' || ATLAS ? 'rgba(240,229,205,.94)' : 'rgba(255,255,255,.94)');
-  rr(px, py - 3*k, pw, 6*k, 3*k, TERRA ? '#4A4234' : DARK ? '#3A4656' : '#E3DED6'); rr(px, py - 3*k, pw*d/TOTAL, 6*k, 3*k, RCOL);
+  const px = 40*k, pw = W - 80*k, py = H - 46*k; rr(px - 24*k, py - 40*k, pw + 48*k, 74*k, 16*k, DARK ? 'rgba(16,22,30,.92)' : MAPSTYLE === 'vintage' || ATLAS ? 'rgba(240,229,205,.94)' : 'rgba(255,255,255,.94)');
+  rr(px, py - 3*k, pw, 6*k, 3*k, DARK ? '#3A4656' : '#E3DED6'); rr(px, py - 3*k, pw*d/TOTAL, 6*k, 3*k, RCOL);
   // nomes sem se sobreporem: partida e chegada sempre; os outros em cima, senão em baixo, senão só o ponto
   x.font = `700 ${12*k}px Inter`; const lab = s => s.kind === 'fuel' ? '⛽ ' + s.name : s.name, gap = 10*k;
   const span = s => { const sx = px + pw*s.d/TOTAL, w = x.measureText(lab(s)).width; return s === STOPS[0] ? [sx, sx + w] : s === STOPS.at(-1) ? [sx - w, sx] : [sx - w/2, sx + w/2]; };
   const rows = [[], []], free = (r, a) => rows[r].every(b => a[1] + gap < b[0] || a[0] > b[1] + gap);
   const place = new Map(); [STOPS[0], STOPS.at(-1)].forEach(s => { place.set(s, 0); rows[0].push(span(s)); });
   STOPS.forEach(s => { if(place.has(s)) return; const a = span(s); const r = free(0, a) ? 0 : free(1, a) ? 1 : -1; place.set(s, r); if(r >= 0) rows[r].push(a); });
-  STOPS.forEach(s => { const sx = px + pw*s.d/TOTAL; x.fillStyle = s.d <= d ? (s.kind === 'fuel' ? '#F57C00' : '#E53935') : '#BDB6AC'; x.beginPath(); x.arc(sx, py, 7*k, 0, 7); x.fill(); x.strokeStyle = '#fff'; x.lineWidth = 2.5*k; x.stroke(); const r = place.get(s); if(r < 0) return; x.fillStyle = TERRA ? '#E6DCC4' : DARK ? '#DDE5EE' : '#3C4043'; x.font = `700 ${12*k}px Inter`; x.textAlign = s === STOPS[0] ? 'left' : s === STOPS.at(-1) ? 'right' : 'center'; x.fillText(lab(s), sx, r ? py + 20*k : py - 16*k); x.textAlign = 'left'; });
+  STOPS.forEach(s => { const sx = px + pw*s.d/TOTAL; x.fillStyle = s.d <= d ? (s.kind === 'fuel' ? '#F57C00' : '#E53935') : '#BDB6AC'; x.beginPath(); x.arc(sx, py, 7*k, 0, 7); x.fill(); x.strokeStyle = '#fff'; x.lineWidth = 2.5*k; x.stroke(); const r = place.get(s); if(r < 0) return; x.fillStyle = DARK ? '#DDE5EE' : '#3C4043'; x.font = `700 ${12*k}px Inter`; x.textAlign = s === STOPS[0] ? 'left' : s === STOPS.at(-1) ? 'right' : 'center'; x.fillText(lab(s), sx, r ? py + 20*k : py - 16*k); x.textAlign = 'left'; });
   x.fillStyle = DARK ? '#FFFFFF' : '#1F2328'; x.font = `800 ${15*k}px Inter`; x.textAlign = 'right'; x.fillText(`${(d/1000).toFixed(0)} / ${(TOTAL/1000).toFixed(0)} km`, W - 30*k, 46*k); x.textAlign = 'left';
   x.fillStyle = DARK ? 'rgba(255,255,255,.6)' : 'rgba(0,0,0,.55)'; x.font = `600 ${10*k}px Inter`; x.textAlign = 'right'; x.fillText('© OpenStreetMap · OpenMapTiles · OpenFreeMap', W - 30*k, H - 76*k); x.textAlign = 'left';
 }
-/* ---------- realizador: planos de drone que mudam ao longo do vídeo (de cima, volta de 360°, atrás do carro, a subir) ---------- */
+/* ---------- drone: alto e afastado na autoestrada; desce e segue de perto nas vilas; à saída sobe devagar ---------- */
 const TEND = T.at(-1);
-const timeAtD = dd => { let lo = 0, hi = D.length-1; while(hi-lo > 1){ const m = (lo+hi) >> 1; D[m] < dd ? lo = m : hi = m; } return T[hi]; };
 const ease = x => x <= 0 ? 0 : x >= 1 ? 1 : x*x*(3 - 2*x);
-// pitch: 0 = câmara a pique (de cima); dz: zoom extra; rot: volta à volta do carro (graus); pad: onde fica o carro no ecrã (0 = ao centro)
-const SHOT = {
-  revela: p => ({pitch: 4 + 48*ease(p), dz: -2.6*(1 - ease(p)), rot: 0, pad: .04 + .14*ease(p), big: 1}),          // começo: desce do céu até ao carro
-  alto:   p => ({pitch: 40, dz: -.9, rot: 0, pad: .18, big: 1}),                                                     // drone alto: paisagem
-  cima:   p => ({pitch: 6, dz: -.1, rot: 0, pad: .03, big: 1.3}),                                                      // drone a pique: o carro visto de cima
-  humano: p => ({pitch: 70, dz: 1.1, rot: 0, pad: .32, big: 1.8}),                                                     // atrás do carro, como quem o segue
-  grua:   p => ({pitch: 64 - 50*ease(p), dz: .7 - 1.5*ease(p), rot: 0, pad: .28 - .22*ease(p), big: 1.6 - .6*ease(p)}),             // drone a subir e a inclinar
-  orbita: (p, n, dir) => ({pitch: 50, dz: .5, rot: 0, pad: .1, big: 2.4}),                                // paragem: aproxima do carro (sem rodar)                           // volta completa à volta do carro
-  sobe:   p => ({pitch: 52 - 48*ease(p), dz: -2.8*ease(p), rot: 0, pad: .18 - .15*ease(p), big: 1})                  // fim: sobe e afasta
-};
-const SHOTS = (() => {
-  const L = [], add = (t0, t1, kind, extra) => L.push({t0, t1, kind, ...(extra || {})});
-  const intro = Math.min(6, TEND*.08), outro = Math.min(7, TEND*.09), cyc = ['alto', 'humano', 'cima', 'grua']; let ci = 0, dir = 1, cur = intro;
-  const fill = (a, b) => { const len = b - a; if(len <= 0) return; if(len < 3 && L.length){ L.at(-1).t1 = b; return; } const n = Math.max(1, Math.round(len/14));
-    for(let i = 0; i < n; i++){ const t0 = a + len*i/n, t1 = a + len*(i+1)/n; let k = cyc[ci++ % cyc.length]; if(twistAt(distAtTime((t0 + t1)/2/TEND)) > .55 && k !== 'grua') k = 'cima'; add(t0, t1, k); } };
-  const st = []; STOPS.slice(1, -1).forEach(s => { const ta = timeAtD(s.d), pz = Math.max(+s.pause || 0, s.kind === 'fuel' ? 4 : 0), a = ta - 4, b = ta + pz + 3, last = st.at(-1); if(last && a < last.t1 + 2) last.t1 = Math.max(last.t1, b); else st.push({t0: a, t1: b}); });
-  add(0, intro, 'revela');
-  st.forEach(o => { const a = Math.max(o.t0, cur), b = Math.min(o.t1, TEND - outro); if(b - a < 2.5) return; fill(cur, a); add(a, b, 'orbita', {n: Math.max(1, Math.round((b - a)/12)), dir}); dir = -dir; cur = b; });
-  fill(cur, TEND - outro); add(TEND - outro, TEND, 'sobe');
-  return L;
-})();
-const shotAt = t => { const o = SHOTS.find(q => t >= q.t0 && t < q.t1) || SHOTS.at(-1); return SHOT[o.kind](Math.max(0, Math.min(1, (t - o.t0)/((o.t1 - o.t0) || 1))), o.n || 1, o.dir || 1); };
+// 0 = autoestrada (drone alto) · 1 = dentro da vila / paragem (drone baixo, perto do carro). Suavizado em ~3 km: as subidas e descidas são lentas.
+const CITY = []; { const st = 50, hasSteps = steps.length > 0;
+  for(let d = 0; d <= TOTAL + st; d += st){ const sp = stepAt(d); let c = hasSteps ? (isMotorway(sp) ? 0 : .5) : Math.min(.6, twistAt(d)*1.2);
+    const near = STOPS.reduce((m, q) => Math.min(m, Math.abs(q.d - d)), 1e9); c = Math.max(c, near < 1500 ? 1 : near < 3500 ? (3500 - near)/2000 : 0); CITY.push(c); }
+  for(let k = 0; k < 5; k++){ const c = CITY.slice(); for(let i = 0; i < CITY.length; i++){ let a = 0, n = 0; for(let j = -14; j <= 14; j++){ const q = c[i+j]; if(q != null){ a += q; n++; } } CITY[i] = a/n; } } }
+const cityAt = d => { const f = Math.max(0, d)/50, i = Math.floor(f), A = CITY[Math.min(CITY.length - 1, i)], B = CITY[Math.min(CITY.length - 1, i + 1)]; return A + (B - A)*(f - i); };
 let cam = null;
 const visLenCam = () => 4.8*carScaleApp(appZoom ?? 13);
 function frame(u, first){
@@ -339,11 +320,14 @@ function frame(u, first){
   { const h0 = headingAt(d, Math.max(15, visLen*.15)), h1 = headingAt(d + Math.max(30, visLen*.5), Math.max(15, visLen*.15)); const turn = ((h1 - h0 + 540) % 360) - 180; const target = Math.max(-.55, Math.min(.55, -turn*rad*1.4)); carState.steer = (carState.steer || 0) + (target - (carState.steer || 0))*.25; }
   if(LOOK === 'app'){
     // vista de cima inclinada, mais afastada; aproxima nas paragens
-    const near = STOPS.reduce((m, q) => Math.min(m, Math.abs(q.d - d)), 1e9), fuel = STOPS.filter(q => q.kind === 'fuel').reduce((m, q) => Math.min(m, Math.abs(q.d - d)), 1e9), tw = Math.max(twistAt(d), twistAt(d + 300)*.8);
-    let zt = Math.min(16.0, (mw ? 13.2 : 14.0) + 2.0*tw + 1.2*Math.max(0, 1 - near/2500)); if(fuel < 1200) zt = Math.max(zt, 18.0 - 1.6*fuel/1200);
-    zt = Math.min(18.0, zt + CAMS[CAM]); appZoom = appZoom === null || first ? zt : appZoom + (zt - appZoom)*.05;
-    const sh = shotAt(u*TEND); if(!cam || first) cam = {...sh}; else { for(const k of ['pitch', 'dz', 'pad', 'big']) cam[k] += (sh[k] - cam[k])*.02; cam.rot = sh.rot; } carState.big = cam.big;
-    map.jumpTo({center: p, zoom: Math.min(18.6, appZoom + cam.dz), pitch: Math.min(76, cam.pitch + 4*tw), bearing: (camBear + cam.rot + 360) % 360, padding: {top: H0()*cam.pad, bottom: 0, left: 0, right: 0}});
+    const fuel = STOPS.filter(q => q.kind === 'fuel').reduce((m, q) => Math.min(m, Math.abs(q.d - d)), 1e9), c = cityAt(d), tt = u*TEND;
+    let zt = 13.2 + 3.4*c + CAMS[CAM]; if(fuel < 1200) zt = Math.max(zt, 18.0 - 1.6*fuel/1200); zt = Math.min(18.4, zt);
+    appZoom = appZoom === null || first ? zt : appZoom + (zt - appZoom)*.03;
+    // alvo da câmara: drone alto (mais de cima) na autoestrada, mais baixo e atrás do carro na vila; começo desce do céu, fim sobe
+    const pin = ease(tt/Math.min(6, TEND*.08)), pout = ease((tt - (TEND - Math.min(7, TEND*.09)))/Math.min(7, TEND*.09));
+    const sh = {pitch: (42 + 20*c)*pin + 5*(1 - pin), dz: -2.6*(1 - pin) - 2.8*pout, pad: .14 + .16*c, big: 1.15 + .85*c}; sh.pitch = sh.pitch*(1 - pout) + 6*pout;
+    if(!cam || first) cam = {...sh}; else for(const k of ['pitch', 'dz', 'pad', 'big']) cam[k] += (sh[k] - cam[k])*(k === 'dz' ? .08 : .03); carState.big = cam.big;
+    map.jumpTo({center: p, zoom: Math.min(18.6, appZoom + cam.dz), pitch: Math.min(72, cam.pitch), bearing: camBear, padding: {top: H0()*cam.pad, bottom: 0, left: 0, right: 0}});
     setProgress(d/TOTAL); drawAppHud(d, u); map.triggerRepaint(); return;
   }
   const z = mw ? 15.8 : 16.3; const near = (trip.points || []).some(q => hav([q.lon, q.lat], p) < 2500);
@@ -351,7 +335,7 @@ function frame(u, first){
   setProgress(d/TOTAL); hud(d, u); map.triggerRepaint();
 }
 const uOfKm = km => { let lo = 0, hi = 1; for(let k=0;k<40;k++){ const m = (lo+hi)/2; distAtTime(m) < km*1000 ? lo = m : hi = m; } return (lo+hi)/2; };
-window.__nav = {frame, uOfKm, STOPS, SHOTS, TEND, map, TOTAL, ready: () => carLayer.ready && map.loaded() && map.areTilesLoaded(), trip, dbg: () => ({ready: carLayer.ready, car: carState, model: !!carModel, wheels: wheels.length, err: window.__carErr || null})};
+window.__nav = {frame, uOfKm, STOPS, TEND, cityAt, map, TOTAL, ready: () => carLayer.ready && map.loaded() && map.areTilesLoaded(), trip, dbg: () => ({ready: carLayer.ready, car: carState, model: !!carModel, wheels: wheels.length, err: window.__carErr || null})};
 frame(0, true);
 /* reprodução: o tempo só avança com o mapa carregado (sem saltos); na gravação o gravador pausa enquanto carrega */
 let playing = false;
@@ -363,7 +347,7 @@ function run(rec){
     let loaded = map.isSourceLoaded('omt') && carLayer.ready;   // espera só pelas ruas e prédios; o relevo pode chegar depois
     if(!loaded){ waitSince = waitSince ?? t; if(t - waitSince > 4000) loaded = true; } else waitSince = null;
     if(rec){ if(!loaded && rec.state === 'recording') rec.pause(); if(loaded && rec.state === 'paused') rec.resume(); }
-    if(!rec){ acc = (acc || 0) + dt; if(acc < 1/30 - .004 && u > 0){ requestAnimationFrame(tick); return; } acc = Math.max(0, Math.min(1/30, acc - 1/30)); if(loaded) u = Math.min(1, u + 1/30/DUR); }
+    if(!rec){ acc = (acc || 0) + dt; if(acc < 1/30 - .004 && u > 0){ requestAnimationFrame(tick); return; } acc = Math.max(0, Math.min(1/30, acc - 1/30)); if(loaded || u > 0) u = Math.min(1, u + 1/30/DUR); }
     else if(loaded) u = Math.min(1, u + dt/DUR);
     frame(u, u === 0); if(rec){ drawRec(); status(`A gravar… ${Math.round(u*100)}%`); }
     if(u < 1) requestAnimationFrame(tick); else { playing = false; if(rec) setTimeout(() => rec.stop(), 600); else status(''); }
@@ -372,14 +356,14 @@ function run(rec){
 }
 // HUD desenhado no vídeo (o mesmo que está no ecrã)
 const rc = $('#rec'), rx = rc.getContext('2d');
-const GRADE = 'contrast(1.08) saturate(.92) sepia(.1) brightness(.98)';
-if(ATLAS) map.getCanvas().style.filter = TERRA ? 'contrast(1.1) saturate(.92) brightness(.98)' : GRADE;   // no ecrã (grátis: é a placa gráfica que aplica)
+const GRADE = 'contrast(1.06) saturate(1.02)';   // nítido: sem sépia (deixava a imagem baça)
+if(ATLAS) map.getCanvas().style.filter = GRADE;   // no ecrã (grátis: é a placa gráfica que aplica)
 const tsC = document.createElement('canvas'), tsX = tsC.getContext('2d');
 function drawRec(){
   const W = rc.width, H = rc.height, k = W/1280, mc = map.getCanvas();
   rx.drawImage(mc, 0, 0, W, H);
-  if(ATLAS && !TERRA){
-    // grade de cinema barata (sem filtros de CPU): tom quente por multiplicação + desfoque do horizonte feito em baixa resolução
+  if(false){
+    // (desligado) grade antiga com desfoque do horizonte (sem filtros de CPU): tom quente por multiplicação + desfoque do horizonte feito em baixa resolução
     rx.save(); rx.globalCompositeOperation = 'multiply'; rx.fillStyle = '#F6E6CF'; rx.fillRect(0, 0, W, H); rx.globalCompositeOperation = 'source-over';
     const bh = Math.round(H*.42); tsC.width = 160; tsC.height = Math.round(160*bh/W); tsX.globalCompositeOperation = 'source-over'; tsX.drawImage(mc, 0, 0, mc.width, mc.height*.42, 0, 0, tsC.width, tsC.height);
     tsX.globalCompositeOperation = 'destination-in'; const g = tsX.createLinearGradient(0, 0, 0, tsC.height); g.addColorStop(0, 'rgba(0,0,0,.95)'); g.addColorStop(.6, 'rgba(0,0,0,.45)'); g.addColorStop(1, 'rgba(0,0,0,0)'); tsX.fillStyle = g; tsX.fillRect(0, 0, tsC.width, tsC.height);
@@ -400,7 +384,6 @@ function drawRec(){
 }
 let lastFile = null;
 $('#bPlay').onclick = () => run(null);
-if(ATLAS){ const b = $('#bMap'); b.hidden = false; b.textContent = '🎨 Cor: ' + (TERRA ? 'terra escura' : 'atlas claro'); b.onclick = () => { Q.set('map', TERRA ? 'atlas' : 'terra'); location.search = Q.toString(); }; }
 { const CAM_PT = {normal: 'automático', perto: 'automático, mais perto', longe: 'automático, mais longe'}, NEXT = {normal: 'perto', perto: 'longe', longe: 'normal'};
   const lab = () => $('#bCam').textContent = '🎥 Zoom: ' + CAM_PT[CAM]; lab();
   $('#bCam').onclick = () => { CAM = NEXT[CAM]; try{ localStorage.setItem('lr-nav-cam', CAM); }catch(e){} lab(); appZoom = null; status('Zoom ' + CAM_PT[CAM] + ': aproxima sozinho nas vilas, curvas e no abastecimento'); setTimeout(() => status(''), 3500); }; }
@@ -451,11 +434,12 @@ function makeGPUComposer(W, H){
   float h(vec2 q){ return fract(sin(dot(q, vec2(12.9898, 78.233)) + t)*43758.5453); }
   void main(){
     vec3 c = texture(M, uv).rgb;
-    if(atlas > 1.5){
-      c *= vec3(1.03, 1., .93);   // tom quente subtil (terra)
-      c = (c - .45)*1.1 + .45; float l = dot(c, vec3(.299, .587, .114)); c = mix(vec3(l), c, .9);   // contraste de cinema
-      float v = distance(uv, vec2(.5)); c *= mix(1., .7, smoothstep(.38, .8, v));   // vinheta
-    } else if(atlas > .5){
+    if(atlas > .5){
+      c *= vec3(.985, .955, .9);   // tom de papel, leve
+      c = (c - .5)*1.06 + .5;   // contraste
+      float v = distance(uv, vec2(.5)); c *= mix(1., .86, smoothstep(.45, .85, v));   // vinheta leve
+    }
+    if(false){
       float b = smoothstep(.42, 0., uv.y)*7.;   // desfoque do horizonte (só no topo)
       if(b > .2){ vec3 a = vec3(0.); float n = 0.; for(int i=-3;i<=3;i++) for(int j=-3;j<=3;j++){ a += texture(M, uv + vec2(float(i), float(j))*px*b).rgb; n += 1.; } c = mix(c, a/n, clamp(b/3., 0., 1.)); }
       c *= vec3(.965, .905, .815);   // papel quente
@@ -470,7 +454,7 @@ function makeGPUComposer(W, H){
   const b = g.createBuffer(); g.bindBuffer(g.ARRAY_BUFFER, b); g.bufferData(g.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), g.STATIC_DRAW); const loc = g.getAttribLocation(pr, 'p'); g.enableVertexAttribArray(loc); g.vertexAttribPointer(loc, 2, g.FLOAT, false, 0, 0);
   const tex = unit => { const x = g.createTexture(); g.activeTexture(g.TEXTURE0 + unit); g.bindTexture(g.TEXTURE_2D, x); g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MIN_FILTER, g.LINEAR); g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MAG_FILTER, g.LINEAR); g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_S, g.CLAMP_TO_EDGE); g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE); return x; };
   const tM = tex(0), tU = tex(1); g.uniform1i(g.getUniformLocation(pr, 'M'), 0); g.uniform1i(g.getUniformLocation(pr, 'U'), 1);
-  g.uniform1f(g.getUniformLocation(pr, 'atlas'), TERRA ? 2 : ATLAS ? 1 : 0); g.uniform2f(g.getUniformLocation(pr, 'px'), 1/W, 1/H); const uT = g.getUniformLocation(pr, 't'); g.viewport(0, 0, W, H);
+  g.uniform1f(g.getUniformLocation(pr, 'atlas'), ATLAS ? 1 : 0); g.uniform2f(g.getUniformLocation(pr, 'px'), 1/W, 1/H); const uT = g.getUniformLocation(pr, 't'); g.viewport(0, 0, W, H);
   g.pixelStorei(g.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
   return { canvas: cv, draw(mapCanvas, hudCanvas, i){ g.activeTexture(g.TEXTURE0); g.bindTexture(g.TEXTURE_2D, tM); g.texImage2D(g.TEXTURE_2D, 0, g.RGBA, g.RGBA, g.UNSIGNED_BYTE, mapCanvas);
     g.activeTexture(g.TEXTURE1); g.bindTexture(g.TEXTURE_2D, tU); g.texImage2D(g.TEXTURE_2D, 0, g.RGBA, g.RGBA, g.UNSIGNED_BYTE, hudCanvas); g.uniform1f(uT, i % 97); g.drawArrays(g.TRIANGLE_STRIP, 0, 4); } };
