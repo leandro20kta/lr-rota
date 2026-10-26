@@ -514,13 +514,20 @@ async function wikiPlaces(p, radius=3000){
     .sort((a, b) => a.d - b.d);
 }
 async function wikiSights(p){ let r = await wikiPlaces(p, 3000); if(r.length < 3){ const more = await wikiPlaces(p, 10000); const seen = new Set(r.map(x => x.name)); r = r.concat(more.filter(x => !seen.has(x.name))); } return r; }
+async function addFame(list){
+  const ids = [...new Set(list.map(p => p.wd).filter(Boolean))];
+  for(let i = 0; i < ids.length; i += 50){ try{ const j = await jget(`https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${ids.slice(i, i+50).join('|')}&props=sitelinks&format=json&origin=*`);
+    for(const p of list) if(p.wd && j.entities?.[p.wd]) p.fame = Object.keys(j.entities[p.wd].sitelinks || {}).filter(k => k.endsWith('wiki') && !k.startsWith('commons')).length; }catch(e){} }
+  return list;
+}
 async function pois(p, kinds){
   const sights = kinds.some(k => ['attraction','museum','viewpoint','beach'].includes(k));
   const [wp, op] = await Promise.allSettled([sights ? wikiSights(p) : Promise.resolve([]), poisOSM(p, kinds)]);
   const osm = op.status === 'fulfilled' ? op.value : []; const wiki = wp.status === 'fulfilled' ? wp.value : [];
   // juntar: se o OSM tiver o mesmo local (nome parecido, <300 m), herda horários/entrada do OSM
   for(const w of wiki){ const o = osm.find(x => x.name && dist(x.lat, x.lon, w.lat, w.lon) < 300 && (x.name.toLowerCase().includes(w.name.toLowerCase().split(' ').slice(-1)[0]) || w.name.toLowerCase().includes(x.name.toLowerCase().split(' ').slice(-1)[0]))); if(o){ w.hours = o.hours; w.fee = o.fee; w.website = o.website; w.heritage = o.heritage; o._merged = true; } }
-  return [...wiki, ...osm.filter(o => !o._merged)].sort((a, b) => a.d - b.d);
+  const all = await addFame([...wiki, ...osm.filter(o => !o._merged)]);
+  return all.sort((a, b) => (b.fame || 0) - (a.fame || 0) || a.d - b.d);   // os mais famosos primeiro
 }
 async function poisOSM(p, kinds){
   const q = [];
@@ -552,7 +559,7 @@ $('#btn-plan').addEventListener('click', async () => {
     trip.distance = legs.reduce((s,l) => s + (l.type==='car' ? l.distance : 0), 0); trip.flightKm = legs.filter(l=>l.type==='plane').reduce((s,l)=> s+l.distance,0)/1000;
     trip.duration = legs.reduce((s,l) => s + l.duration, 0); trip.tollM = legs.reduce((s,l) => s + l.tollM, 0); trip.refs = legs.flatMap(l => l.refs);
     try{ trip.pois = await pois(dest, kinds); }catch(e){ trip.pois = []; }
-    const notab = p => (p.wiki || p.wd ? 0 : 3) + (p.heritage ? 0 : 1) + (p.kind === 'museum' || p.kind === 'viewpoint' ? 0 : 0.5) + p.d/4000;
+    const notab = p => -(p.fame || 0)*0.25 + (p.wiki || p.wd ? 0 : 3) + (p.heritage ? 0 : 1) + p.d/4000;
     const seen = new Set(); trip.stops = trip.pois.filter(p => ['attraction','viewpoint','museum','beach'].includes(p.kind)).sort((a,b) => notab(a) - notab(b)).filter(p => { const k = p.name.toLowerCase(); if(seen.has(k)) return false; seen.add(k); return true; }).slice(0,4).map(p => ({...p, note: p.kind === 'viewpoint' ? 'Miradouro' : p.kind === 'museum' ? 'Museu' : p.kind === 'beach' ? 'Praia' : 'Ponto turístico'}));
     current = trip; store.set('current', current);
     const rec = store.get('recent', []); rec.unshift({o: origin.name, d: dest.name, km: Math.round(trip.distance/1000), mode}); store.set('recent', rec.slice(0,5));
@@ -588,10 +595,12 @@ const KPT = {attraction:'ponto turístico', viewpoint:'miradouro', museum:'museu
 const sightsOf = t => (t.pois || []).filter(p => SIGHT_KINDS.includes(p.kind));
 const isSel = (t, p) => (t.stops || []).some(s => s.name === p.name);
 const fmtD = d => d < 1000 ? Math.round(d) + ' m' : (d/1000).toFixed(1).replace('.', ',') + ' km';
+let allSights = false;
 function renderSights(){
-  const t = current; if(!t) return; const list = sightsOf(t);
-  $('#sights-title').textContent = `Pontos turísticos em ${t.dest.name}` + (list.length ? ` (${list.length})` : '');
-  $('#sights').innerHTML = list.map((p, i) => `<div class="sight ${isSel(t, p) ? 'on' : ''}" data-si="${i}"><span class="ck">${isSel(t, p) ? '✓' : ''}</span><div class="grow"><div class="t">${p.name}</div><div class="s">${KPT[p.kind] || 'local'} · ${fmtD(p.d || 0)} do centro${p.fee === 'no' ? ' · grátis' : p.fee === 'yes' ? ' · pago' : ''}${p.hours ? ' · tem horário' : ''}</div></div><button class="i" data-info="${i}" aria-label="Resumo">i</button></div>`).join('') || '<p class="hint">Sem pontos turísticos encontrados perto do destino.</p>';
+  const t = current; if(!t) return; const full = sightsOf(t), list = allSights ? full : full.slice(0, 20);
+  $('#sights-title').textContent = `Pontos turísticos em ${t.dest.name}` + (full.length ? ` (${full.length})` : '');
+  $('#sights').innerHTML = list.map((p, i) => `<div class="sight ${isSel(t, p) ? 'on' : ''}" data-si="${i}"><span class="ck">${isSel(t, p) ? '✓' : ''}</span><div class="grow"><div class="t">${p.name}</div><div class="s">${p.fame >= 15 ? '⭐ muito conhecido · ' : ''}${KPT[p.kind] || 'local'} · ${fmtD(p.d || 0)} do centro${p.fee === 'no' ? ' · grátis' : p.fee === 'yes' ? ' · pago' : ''}${p.hours ? ' · tem horário' : ''}</div></div><button class="i" data-info="${i}" aria-label="Resumo">i</button></div>`).join('') + (full.length > list.length ? `<button class="btn sm ghost" id="sights-more" style="margin-top:8px">Mostrar todos (${full.length})</button>` : '') || '<p class="hint">Sem pontos turísticos encontrados perto do destino.</p>';
+  if($('#sights-more')) $('#sights-more').onclick = () => { allSights = true; renderSights(); };
   $$('#sights [data-si]').forEach(el => el.addEventListener('click', e => { if(e.target.closest('[data-info]')) return; toggleSight(list[+el.dataset.si]); }));
   $$('#sights [data-info]').forEach(b => b.addEventListener('click', () => stopInfo(list[+b.dataset.info])));
 }
