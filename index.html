@@ -575,6 +575,7 @@ async function poisOSM(p, kinds){
 let mapPlan, planLayer;
 $('#btn-plan').addEventListener('click', async () => {
   if(!origin && pos) origin = {lat:pos.latitude, lon:pos.longitude, name: ($('#origin').value||'Minha posição').split(',').pop().trim()};
+  if(!origin){ const q = $('#origin').value.trim(); if(q){ try{ origin = $('#origin')._first() || (await suggest(q))[0] || null; }catch(e){} } }   // escreveu a saída mas não escolheu: usa a 1.ª sugestão
   if(!origin){ toast('Indique a saída'); return; }
   if(!dest){ const q = $('#dest').value.trim(); if(!q){ toast('Indique o destino'); return; } try{ const r = $('#dest')._first() || (await suggest(q))[0]; if(!r) throw 0; dest = r; }catch(e){ toast('Destino não encontrado'); return; } }
   const btn = $('#btn-plan'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span> A planear…';
