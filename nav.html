@@ -554,7 +554,7 @@ async function exportVideo(W0){
   // mantém o ecrã ligado e não depende do requestAnimationFrame (o Chrome trava-o quando o ecrã apaga)
   let wake = null; const getWake = async () => { try{ wake = await navigator.wakeLock?.request('screen'); }catch(e){} }; await getWake();
   const onVis = () => { if(document.visibilityState === 'visible' && (!wake || wake.released)) getWake(); }; document.addEventListener('visibilitychange', onVis);
-  const draw = () => new Promise(r => { map.redraw(); setTimeout(r, 0); }); const ready = () => map.areTilesLoaded();
+  const draw = () => new Promise(r => { map.redraw(); setTimeout(r, 0); }); const ready = () => map.isSourceLoaded('omt') && (!map.getSource('dem2') || map.isSourceLoaded('dem2'));   // a fonte 'dem' do relevo 3D nunca diz que acabou: não esperar por ela
   const T = {frame: 0, wait: 0, draw: 0, enc: 0}; const t0 = performance.now(); let tA;
   for(let i = 0; i < N; i++){
     const u = BENCH ? U0 + i*0.0004 : i/(N-1);
