@@ -80,7 +80,7 @@ async function repairGPS(t){
   const ll = q => [q[1], q[0]], osrm = async (a, b) => { const j = await (await fetch(`https://router.project-osrm.org/route/v1/driving/${a[1]},${a[0]};${b[1]},${b[0]}?overview=full&geometries=geojson`)).json(); return j.code === 'Ok' ? j.routes[0].geometry.coordinates.map(([lo, la]) => [la, lo]) : null; };
   const src = t.route, out = [src[0]]; let fixed = 0;
   for(let i = 1; i < src.length; i++){ const a = src[i-1], b = src[i], m = hav(ll(a), ll(b));
-    if(m > 250){ try{ const seg = await osrm(a, b); if(seg && seg.length > 2){ let len = 0; for(let k = 1; k < seg.length; k++) len += hav(ll(seg[k-1]), ll(seg[k])); if(len < m*4){ out.push(...seg.slice(1, -1)); fixed++; } } }catch(e){} }
+    if(m > 250 && fixed < 60){ try{ const seg = await osrm(a, b); if(seg && seg.length > 2){ let len = 0; for(let k = 1; k < seg.length; k++) len += hav(ll(seg[k-1]), ll(seg[k])); if(len < m*4){ out.push(...seg.slice(1, -1)); fixed++; } } }catch(e){} }
     out.push(b); }
   if(t.plannedOrigin){ const o = [t.plannedOrigin.lat, t.plannedOrigin.lon]; if(hav(ll(o), ll(out[0])) > 1000){ try{ const seg = await osrm(o, out[0]); if(seg && seg.length > 1){ out.unshift(...seg.slice(0, -1)); t.points[0] = {...t.points[0], lat: o[0], lon: o[1]}; t.startRebuilt = true; } }catch(e){} } }
   t.route = out; t.repaired = true; t.gapsFixed = fixed; return t;
@@ -349,18 +349,19 @@ function drawAppHud(d, u){
   x.shadowColor = 'rgba(0,0,0,.35)'; x.shadowBlur = 10*k; x.fillStyle = DARK ? '#FFFFFF' : MAPSTYLE === 'vintage' ? '#3B2A18' : '#1F2328'; x.font = `800 ${34*k}px Inter`; if(ATLAS){ x.save(); x.shadowBlur = 0; x.lineJoin = 'round'; x.lineWidth = 7*k; x.strokeStyle = 'rgba(250,246,236,.9)'; x.strokeText(TITLE, 26*k, 104*k); x.restore(); } x.fillText(TITLE, 26*k, 104*k); x.shadowBlur = 0;
   x.font = `700 ${17*k}px Inter`; x.fillStyle = DARK ? '#C9D3DF' : '#3C4043'; { const names = STOPS.slice(1, -1).filter(s => s.kind !== 'fuel').map(s => s.name); let n = names.length, t = names.join(' · '); while(n > 1 && x.measureText(t).width > W - 300*k){ n--; t = names.slice(0, n).join(' · ') + ` · +${names.length - n}`; } x.fillText(t, 27*k, 130*k); }
   // cartão da paragem (ao chegar / na pausa) + foto
-  STOPS.forEach(s => drawPhoto(x, k, W, H, s, d));
+  { const ph = STOPS.filter(s => PHOTOS.has(s)).sort((a, b) => Math.abs(a.d - d) - Math.abs(b.d - d))[0]; if(ph) drawPhoto(x, k, W, H, ph, d); }   // uma foto de cada vez (a do ponto mais próximo)
   // (o cartão branco com o ícone foi retirado: ficam só as fotos)
   // barra de progresso com as paragens
   const px = 40*k, pw = W - 80*k, py = H - 46*k; rr(px - 24*k, py - 40*k, pw + 48*k, 74*k, 16*k, DARK ? 'rgba(16,22,30,.92)' : MAPSTYLE === 'vintage' || ATLAS ? 'rgba(240,229,205,.94)' : 'rgba(255,255,255,.94)');
   rr(px, py - 3*k, pw, 6*k, 3*k, DARK ? '#3A4656' : '#E3DED6'); rr(px, py - 3*k, pw*d/TOTAL, 6*k, 3*k, RCOL);
   // nomes sem se sobreporem: partida e chegada sempre; os outros em cima, senão em baixo, senão só o ponto
   x.font = `700 ${12*k}px Inter`; const lab = s => s.kind === 'fuel' ? '⛽ ' + s.name : s.name, gap = 10*k;
-  const span = s => { const sx = px + pw*s.d/TOTAL, w = x.measureText(lab(s)).width; return s === STOPS[0] ? [sx, sx + w] : s === STOPS.at(-1) ? [sx - w, sx] : [sx - w/2, sx + w/2]; };
+  const lx = s => { const sx = px + pw*s.d/TOTAL, w = x.measureText(lab(s)).width; return s === STOPS[0] || s === STOPS.at(-1) ? sx : Math.max(px + w/2, Math.min(px + pw - w/2, sx)); };
+  const span = s => { const sx = lx(s), w = x.measureText(lab(s)).width; return s === STOPS[0] ? [sx, sx + w] : s === STOPS.at(-1) ? [sx - w, sx] : [sx - w/2, sx + w/2]; };
   const rows = [[], []], free = (r, a) => rows[r].every(b => a[1] + gap < b[0] || a[0] > b[1] + gap);
   const place = new Map(); [STOPS[0], STOPS.at(-1)].forEach(s => { place.set(s, 0); rows[0].push(span(s)); });
   STOPS.forEach(s => { if(place.has(s)) return; const a = span(s); const r = free(0, a) ? 0 : free(1, a) ? 1 : -1; place.set(s, r); if(r >= 0) rows[r].push(a); });
-  STOPS.forEach(s => { const sx = px + pw*s.d/TOTAL; x.fillStyle = s.d <= d ? (s.kind === 'fuel' ? '#F57C00' : '#E53935') : '#BDB6AC'; x.beginPath(); x.arc(sx, py, 7*k, 0, 7); x.fill(); x.strokeStyle = '#fff'; x.lineWidth = 2.5*k; x.stroke(); const r = place.get(s); if(r < 0) return; x.fillStyle = DARK ? '#DDE5EE' : '#3C4043'; x.font = `700 ${12*k}px Inter`; x.textAlign = s === STOPS[0] ? 'left' : s === STOPS.at(-1) ? 'right' : 'center'; x.fillText(lab(s), sx, r ? py + 20*k : py - 16*k); x.textAlign = 'left'; });
+  STOPS.forEach(s => { const sx = px + pw*s.d/TOTAL; x.fillStyle = s.d <= d ? (s.kind === 'fuel' ? '#F57C00' : '#E53935') : '#BDB6AC'; x.beginPath(); x.arc(sx, py, 7*k, 0, 7); x.fill(); x.strokeStyle = '#fff'; x.lineWidth = 2.5*k; x.stroke(); const r = place.get(s); if(r < 0) return; x.fillStyle = DARK ? '#DDE5EE' : '#3C4043'; x.font = `700 ${12*k}px Inter`; x.textAlign = s === STOPS[0] ? 'left' : s === STOPS.at(-1) ? 'right' : 'center'; x.fillText(lab(s), lx(s), r ? py + 20*k : py - 16*k); x.textAlign = 'left'; });
   x.fillStyle = DARK ? '#FFFFFF' : '#1F2328'; x.font = `800 ${15*k}px Inter`; x.textAlign = 'right'; x.fillText(`${(d/1000).toFixed(0)} / ${(TOTAL/1000).toFixed(0)} km`, W - 30*k, 46*k); x.textAlign = 'left';
   x.fillStyle = DARK ? 'rgba(255,255,255,.6)' : 'rgba(0,0,0,.55)'; x.font = `600 ${10*k}px Inter`; x.textAlign = 'right'; x.fillText('© OpenStreetMap · OpenMapTiles · OpenFreeMap', W - 30*k, H - 76*k); x.textAlign = 'left';
 }
