@@ -388,11 +388,11 @@ function frame(u, first){
   if(LOOK === 'app'){
     // vista de cima inclinada, mais afastada; aproxima nas paragens
     const fuel = STOPS.filter(q => q.kind === 'fuel').reduce((m, q) => Math.min(m, Math.abs(q.d - d)), 1e9), c = cityAt(d), tt = u*TEND;
-    let zt = 14.1 + 2.6*c + CAMS[CAM]; if(fuel < 1200) zt = Math.max(zt, 18.0 - 1.6*fuel/1200); zt = Math.min(18.4, zt);
+    let zt = 15.2 + 1.8*c + CAMS[CAM]; if(fuel < 1200) zt = Math.max(zt, 18.0 - 1.6*fuel/1200); zt = Math.min(18.4, zt);
     appZoom = appZoom === null || first ? zt : appZoom + (zt - appZoom)*.03;
     // alvo da câmara: drone alto (mais de cima) na autoestrada, mais baixo e atrás do carro na vila; começo desce do céu, fim sobe
     const pin = ease(tt/Math.min(6, TEND*.08)), pout = ease((tt - (TEND - Math.min(7, TEND*.09)))/Math.min(7, TEND*.09));
-    const sh = {pitch: (56 + 10*c)*pin + 5*(1 - pin), dz: -2.6*(1 - pin) - 2.8*pout, pad: .24 + .1*c, big: 1.1 + .35*c}; sh.pitch = sh.pitch*(1 - pout) + 6*pout;
+    const sh = {pitch: (62 + 6*c)*pin + 5*(1 - pin), dz: -3.4*(1 - pin) - 3.4*pout, pad: .3 + .06*c, big: 1.3 + .2*c}; sh.pitch = sh.pitch*(1 - pout) + 6*pout;
     if(!cam || first) cam = {...sh}; else for(const k of ['pitch', 'dz', 'pad', 'big']) cam[k] += (sh[k] - cam[k])*(k === 'dz' ? .08 : .03); carState.big = cam.big;
     map.jumpTo({center: p, zoom: Math.min(18.6, appZoom + cam.dz), pitch: Math.min(72, cam.pitch), bearing: camBear, padding: {top: H0()*cam.pad, bottom: 0, left: 0, right: 0}});
     setProgress(d/TOTAL); drawAppHud(d, u); map.triggerRepaint(); return;
