@@ -58,7 +58,7 @@ const CAMS = {perto: .8, normal: 0, longe: -.8}; let CAM = Q.get('cam') || (()=>
 const CAR_K = +(Q.get('carsize') || 1);
 const carScaleApp = z => 7.5*CAR_K*Math.pow(2, (17.5 - z)*1.1);  // carro ampliado para ser visível (tamanho real ficaria com poucos píxeis)
 const DUR = +(Q.get('dur') || 25);
-const START_HOLD = 2.5, END_HOLD = 4;   // s: foto da partida antes de arrancar · chegada parada com a câmara a mostrar o carro e as fotos finais            // segundos de vídeo para a viagem inteira
+const START_HOLD = 3, END_HOLD = 4;   // s: foto da partida antes de arrancar · chegada parada com a câmara a mostrar o carro e as fotos finais            // segundos de vídeo para a viagem inteira
 
 /* ---------- viagem ---------- */
 let trip;
@@ -206,6 +206,9 @@ function pinImg(id, color, glyph){ const c = document.createElement('canvas'); c
 function pinStart(){ const c = document.createElement('canvas'); c.width = 120; c.height = 150; const x = c.getContext('2d'); const g = x.createLinearGradient(0, 0, 0, 150); g.addColorStop(0, '#FFFFFF'); g.addColorStop(1, '#C9CED6'); x.fillStyle = g; x.shadowColor = 'rgba(0,0,0,.35)'; x.shadowBlur = 8; x.beginPath(); x.arc(60, 54, 48, Math.PI*.82, Math.PI*.18); x.lineTo(60, 144); x.closePath(); x.fill(); x.shadowBlur = 0; x.fillStyle = '#fff'; x.beginPath(); x.arc(60, 54, 38, 0, 7); x.fill(); x.fillStyle = '#111'; x.beginPath(); x.roundRect(30, 50, 60, 16, 7); x.fill(); x.beginPath(); x.moveTo(40, 52); x.quadraticCurveTo(48, 36, 62, 36); x.quadraticCurveTo(76, 36, 82, 52); x.fill(); x.fillStyle = '#fff'; x.fillRect(50, 42, 10, 8); x.fillRect(63, 42, 10, 8); x.fillStyle = '#111'; [44, 76].forEach(cx => { x.beginPath(); x.arc(cx, 67, 7, 0, 7); x.fill(); }); x.fillStyle = '#ddd'; [44, 76].forEach(cx => { x.beginPath(); x.arc(cx, 67, 3, 0, 7); x.fill(); }); map.addImage('pin-start', x.getImageData(0, 0, 120, 150), {pixelRatio: 2}); }
 pinStart(); pinImg('pin-stop', '#E53935', '●'); pinImg('pin-fuel', '#F57C00', '⛽'); pinImg('pin-end', '#2E7D32', '⚑');
 map.addSource('stops', {type:'geojson', data:{type:'FeatureCollection', features: STOPS.map((p, i) => ({type:'Feature', properties:{name: p.name, icon: p.kind === 'fuel' ? 'pin-fuel' : i === 0 && ATLAS ? 'pin-start' : i === STOPS.length-1 ? 'pin-end' : 'pin-stop'}, geometry:{type:'Point', coordinates:[p.lon, p.lat]}}))}});
+if(LOOK === 'app'){ const c = document.createElement('canvas'); c.width = 96; c.height = 132; const g = c.getContext('2d'); g.fillStyle = '#E53935'; g.strokeStyle = '#FFFFFF'; g.lineWidth = 6; g.beginPath(); g.moveTo(48, 128); g.bezierCurveTo(40, 104, 8, 80, 8, 48); g.arc(48, 48, 40, Math.PI, 0); g.bezierCurveTo(88, 80, 56, 104, 48, 128); g.closePath(); g.shadowColor = 'rgba(0,0,0,.35)'; g.shadowBlur = 6; g.fill(); g.shadowBlur = 0; g.stroke(); g.fillStyle = '#FFFFFF'; g.beginPath(); g.arc(48, 48, 15, 0, 7); g.fill();
+  map.addImage('pin-drop', g.getImageData(0, 0, 96, 132), {pixelRatio: 1.4}); map.addSource('dest', {type: 'geojson', data: {type: 'Feature', properties: {}, geometry: {type: 'Point', coordinates: line.at(-1)}}});
+  map.addLayer({id: 'dest', type: 'symbol', source: 'dest', layout: {'icon-image': 'pin-drop', 'icon-anchor': 'bottom', 'icon-allow-overlap': true, 'icon-ignore-placement': true}, paint: {'icon-opacity': 0, 'icon-opacity-transition': {duration: 0}}}); }   // pino do destino final
 if(LOOK === 'app') map.addLayer({id:'stops', minzoom: 30, type:'symbol', source:'stops', layout:{'icon-image':['get','icon'], 'icon-anchor':'bottom', 'icon-allow-overlap': true, 'text-field':['get','name'], 'text-font':['Noto Sans Bold'], 'text-size': 15, 'text-anchor':'top', 'text-offset':[0,.3], 'text-allow-overlap': true}, paint:{'text-color': MAPSTYLE === 'escuro' ? '#FFFFFF' : '#1F2328', 'text-halo-color': MAPSTYLE === 'escuro' ? '#0D141D' : '#fff', 'text-halo-width': 2.2}});
 
 /* ---------- carro 3D (camada three.js dentro do mapa) ---------- */
@@ -314,8 +317,10 @@ async function loadPhotos(){
     try{
       const mine = await idbGet(photoKey(s)); if(mine === 'none') return;
       let src = mine || s.photo || (s.photoId ? await idbGet('photo:' + s.photoId) : null), credit = '', from = 'tua';
-      if(!src){ const w = s.kind === 'fuel' ? await brandPhoto(s) : await wikiPhoto(s); if(w){ src = w.src; credit = w.credit; from = 'wiki'; } }
-      if(src) PHOTOS.set(s, {img: await loadImg(src), credit, src: from});
+      if(!src){ const ck = 'autophoto:' + s.name + ':' + (+s.lat).toFixed(3) + ',' + (+s.lon).toFixed(3); let w = await idbGet(ck);
+        for(let n = 0; !w && n < 3; n++){ w = s.kind === 'fuel' ? await brandPhoto(s) : await wikiPhoto(s); if(!w) await new Promise(r => setTimeout(r, 800)); }
+        if(w){ idbSet(ck, w); src = w.src; credit = w.credit; from = 'wiki'; } }
+      if(src){ let im = null; for(let n = 0; !im && n < 3; n++) im = await loadImg(src).catch(() => null); if(im) PHOTOS.set(s, {img: im, credit, src: from}); }
     }catch(e){ console.warn('foto', s.name, e); }
   }));
 }
@@ -324,7 +329,7 @@ let LOGO = null; const LOGO_READY = loadImg('img/logo-canal.png').then(im => LOG
 // polaroide da paragem (entra ao aproximar, fica na paragem, sai ao afastar) — desenhada no vídeo
 function drawPhoto(x, k, W, H, s, d, left){
   const P = PHOTOS.get(s); if(!P) return; const e = Math.max(0, Math.min(1, d)), pw = 290*k, ph = 195*k, fw = pw + 20*k, fh = ph + 58*k;   // d = opacidade 0..1
-  const cx = left ? 60*k + fw/2 : W - 60*k - fw/2, cy = H*.5 + (1 - e)*40*k; x.save(); x.globalAlpha = e; x.translate(cx, cy); x.rotate(((left ? 3 : -3) + 2*(1 - e))*Math.PI/180); x.scale(.85 + .15*e, .85 + .15*e);
+  const cx = left ? 60*k + fw/2 : W - 60*k - fw/2, cy = H*.5; x.save(); x.globalAlpha = e; x.translate(cx, cy); x.rotate((left ? 3 : -3)*Math.PI/180); x.scale(.92 + .08*e, .92 + .08*e);   // aparece no sítio (sem cair de cima)
   x.shadowColor = 'rgba(0,0,0,.35)'; x.shadowBlur = 24*k; x.shadowOffsetY = 8*k; x.fillStyle = '#FBF8F1'; x.fillRect(-fw/2, -fh/2, fw, fh); x.shadowColor = 'transparent';
   const im = P.img, sc = Math.max(pw/im.width, ph/im.height), sw = pw/sc, sh = ph/sc; x.drawImage(im, (im.width - sw)/2, (im.height - sh)/2, sw, sh, -pw/2, -fh/2 + 12*k, pw, ph);
   x.fillStyle = '#1F2328'; x.font = `800 ${19*k}px Montserrat, Inter`; x.textAlign = 'center'; x.fillText(s.name.trim(), 0, fh/2 - 20*k);
@@ -345,10 +350,11 @@ function drawAppHud(d, u){
   { x.font = `800 ${30*k}px Montserrat, Inter`; x.fillStyle = '#1F2328'; x.shadowColor = 'rgba(255,255,255,.55)'; x.shadowBlur = 8*k; x.fillText(TITLE, (LOGO ? 22 + 14 : 30)*k + LW, 86*k); x.shadowBlur = 0; x.shadowColor = 'transparent'; }   // título simples, sem placa
   // fotos: a da partida enquanto o carro está parado no início; as finais depois de o carro parar na chegada (a meio, nada)
   { const tt = u*TEND, A = .45;
-    if(tt < START_HOLD){ const a0 = Math.min(1, tt/A, (START_HOLD - .15 - tt)/A); if(a0 > 0 && PHOTOS.has(STOPS[0])) drawPhoto(x, k, W, H, STOPS[0], Math.max(0, a0), false); }
+    if(tt < START_HOLD){ const a0 = Math.min(1, (START_HOLD - .1 - tt)/A);   // já visível no 1.º instante; some antes de o carro arrancar
+      if(a0 > 0 && PHOTOS.has(STOPS[0])) drawPhoto(x, k, W, H, STOPS[0], Math.max(0, a0), false); }
     const te = tt - (TEND - END_HOLD + .3); if(te > 0){ const a1 = Math.min(1, te/A), dest = STOPS.at(-1);
       const extra = STOPS.slice(1, -1).filter(s => PHOTOS.has(s) && s.d > TOTAL - 3000).sort((p, q) => (PHOTOS.get(q).src === 'tua') - (PHOTOS.get(p).src === 'tua') || q.d - p.d)[0];
-      if(PHOTOS.has(dest)) drawPhoto(x, k, W, H, dest, a1, true); if(extra) drawPhoto(x, k, W, H, extra, Math.min(1, Math.max(0, (te - .25)/A)), !PHOTOS.has(dest) ? true : false); } }
+      if(PHOTOS.has(dest)) drawPhoto(x, k, W, H, dest, a1, true); if(extra) drawPhoto(x, k, W, H, extra, Math.min(1, Math.max(0, (te - 1)/A)), !PHOTOS.has(dest) ? true : false); } }   // primeiro uma, 1 s depois a outra
   x.fillStyle = DARK ? '#FFFFFF' : '#1F2328'; x.font = `800 ${15*k}px Inter`; x.textAlign = 'right'; x.fillText(`${(d/1000).toFixed(0)} / ${(TOTAL/1000).toFixed(0)} km`, W - 30*k, 46*k); x.textAlign = 'left';
   if(u < .12 || u > .9){ x.fillStyle = 'rgba(0,0,0,.5)'; x.font = `600 ${8.5*k}px Inter`; x.textAlign = 'right'; x.fillText('© OpenStreetMap contributors · OpenMapTiles · OpenFreeMap', W - 30*k, H - 76*k); x.textAlign = 'left'; }
 }
@@ -362,9 +368,11 @@ const CITY = []; { const st = 50, hasSteps = steps.length > 0;
   for(let k = 0; k < 5; k++){ const c = CITY.slice(); for(let i = 0; i < CITY.length; i++){ let a = 0, n = 0; for(let j = -14; j <= 14; j++){ const q = c[i+j]; if(q != null){ a += q; n++; } } CITY[i] = a/n; } } }
 const cityAt = d => { const f = Math.max(0, d)/50, i = Math.floor(f), A = CITY[Math.min(CITY.length - 1, i)], B = CITY[Math.min(CITY.length - 1, i + 1)]; return A + (B - A)*(f - i); };
 let cam = null;
+const END_GAP = Math.min(450, 4.8*carScaleApp(15.2 + 1.8*cityAt(TOTAL) + CAMS[CAM] + .7)*(2.8 + .3*cityAt(TOTAL))*.6), DSCALE = (TOTAL - END_GAP)/TOTAL;   // o carro pára com o nariz junto ao pino
+let pinA = -1;
 const visLenCam = () => 4.8*carScaleApp(appZoom ?? 13);
 function frame(u, first){
-  const d = distAtTime(u); const {p} = posAt(d); const s = stepAt(d); const mw = isMotorway(s);
+  const d = distAtTime(u)*(LOOK === 'app' ? DSCALE : 1); const {p} = posAt(d); const s = stepAt(d); const mw = isMotorway(s);
   const head = headingAt(d, LOOK === 'app' ? Math.max(350, Math.min(900, visLenCam()*3)) : mw ? 420 : 160); if(camBear === null || first) camBear = head; let db = ((head - camBear + 540) % 360) - 180; camBear = (camBear + (LOOK === 'app' ? Math.max(-1.2, Math.min(1.2, db*.025)) : db*.12) + 360) % 360;   // roda devagar (máx. ~36°/s): não baloiça
   carState.lng = p[0]; carState.lat = p[1]; carState.dist = d; carState.alt = (map.queryTerrainElevation(p) || 0); const visLen = 4.8*(LOOK === 'app' ? carScaleApp(appZoom ?? 13) : CAR_SCALE*Math.pow(2, 16.6 - map.getZoom()));   // comprimento do carro "no mapa" (m)
   const carHead = headingAt(d, LOOK === 'app' ? Math.max(25, Math.min(60, visLen*.35)) : 25), yawT = (90 - carHead)*rad;
@@ -379,6 +387,7 @@ function frame(u, first){
     // alvo da câmara: drone alto (mais de cima) na autoestrada, mais baixo e atrás do carro na vila; começo desce do céu, fim sobe
     const pin = ease(tt/Math.min(6, TEND*.08)), pout = 0, pend = ease((tt - (TEND - END_HOLD - .6))/2.2);   // pend: plano final a 3/4
     const sh = {pitch: (60 + 3*c)*pin + 5*(1 - pin) + 3*pend, dz: -3.4*(1 - pin) + .7*pend, pad: (.3 + .06*c)*(1 - pend) + .12*pend, big: 2.1 + .3*c + .4*pend, rot: 58*pend}; sh.pitch = sh.pitch*(1 - pout) + 6*pout;
+    { const a = Math.round(ease((tt - (TEND - END_HOLD - 2.2))/1.2)*20)/20; if(a !== pinA && map.getLayer('dest')){ map.setPaintProperty('dest', 'icon-opacity', a); pinA = a; } }   // pino aparece ao chegar
     if(!cam || first) cam = {...sh}; else for(const k of ['pitch', 'dz', 'pad', 'big']) cam[k] += (sh[k] - cam[k])*(k === 'dz' ? .08 : .03); carState.big = cam.big;
     map.jumpTo({center: p, zoom: Math.min(18.6, appZoom + cam.dz), pitch: Math.min(63, cam.pitch), bearing: (camBear + sh.rot + 360) % 360, padding: {top: H0()*cam.pad, bottom: 0, left: 0, right: 0}});
     setProgress(d/TOTAL); drawAppHud(d, u); map.triggerRepaint(); return;
