@@ -320,6 +320,7 @@ async function loadPhotos(){
   }));
 }
 let PHOTOS_READY = loadPhotos();
+let LOGO = null; const LOGO_READY = loadImg('img/logo-canal.png').then(im => LOGO = im).catch(() => null);   // logótipo do canal (canto superior esquerdo)
 // polaroide da paragem (entra ao aproximar, fica na paragem, sai ao afastar) — desenhada no vídeo
 function drawPhoto(x, k, W, H, s, d, left){
   const P = PHOTOS.get(s); if(!P) return; const e = Math.max(0, Math.min(1, d)), pw = 290*k, ph = 195*k, fw = pw + 20*k, fh = ph + 58*k;   // d = opacidade 0..1
@@ -340,7 +341,8 @@ function drawAppHud(d, u){
   if(ATLAS && !GPU_FX){ x.save(); x.globalAlpha = 0; x.globalCompositeOperation = 'multiply'; x.fillStyle = x.createPattern(GRAIN, 'repeat'); x.fillRect(0, 0, W, H); x.restore(); const v = x.createRadialGradient(W/2, H/2, H*.45, W/2, H/2, H*.95); v.addColorStop(0, 'rgba(60,40,20,0)'); v.addColorStop(1, 'rgba(60,40,20,.32)'); x.fillStyle = v; x.fillRect(0, 0, W, H); }
   // título (com fundo suave para não se misturar com os nomes do mapa)
   if(!ATLAS){ const g = x.createLinearGradient(0, 0, 0, 160*k); const P = DARK ? '14,22,32' : MAPSTYLE === 'vintage' || ATLAS ? '242,233,208' : '255,255,255'; g.addColorStop(0, `rgba(${P},.92)`); g.addColorStop(.75, `rgba(${P},.6)`); g.addColorStop(1, `rgba(${P},0)`); x.fillStyle = g; x.fillRect(0, 0, W, 160*k); }
-  { x.font = `800 ${30*k}px Montserrat, Inter`; x.fillStyle = '#1F2328'; x.shadowColor = 'rgba(255,255,255,.55)'; x.shadowBlur = 8*k; x.fillText(TITLE, 30*k, 62*k); x.shadowBlur = 0; x.shadowColor = 'transparent'; }   // título simples, sem placa
+  const LH = 120*k, LW = LOGO ? LH*LOGO.width/LOGO.height : 0; if(LOGO){ x.save(); x.shadowColor = 'rgba(0,0,0,.25)'; x.shadowBlur = 10*k; x.drawImage(LOGO, 22*k, 16*k, LW, LH); x.restore(); }
+  { x.font = `800 ${30*k}px Montserrat, Inter`; x.fillStyle = '#1F2328'; x.shadowColor = 'rgba(255,255,255,.55)'; x.shadowBlur = 8*k; x.fillText(TITLE, (LOGO ? 22 + 14 : 30)*k + LW, 86*k); x.shadowBlur = 0; x.shadowColor = 'transparent'; }   // título simples, sem placa
   // fotos: a da partida enquanto o carro está parado no início; as finais depois de o carro parar na chegada (a meio, nada)
   { const tt = u*TEND, A = .45;
     if(tt < START_HOLD){ const a0 = Math.min(1, tt/A, (START_HOLD - .15 - tt)/A); if(a0 > 0 && PHOTOS.has(STOPS[0])) drawPhoto(x, k, W, H, STOPS[0], Math.max(0, a0), false); }
@@ -530,7 +532,7 @@ async function exportVideo(W0){
   const W_ = +(Q.get('w') || W0), tag0 = W_ >= 3840 ? '4K' : Math.round(W_*9/16) + 'p', stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
   const name = `lr-rota-${(STOPS[0]?.name || 'viagem').replace(/\W+/g, '-')}-${(STOPS.at(-1)?.name || '').replace(/\W+/g, '-')}-${tag0}-${stamp}.mp4`;
   let picked = null; if(!+(Q.get('bench') || 0) && window.showSaveFilePicker && navigator.userActivation?.isActive){ try{ picked = await showSaveFilePicker({suggestedName: name, startIn: 'downloads', types: [{description: 'Vídeo MP4', accept: {'video/mp4': ['.mp4']}}]}); }catch(e){ if(e.name === 'AbortError'){ status('Exportação cancelada.'); return; } } }
-  status('A preparar as fotos das paragens…'); await Promise.race([Promise.all([PHOTOS_READY, document.fonts.load('800 28px Montserrat'), document.fonts.load('700 13px Montserrat')]), new Promise(r => setTimeout(r, 10000))]);
+  status('A preparar as fotos das paragens…'); await Promise.race([Promise.all([PHOTOS_READY, LOGO_READY, document.fonts.load('800 28px Montserrat'), document.fonts.load('700 13px Montserrat')]), new Promise(r => setTimeout(r, 10000))]);
   const { Muxer, ArrayBufferTarget, FileSystemWritableFileStreamTarget } = await import('./vendor/mp4-muxer/mp4-muxer.mjs');
   const W = +(Q.get('w') || W0), H = Math.round(W*9/16), FPS = +(Q.get('fps') || 30), BR = +(Q.get('br') || (W >= 3840 ? 35e6 : W >= 2560 ? 20e6 : 12e6)), PR = W >= 2560 ? W/1920 : 1;
   const BENCH = +(Q.get('bench') || 0), U0 = +(Q.get('from') || 0);
