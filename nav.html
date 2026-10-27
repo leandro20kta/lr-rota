@@ -57,7 +57,8 @@ const CAMS = {perto: .8, normal: 0, longe: -.8}; let CAM = Q.get('cam') || (()=>
 // estilo 'app': o carro tem ~80 px na autoestrada (vista alta) e encolhe para caber na faixa quando a câmara desce às ruas
 const CAR_K = +(Q.get('carsize') || 1);
 const carScaleApp = z => 7.5*CAR_K*Math.pow(2, (17.5 - z)*1.1);  // carro ampliado para ser visível (tamanho real ficaria com poucos píxeis)
-const DUR = +(Q.get('dur') || 25);            // segundos de vídeo para a viagem inteira
+const DUR = +(Q.get('dur') || 25);
+const START_HOLD = 2.5, END_HOLD = 4;   // s: foto da partida antes de arrancar · chegada parada com a câmara a mostrar o carro e as fotos finais            // segundos de vídeo para a viagem inteira
 
 /* ---------- viagem ---------- */
 let trip;
@@ -124,14 +125,14 @@ const T = [0], D = [0]; { const NS = Math.min(20000, Math.max(2000, Math.round(T
   const cv = []; for(let i = 0; i <= NS; i++){ const d = i*SD, a = bearingOf(posAt(d - 20).p, posAt(d).p), b = bearingOf(posAt(d).p, posAt(d + 20).p); cv.push(Math.abs(((b - a + 540) % 360) - 180)/20); }
   box(cv, W(25));
   { const c = cv.slice(), r = W(30); for(let i = 0; i <= NS; i++){ let m = 0; for(let j = Math.max(0, i - r); j <= Math.min(NS, i + r); j++) if(c[j] > m) m = c[j]; cv[i] = m; } }
-  const pauses = STOPS.filter((p, i) => i === 0 || i === STOPS.length - 1 || p.pause || p.kind === 'fuel' || p.photo || p.photoId).map(p => ({d: p.d, s: Math.min(2, Math.max(1.2, DUR*.08))})).sort((a, b) => a.d - b.d), pz = pauses.reduce((a, b) => a + b.s, 0);
+  const pauses = [{d: 0, s: START_HOLD, ease: 300}, {d: TOTAL, s: END_HOLD, ease: 1400}], pz = pauses.reduce((a, b) => a + b.s, 0);   // a meio não pára: segue direto
   // travagem e arranque suaves nas paragens com pausa (abastecimento)
   // curvas e rotundas: o carro nunca roda mais de ~220°/s no vídeo (7° por imagem); o tempo recupera-se nas retas
   const sp0 = sp.slice();
   for(let it = 0; it < 10; it++){ let r = 0; for(let i = 1; i <= NS; i++) r += 2/(sp[i-1] + sp[i]); const kk = Math.max(5, DUR - pz)/r;
     for(let i = 0; i <= NS; i++){ const cap = 380/Math.max(cv[i], 1e-4)*kk/SD; sp[i] = Math.min(sp[i], Math.max(cap, sp0[i]*.45), sp0[i]*3); }
     box(sp, W(it < 9 ? 150 : 60)); }                              // trava antes da curva e acelera depois, sempre de forma progressiva
-  pauses.forEach(p => { for(let i = 0; i <= NS; i++){ const g = Math.abs(p.d - i*SD); if(g < 350) sp[i] *= Math.max(.12, Math.pow(g/350, .6)); } });   // chega à bomba a travar até parar
+  pauses.forEach(p => { for(let i = 0; i <= NS; i++){ const g = Math.abs(p.d - i*SD); if(g < p.ease) sp[i] *= Math.max(.06, Math.pow(g/p.ease, .7)); } });   // arranca devagar; na chegada vai travando até parar
   const raw = [0]; for(let i = 1; i <= NS; i++) raw.push(raw[i-1] + 2/(sp[i-1] + sp[i]));
   const k = Math.max(5, DUR - pz)/raw.at(-1); let extra = 0, pi = 0;
   for(let i = 1; i <= NS; i++){ const d = i*SD, d0 = (i - 1)*SD;
@@ -205,7 +206,7 @@ function pinImg(id, color, glyph){ const c = document.createElement('canvas'); c
 function pinStart(){ const c = document.createElement('canvas'); c.width = 120; c.height = 150; const x = c.getContext('2d'); const g = x.createLinearGradient(0, 0, 0, 150); g.addColorStop(0, '#FFFFFF'); g.addColorStop(1, '#C9CED6'); x.fillStyle = g; x.shadowColor = 'rgba(0,0,0,.35)'; x.shadowBlur = 8; x.beginPath(); x.arc(60, 54, 48, Math.PI*.82, Math.PI*.18); x.lineTo(60, 144); x.closePath(); x.fill(); x.shadowBlur = 0; x.fillStyle = '#fff'; x.beginPath(); x.arc(60, 54, 38, 0, 7); x.fill(); x.fillStyle = '#111'; x.beginPath(); x.roundRect(30, 50, 60, 16, 7); x.fill(); x.beginPath(); x.moveTo(40, 52); x.quadraticCurveTo(48, 36, 62, 36); x.quadraticCurveTo(76, 36, 82, 52); x.fill(); x.fillStyle = '#fff'; x.fillRect(50, 42, 10, 8); x.fillRect(63, 42, 10, 8); x.fillStyle = '#111'; [44, 76].forEach(cx => { x.beginPath(); x.arc(cx, 67, 7, 0, 7); x.fill(); }); x.fillStyle = '#ddd'; [44, 76].forEach(cx => { x.beginPath(); x.arc(cx, 67, 3, 0, 7); x.fill(); }); map.addImage('pin-start', x.getImageData(0, 0, 120, 150), {pixelRatio: 2}); }
 pinStart(); pinImg('pin-stop', '#E53935', '●'); pinImg('pin-fuel', '#F57C00', '⛽'); pinImg('pin-end', '#2E7D32', '⚑');
 map.addSource('stops', {type:'geojson', data:{type:'FeatureCollection', features: STOPS.map((p, i) => ({type:'Feature', properties:{name: p.name, icon: p.kind === 'fuel' ? 'pin-fuel' : i === 0 && ATLAS ? 'pin-start' : i === STOPS.length-1 ? 'pin-end' : 'pin-stop'}, geometry:{type:'Point', coordinates:[p.lon, p.lat]}}))}});
-if(LOOK === 'app') map.addLayer({id:'stops', type:'symbol', source:'stops', layout:{'icon-image':['get','icon'], 'icon-anchor':'bottom', 'icon-allow-overlap': true, 'text-field':['get','name'], 'text-font':['Noto Sans Bold'], 'text-size': 15, 'text-anchor':'top', 'text-offset':[0,.3], 'text-allow-overlap': true}, paint:{'text-color': MAPSTYLE === 'escuro' ? '#FFFFFF' : '#1F2328', 'text-halo-color': MAPSTYLE === 'escuro' ? '#0D141D' : '#fff', 'text-halo-width': 2.2}});
+if(LOOK === 'app') map.addLayer({id:'stops', minzoom: 30, type:'symbol', source:'stops', layout:{'icon-image':['get','icon'], 'icon-anchor':'bottom', 'icon-allow-overlap': true, 'text-field':['get','name'], 'text-font':['Noto Sans Bold'], 'text-size': 15, 'text-anchor':'top', 'text-offset':[0,.3], 'text-allow-overlap': true}, paint:{'text-color': MAPSTYLE === 'escuro' ? '#FFFFFF' : '#1F2328', 'text-halo-color': MAPSTYLE === 'escuro' ? '#0D141D' : '#fff', 'text-halo-width': 2.2}});
 
 /* ---------- carro 3D (camada three.js dentro do mapa) ---------- */
 const WHEELS = ['roda_FE','roda_FD','roda_TE','roda_TD'];
@@ -321,8 +322,7 @@ async function loadPhotos(){
 let PHOTOS_READY = loadPhotos();
 // polaroide da paragem (entra ao aproximar, fica na paragem, sai ao afastar) — desenhada no vídeo
 function drawPhoto(x, k, W, H, s, d, left){
-  const P = PHOTOS.get(s); if(!P) return; const R = Math.max(s.pause || s.kind === 'fuel' ? 1200 : 1600, TOTAL/TEND*1.4), g = Math.abs(s.d - d);   // em vídeos curtos a foto fica ~3 s if(g >= R) return;
-  const a = Math.min(1, (R - g)/(R*.3)), e = a*a*(3 - 2*a), pw = 290*k, ph = 195*k, fw = pw + 20*k, fh = ph + 58*k;
+  const P = PHOTOS.get(s); if(!P) return; const e = Math.max(0, Math.min(1, d)), pw = 290*k, ph = 195*k, fw = pw + 20*k, fh = ph + 58*k;   // d = opacidade 0..1
   const cx = left ? 60*k + fw/2 : W - 60*k - fw/2, cy = H*.5 + (1 - e)*40*k; x.save(); x.globalAlpha = e; x.translate(cx, cy); x.rotate(((left ? 3 : -3) + 2*(1 - e))*Math.PI/180); x.scale(.85 + .15*e, .85 + .15*e);
   x.shadowColor = 'rgba(0,0,0,.35)'; x.shadowBlur = 24*k; x.shadowOffsetY = 8*k; x.fillStyle = '#FBF8F1'; x.fillRect(-fw/2, -fh/2, fw, fh); x.shadowColor = 'transparent';
   const im = P.img, sc = Math.max(pw/im.width, ph/im.height), sw = pw/sc, sh = ph/sc; x.drawImage(im, (im.width - sw)/2, (im.height - sh)/2, sw, sh, -pw/2, -fh/2 + 12*k, pw, ph);
@@ -340,18 +340,13 @@ function drawAppHud(d, u){
   if(ATLAS && !GPU_FX){ x.save(); x.globalAlpha = 0; x.globalCompositeOperation = 'multiply'; x.fillStyle = x.createPattern(GRAIN, 'repeat'); x.fillRect(0, 0, W, H); x.restore(); const v = x.createRadialGradient(W/2, H/2, H*.45, W/2, H/2, H*.95); v.addColorStop(0, 'rgba(60,40,20,0)'); v.addColorStop(1, 'rgba(60,40,20,.32)'); x.fillStyle = v; x.fillRect(0, 0, W, H); }
   // título (com fundo suave para não se misturar com os nomes do mapa)
   if(!ATLAS){ const g = x.createLinearGradient(0, 0, 0, 160*k); const P = DARK ? '14,22,32' : MAPSTYLE === 'vintage' || ATLAS ? '242,233,208' : '255,255,255'; g.addColorStop(0, `rgba(${P},.92)`); g.addColorStop(.75, `rgba(${P},.6)`); g.addColorStop(1, `rgba(${P},0)`); x.fillStyle = g; x.fillRect(0, 0, W, 160*k); }
-  rr(24*k, 22*k, 214*k, 40*k, 20*k, '#0A5BD6'); x.fillStyle = '#fff'; x.font = `800 ${17*k}px Inter`; x.fillText('LEANDRO NA ROTA', 44*k, 48*k);
-  { x.font = `800 ${28*k}px Montserrat, Inter`; const tw = x.measureText(TITLE).width; x.shadowColor = 'rgba(0,0,0,.3)'; x.shadowBlur = 14*k; rr(24*k, 72*k, tw + 40*k, 50*k, 14*k, 'rgba(17,20,26,.78)'); x.shadowBlur = 0; x.fillStyle = '#FFFFFF'; x.fillText(TITLE, 44*k, 106*k); }
-  // cartão da paragem (ao chegar / na pausa) + foto
-  { const ph = STOPS.filter(s => PHOTOS.has(s)).sort((a, b) => Math.abs(a.d - d) - Math.abs(b.d - d)); if(ph[0]){ drawPhoto(x, k, W, H, ph[0], d, false); if(ph[1] && Math.abs(ph[1].d - ph[0].d) < 700) drawPhoto(x, k, W, H, ph[1], d, true); } }   // a do ponto mais próximo; se houver outro ali ao lado, aparece do outro lado
-  // (o cartão branco com o ícone foi retirado: ficam só as fotos)
-  // barra de progresso com as paragens
-  const px = 40*k, pw = W - 80*k, py = H - 46*k; rr(px - 24*k, py - 40*k, pw + 48*k, 74*k, 16*k, DARK ? 'rgba(16,22,30,.92)' : MAPSTYLE === 'vintage' || ATLAS ? 'rgba(240,229,205,.94)' : 'rgba(255,255,255,.94)');
-  rr(px, py - 3*k, pw, 6*k, 3*k, DARK ? '#3A4656' : '#E3DED6'); rr(px, py - 3*k, pw*d/TOTAL, 6*k, 3*k, RCOL);
-  { const pin = (cx, col) => { x.save(); x.fillStyle = col; x.strokeStyle = '#fff'; x.lineWidth = 2.5*k; x.beginPath(); x.moveTo(cx, py + 1*k); x.bezierCurveTo(cx - 3*k, py - 6*k, cx - 11*k, py - 12*k, cx - 11*k, py - 20*k); x.arc(cx, py - 20*k, 11*k, Math.PI, 0); x.bezierCurveTo(cx + 11*k, py - 12*k, cx + 3*k, py - 6*k, cx, py + 1*k); x.closePath(); x.fill(); x.stroke(); x.fillStyle = '#fff'; x.beginPath(); x.arc(cx, py - 20*k, 4.2*k, 0, 7); x.fill(); x.restore(); };
-    const ex = px + pw, done = d >= TOTAL - 5; pin(px, '#E53935');                                   // partida: pino (gota)
-    x.beginPath(); x.arc(ex, py, 9*k, 0, 7); x.fillStyle = done ? '#E53935' : '#FFFFFF'; x.fill(); x.lineWidth = 3*k; x.strokeStyle = done ? '#FFFFFF' : '#1F2328'; x.stroke(); x.beginPath(); x.arc(ex, py, 3.2*k, 0, 7); x.fillStyle = done ? '#FFFFFF' : '#1F2328'; x.fill();   // chegada: ponto
-    x.fillStyle = '#3C4043'; x.font = `700 ${13*k}px Montserrat, Inter`; x.textAlign = 'left'; x.fillText(STOPS[0].name.trim(), px + 18*k, py - 13*k); x.textAlign = 'right'; x.fillText(STOPS.at(-1).name.trim(), ex - 18*k, py - 13*k); x.textAlign = 'left'; }
+  { x.font = `800 ${30*k}px Montserrat, Inter`; x.fillStyle = '#1F2328'; x.shadowColor = 'rgba(255,255,255,.55)'; x.shadowBlur = 8*k; x.fillText(TITLE, 30*k, 62*k); x.shadowBlur = 0; x.shadowColor = 'transparent'; }   // título simples, sem placa
+  // fotos: a da partida enquanto o carro está parado no início; as finais depois de o carro parar na chegada (a meio, nada)
+  { const tt = u*TEND, A = .45;
+    if(tt < START_HOLD){ const a0 = Math.min(1, tt/A, (START_HOLD - .15 - tt)/A); if(a0 > 0 && PHOTOS.has(STOPS[0])) drawPhoto(x, k, W, H, STOPS[0], Math.max(0, a0), false); }
+    const te = tt - (TEND - END_HOLD + .3); if(te > 0){ const a1 = Math.min(1, te/A), dest = STOPS.at(-1);
+      const extra = STOPS.slice(1, -1).filter(s => PHOTOS.has(s) && s.d > TOTAL - 3000).sort((p, q) => (PHOTOS.get(q).src === 'tua') - (PHOTOS.get(p).src === 'tua') || q.d - p.d)[0];
+      if(PHOTOS.has(dest)) drawPhoto(x, k, W, H, dest, a1, true); if(extra) drawPhoto(x, k, W, H, extra, Math.min(1, Math.max(0, (te - .25)/A)), !PHOTOS.has(dest) ? true : false); } }
   x.fillStyle = DARK ? '#FFFFFF' : '#1F2328'; x.font = `800 ${15*k}px Inter`; x.textAlign = 'right'; x.fillText(`${(d/1000).toFixed(0)} / ${(TOTAL/1000).toFixed(0)} km`, W - 30*k, 46*k); x.textAlign = 'left';
   if(u < .12 || u > .9){ x.fillStyle = 'rgba(0,0,0,.5)'; x.font = `600 ${8.5*k}px Inter`; x.textAlign = 'right'; x.fillText('© OpenStreetMap contributors · OpenMapTiles · OpenFreeMap', W - 30*k, H - 76*k); x.textAlign = 'left'; }
 }
@@ -380,10 +375,10 @@ function frame(u, first){
     let zt = 15.2 + 1.8*c + CAMS[CAM]; if(fuel < 1200) zt = Math.max(zt, 18.0 - 1.6*fuel/1200); zt = Math.min(18.4, zt);
     appZoom = appZoom === null || first ? zt : appZoom + (zt - appZoom)*.03;
     // alvo da câmara: drone alto (mais de cima) na autoestrada, mais baixo e atrás do carro na vila; começo desce do céu, fim sobe
-    const pin = ease(tt/Math.min(6, TEND*.08)), pout = ease((tt - (TEND - Math.min(7, TEND*.09)))/Math.min(7, TEND*.09));
-    const sh = {pitch: (60 + 3*c)*pin + 5*(1 - pin), dz: -3.4*(1 - pin) - 3.4*pout, pad: .3 + .06*c, big: 2.1 + .3*c}; sh.pitch = sh.pitch*(1 - pout) + 6*pout;
+    const pin = ease(tt/Math.min(6, TEND*.08)), pout = 0, pend = ease((tt - (TEND - END_HOLD - .6))/2.2);   // pend: plano final a 3/4
+    const sh = {pitch: (60 + 3*c)*pin + 5*(1 - pin) + 3*pend, dz: -3.4*(1 - pin) + .7*pend, pad: (.3 + .06*c)*(1 - pend) + .12*pend, big: 2.1 + .3*c + .4*pend, rot: 58*pend}; sh.pitch = sh.pitch*(1 - pout) + 6*pout;
     if(!cam || first) cam = {...sh}; else for(const k of ['pitch', 'dz', 'pad', 'big']) cam[k] += (sh[k] - cam[k])*(k === 'dz' ? .08 : .03); carState.big = cam.big;
-    map.jumpTo({center: p, zoom: Math.min(18.6, appZoom + cam.dz), pitch: Math.min(63, cam.pitch), bearing: camBear, padding: {top: H0()*cam.pad, bottom: 0, left: 0, right: 0}});
+    map.jumpTo({center: p, zoom: Math.min(18.6, appZoom + cam.dz), pitch: Math.min(63, cam.pitch), bearing: (camBear + sh.rot + 360) % 360, padding: {top: H0()*cam.pad, bottom: 0, left: 0, right: 0}});
     setProgress(d/TOTAL); drawAppHud(d, u); map.triggerRepaint(); return;
   }
   const z = mw ? 15.8 : 16.3; const near = (trip.points || []).some(q => hav([q.lon, q.lat], p) < 2500);
