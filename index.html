@@ -900,7 +900,7 @@ async function navTripWithPhotos(t){ const nt = navTrip(t); for(const p of nt.po
 function navTrip(t){ const gps = (t.track || []).length > 20; const route = gps ? t.track.map(p => [p.lat, p.lon]) : t.route;
   const near = s => (t.track || []).some(p => dist(p.lat, p.lon, s.lat, s.lon) < 400);   // passou perto, mesmo sem a app marcar 'chegou'
   const stops = (t.stops || []).filter(s => s.done || s.kind === 'fuel' || s.photoId || (gps && near(s))).map(s => ({name: s.name, sub: s.kind === 'fuel' ? 'Abastecimento' : (s.note || ''), kind: s.kind === 'photo' ? undefined : s.kind, pause: s.pause, lat: s.lat, lon: s.lon, photoId: s.photoId}));
-  return {gps, route, distance: t.trackDistance || t.distance, duration: t.startedAt && t.endedAt ? (t.endedAt - t.startedAt)/1000 : t.duration, date: t.created,
+  return {gps, route, plannedOrigin: t.origin ? {lat: t.origin.lat, lon: t.origin.lon} : undefined, distance: t.trackDistance || t.distance, duration: t.startedAt && t.endedAt ? (t.endedAt - t.startedAt)/1000 : t.duration, date: t.created,
     points: [{name: t.origin.name, sub: 'Partida', lat: route[0][0], lon: route[0][1]}, ...stops, {name: t.dest.name, sub: 'Chegada', lat: route.at(-1)[0], lon: route.at(-1)[1]}]}; }
 $('#btn-3d').addEventListener('click', () => { const t = current; if(!t) return; localStorage.setItem('lr-nav-trip', JSON.stringify(navTrip(t))); location.href = 'nav.html?look=app&map=atlas&dur=150'; });
 $('#btn-savejson').addEventListener('click', async () => { const t = current; if(!t) return; const f = new File([JSON.stringify({lrNav: await navTripWithPhotos(t), trip: t})], `lr-rota-${(t.origin.name + '-' + t.dest.name).replace(/\W+/g, '-')}-${new Date(t.created).toISOString().slice(0, 10)}.json`, {type: 'application/json'});
