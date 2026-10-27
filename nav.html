@@ -57,7 +57,7 @@ const CAMS = {perto: .8, normal: 0, longe: -.8}; let CAM = Q.get('cam') || (()=>
 // estilo 'app': o carro tem ~80 px na autoestrada (vista alta) e encolhe para caber na faixa quando a câmara desce às ruas
 const CAR_K = +(Q.get('carsize') || 1);
 const carScaleApp = z => 7.5*CAR_K*Math.pow(2, (17.5 - z)*1.1);  // carro ampliado para ser visível (tamanho real ficaria com poucos píxeis)
-const DUR = +(Q.get('dur') || 75);            // segundos de vídeo para a viagem inteira
+const DUR = +(Q.get('dur') || 25);            // segundos de vídeo para a viagem inteira
 
 /* ---------- viagem ---------- */
 let trip;
@@ -124,7 +124,7 @@ const T = [0], D = [0]; { const NS = Math.min(20000, Math.max(2000, Math.round(T
   const cv = []; for(let i = 0; i <= NS; i++){ const d = i*SD, a = bearingOf(posAt(d - 20).p, posAt(d).p), b = bearingOf(posAt(d).p, posAt(d + 20).p); cv.push(Math.abs(((b - a + 540) % 360) - 180)/20); }
   box(cv, W(25));
   { const c = cv.slice(), r = W(30); for(let i = 0; i <= NS; i++){ let m = 0; for(let j = Math.max(0, i - r); j <= Math.min(NS, i + r); j++) if(c[j] > m) m = c[j]; cv[i] = m; } }
-  const pauses = STOPS.filter(p => p.pause || p.kind === 'fuel').map(p => ({d: p.d, s: Math.max(+p.pause || 0, p.kind === 'fuel' ? 4 : 0)})).sort((a, b) => a.d - b.d), pz = pauses.reduce((a, b) => a + b.s, 0);
+  const pauses = STOPS.filter(p => p.pause || p.kind === 'fuel').map(p => ({d: p.d, s: Math.min(Math.max(+p.pause || 0, p.kind === 'fuel' ? 4 : 0), Math.max(1.2, DUR*.07))})).sort((a, b) => a.d - b.d), pz = pauses.reduce((a, b) => a + b.s, 0);
   // travagem e arranque suaves nas paragens com pausa (abastecimento)
   // curvas e rotundas: o carro nunca roda mais de ~220°/s no vídeo (7° por imagem); o tempo recupera-se nas retas
   const sp0 = sp.slice();
@@ -219,7 +219,7 @@ async function loadCarGLB(){
   m.traverse(o => { if(!o.isMesh) return; (Array.isArray(o.material) ? o.material : [o.material]).forEach(mt => {
     if(/^(Paint|Coloured|GrelhaPreta)$/.test(mt.name)){ mt.color.set('#0A0A0C'); mt.metalness = .35; mt.roughness = .32; if('clearcoat' in mt){ mt.clearcoat = 1; mt.clearcoatRoughness = .035; } mt.envMapIntensity = .9; /* preto de brinquedo: só brilhos pequenos */ }
     if(mt.name === 'GlassRed'){ mt.emissive.set('#FF0000'); mt.emissiveIntensity = 1.8; mt.color.set('#FF0000'); mt.toneMapped = false; }   // sem tone mapping: vermelho puro, não alaranjado
-    if(mt.name === 'GlassMtl'){ mt.color.set('#030406'); mt.envMapIntensity = 1; }
+    if(mt.name === 'GlassMtl'){ mt.color.set('#010102'); mt.envMapIntensity = .12; mt.roughness = .18; if('clearcoat' in mt) mt.clearcoat = 0; }   // vidro escuro (película): sem faixa branca
     if(/^(Carbon1|Base|CaliperAZone)$/.test(mt.name)){ mt.color.set('#050505'); mt.envMapIntensity = .2; }
   }); });
   // brilho vermelho dos farolins (visível de cima) — atrás do carro (frente = +X)
@@ -237,12 +237,12 @@ const carLayer = {
     const studio = new THREE.Scene(); { const g = new THREE.SphereGeometry(60, 48, 32), P = g.attributes.position, col = []; for(let i = 0; i < P.count; i++){ const y = P.getY(i)/60, v = y > 0 ? .62*Math.exp(-y*5.5) + .1 : .62*Math.exp(y*14) + .025; col.push(v, v*1.01, v*1.05); }
       g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); studio.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({vertexColors: true, side: THREE.BackSide}))); }   // céu escuro em cima, horizonte claro, chão escuro
     const strip = (w, h, pos, k) => { const mm = new THREE.MeshBasicMaterial({side: THREE.DoubleSide}); mm.color.setRGB(k, k, k); const q = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mm); q.position.set(...pos); q.lookAt(0, 0, 0); studio.add(q); };
-    strip(26, 2.2, [0, 22, 3], 8); strip(26, 1.4, [0, 20, -6], 5);   // + caixa grande e suave por cima: vê-se a forma do tejadilho        // tiras por cima (reflexo no tejadilho e no capô)
-    strip(4, 14, [24, 8, 0], 4); strip(4, 14, [-24, 8, 0], 3);        // luzes à frente e atrás
+    strip(26, 2.2, [0, 22, 3], 2.2); strip(26, 1.4, [0, 20, -6], 1.4);   // + caixa grande e suave por cima: vê-se a forma do tejadilho        // tiras por cima (reflexo no tejadilho e no capô)
+    strip(4, 14, [24, 8, 0], 2); strip(4, 14, [-24, 8, 0], 1.5);        // luzes à frente e atrás
     strip(30, 3, [0, 4, 26], 3); strip(30, 3, [0, 4, -26], 3);        // faixas laterais baixas (contorno das portas)
     
     this.scene.environment = pm.fromScene(studio, .02).texture; this.scene.environmentIntensity = 1;
-    const sun = new THREE.DirectionalLight('#FFF6EC', 3); sun.position.set(-.6, 1, .45); this.scene.add(sun); this.scene.add(new THREE.HemisphereLight('#DDE8F5', '#3A3D42', .12));   // luz neutra: o preto fica preto
+    const sun = new THREE.DirectionalLight('#FFF6EC', 2); sun.position.set(-.6, 1, .45); this.scene.add(sun); this.scene.add(new THREE.HemisphereLight('#DDE8F5', '#3A3D42', .12));   // luz neutra: o preto fica preto
     try{ carModel = await loadCarGLB(); }catch(e){ console.warn('carro:', e); window.__carErr = String(e); const b = new THREE.Mesh(new THREE.BoxGeometry(4.6, 1.4, 1.9), new THREE.MeshStandardMaterial({color:'#111'})); b.position.y = .7; carModel = new THREE.Group(); carModel.add(b); }
     // sombra de contacto
     const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'); const gg = x.createRadialGradient(64,64,4,64,64,62); gg.addColorStop(0,'rgba(0,0,0,.9)'); gg.addColorStop(.55,'rgba(0,0,0,.55)'); gg.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle = gg; x.fillRect(0,0,128,128);
@@ -327,7 +327,7 @@ async function loadPhotos(){
 let PHOTOS_READY = loadPhotos();
 // polaroide da paragem (entra ao aproximar, fica na paragem, sai ao afastar) — desenhada no vídeo
 function drawPhoto(x, k, W, H, s, d){
-  const P = PHOTOS.get(s); if(!P) return; const R = s.pause || s.kind === 'fuel' ? 1200 : 1600, g = Math.abs(s.d - d); if(g >= R) return;
+  const P = PHOTOS.get(s); if(!P) return; const R = Math.max(s.pause || s.kind === 'fuel' ? 1200 : 1600, TOTAL/TEND*1.4), g = Math.abs(s.d - d);   // em vídeos curtos a foto fica ~3 s if(g >= R) return;
   const a = Math.min(1, (R - g)/(R*.3)), e = a*a*(3 - 2*a), pw = 400*k, ph = 270*k, fw = pw + 24*k, fh = ph + 74*k;
   const cx = W - 60*k - fw/2, cy = H*.47 + (1 - e)*40*k; x.save(); x.globalAlpha = e; x.translate(cx, cy); x.rotate((-3 + 2*(1 - e))*Math.PI/180); x.scale(.85 + .15*e, .85 + .15*e);
   x.shadowColor = 'rgba(0,0,0,.35)'; x.shadowBlur = 24*k; x.shadowOffsetY = 8*k; x.fillStyle = '#FBF8F1'; x.fillRect(-fw/2, -fh/2, fw, fh); x.shadowColor = 'transparent';
@@ -388,11 +388,11 @@ function frame(u, first){
   if(LOOK === 'app'){
     // vista de cima inclinada, mais afastada; aproxima nas paragens
     const fuel = STOPS.filter(q => q.kind === 'fuel').reduce((m, q) => Math.min(m, Math.abs(q.d - d)), 1e9), c = cityAt(d), tt = u*TEND;
-    let zt = 13.2 + 3.4*c + CAMS[CAM]; if(fuel < 1200) zt = Math.max(zt, 18.0 - 1.6*fuel/1200); zt = Math.min(18.4, zt);
+    let zt = 14.1 + 2.6*c + CAMS[CAM]; if(fuel < 1200) zt = Math.max(zt, 18.0 - 1.6*fuel/1200); zt = Math.min(18.4, zt);
     appZoom = appZoom === null || first ? zt : appZoom + (zt - appZoom)*.03;
     // alvo da câmara: drone alto (mais de cima) na autoestrada, mais baixo e atrás do carro na vila; começo desce do céu, fim sobe
     const pin = ease(tt/Math.min(6, TEND*.08)), pout = ease((tt - (TEND - Math.min(7, TEND*.09)))/Math.min(7, TEND*.09));
-    const sh = {pitch: (42 + 20*c)*pin + 5*(1 - pin), dz: -2.6*(1 - pin) - 2.8*pout, pad: .14 + .16*c, big: 1.1 + .45*c}; sh.pitch = sh.pitch*(1 - pout) + 6*pout;
+    const sh = {pitch: (56 + 10*c)*pin + 5*(1 - pin), dz: -2.6*(1 - pin) - 2.8*pout, pad: .24 + .1*c, big: 1.1 + .35*c}; sh.pitch = sh.pitch*(1 - pout) + 6*pout;
     if(!cam || first) cam = {...sh}; else for(const k of ['pitch', 'dz', 'pad', 'big']) cam[k] += (sh[k] - cam[k])*(k === 'dz' ? .08 : .03); carState.big = cam.big;
     map.jumpTo({center: p, zoom: Math.min(18.6, appZoom + cam.dz), pitch: Math.min(72, cam.pitch), bearing: camBear, padding: {top: H0()*cam.pad, bottom: 0, left: 0, right: 0}});
     setProgress(d/TOTAL); drawAppHud(d, u); map.triggerRepaint(); return;
