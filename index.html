@@ -501,10 +501,10 @@ $$('#chips .pill').forEach(b => b.addEventListener('click', () => b.classList.to
 
 /* ---------- routing (OSRM, follows roads) ---------- */
 const ROUTERS = ['https://router.project-osrm.org', 'https://routing.openstreetmap.de/routed-car'];
-async function osrm(path, ms = 12000){   // o primeiro servidor que responder ganha; nunca fica preso mais de 12 s
+async function osrm(path, ms = 20000, again = true){   // o primeiro servidor que responder ganha; se nenhum responder em 20 s, tenta mais uma vez
   const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), ms);
   try{ return await Promise.any(ROUTERS.map(async b => { const j = await (await fetch(b + path, {signal: ctl.signal})).json(); if(j.code !== 'Ok') throw new Error(j.code); return j; })); }
-  catch(e){ throw new Error('O serviço de rotas não respondeu'); } finally{ clearTimeout(to); ctl.abort(); }
+  catch(e){ clearTimeout(to); ctl.abort(); if(again) return osrm(path, ms, false); throw new Error('O serviço de rotas não respondeu'); } finally{ clearTimeout(to); ctl.abort(); }
 }
 async function route(a, b, vias=[]) {
   const pts = [a, ...vias, b].map(p => `${p.lon},${p.lat}`).join(';');
