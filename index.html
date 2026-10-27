@@ -270,8 +270,8 @@ textarea.note{width:100%;resize:none;padding:10px 12px;border:1px solid #D5DBE5;
   <div class="sheet">
     <div class="handle"></div>
     <div class="stats"><div class="stat" style="background:transparent;text-align:center"><b id="dr-done">0,0</b><span>km feitos</span></div><div class="stat" style="background:transparent;text-align:center"><b id="dr-left">–</b><span>restantes</span></div><div class="stat" style="background:transparent;text-align:center"><b id="dr-fuel" style="color:var(--brand-dark)">€0,00</b><span>gasóleo</span></div><div class="stat" style="background:transparent;text-align:center"><b id="dr-toll" style="color:var(--warn)">€0,00</b><span>portagem</span></div></div>
-    <p class="hint" style="margin:0;padding:10px 12px;border-radius:12px;background:var(--soft)">Versão web: o GPS só grava com o ecrã ligado. Mantive o ecrã aceso. Para navegar com voz, abra no Waze e volte aqui no destino.</p>
-    <div class="row"><button class="btn ghost" id="btn-waze">Abrir no Waze</button><button class="btn dark" id="btn-finish">Terminar</button></div>
+    <div id="dr-step"></div>
+    <div class="row"><button class="btn ghost" id="btn-sethome">🏠 Morada de casa</button><button class="btn dark" id="btn-finish">Terminar</button></div>
   </div>
 </section>
 
@@ -472,22 +472,43 @@ const NOM = 'https://nominatim.openstreetmap.org';
 async function geocode(q){ const r = await fetch(`${NOM}/search?format=jsonv2&limit=5&accept-language=pt&q=${encodeURIComponent(q)}`); return r.json(); }
 async function reverseGeocode(lat, lon){ try{ const r = await fetch(`${NOM}/reverse?format=jsonv2&accept-language=pt&lat=${lat}&lon=${lon}`); const j = await r.json(); const a = j.address || {}; return [a.road, a.village || a.town || a.city || a.municipality].filter(Boolean).join(', ') || j.display_name; }catch(e){ return null; } }
 function shortName(j){ const a = j.address || {}; return a.city || a.town || a.village || a.municipality || (j.display_name||'').split(',')[0]; }
-function wireSuggest(inputSel, boxSel, onPick){
-  const inp = $(inputSel), box = $(boxSel); let t;
-  inp.addEventListener('input', () => { clearTimeout(t); const q = inp.value.trim(); if(q.length < 3){ box.hidden = true; return; } t = setTimeout(async () => { try{ const res = await geocode(q); box.innerHTML = res.map((r,i) => `<button data-i="${i}">${r.display_name}</button>`).join(''); box.hidden = res.length === 0; box.querySelectorAll('button').forEach(b => b.addEventListener('click', () => { const r = res[+b.dataset.i]; inp.value = r.display_name.split(',').slice(0,2).join(','); box.hidden = true; onPick({lat:+r.lat, lon:+r.lon, name: shortName(r), full: r.display_name}); })); }catch(e){} }, 450); });
+// sugestões enquanto escreves (Photon/Komoot: feito para isto; o Nominatim não permite e era lento)
+const PHOTON = 'https://photon.komoot.io/api/'; let sugCtl = null;
+async function suggest(q){
+  sugCtl?.abort(); sugCtl = new AbortController(); const bias = pos ? `&lat=${pos.latitude}&lon=${pos.longitude}` : '&lat=41.77&lon=-8.58';
+  const j = await (await fetch(`${PHOTON}?q=${encodeURIComponent(q)}&limit=7${bias}`, {signal: sugCtl.signal})).json();
+  const seen = new Set();
+  return (j.features || []).map(f => { const p = f.properties || {}, [lon, lat] = f.geometry.coordinates; const street = [p.street, p.housenumber].filter(Boolean).join(' ');
+    const title = p.name || street || p.city || p.county || ''; const sub = [p.name && street ? street : '', p.city && p.city !== title ? p.city : '', p.state && p.state !== title ? p.state : '', p.country].filter(Boolean).join(', ');
+    return {lat, lon, title, sub, name: title, full: [title, sub].filter(Boolean).join(', ')}; }).filter(r => { const k = r.full; if(!r.title || seen.has(k)) return false; seen.add(k); return true; });
+}
+function wireSuggest(inputSel, boxSel, onPick, mine){
+  const inp = $(inputSel), box = $(boxSel); let t, last = [];
+  const show = res => { last = res; box.innerHTML = (mine ? `<button data-me="1"><b>📍 A minha localização</b></button>` : '') + res.map((r, i) => `<button data-i="${i}"><b>${r.title}</b>${r.sub ? `<br><span style="color:var(--muted);font-size:12px">${r.sub}</span>` : ''}</button>`).join(''); box.hidden = !res.length && !mine;
+    box.querySelectorAll('[data-i]').forEach(b => b.addEventListener('mousedown', e => { e.preventDefault(); const r = last[+b.dataset.i]; inp.value = r.title + (r.sub ? ', ' + r.sub.split(',')[0] : ''); box.hidden = true; onPick(r); }));
+    box.querySelectorAll('[data-me]').forEach(b => b.addEventListener('mousedown', e => { e.preventDefault(); box.hidden = true; $('#btn-mypos').click(); })); };
+  inp.addEventListener('input', () => { clearTimeout(t); onPick(null); const q = inp.value.trim(); if(q.length < 2){ mine ? show([]) : (box.hidden = true); return; } t = setTimeout(async () => { try{ show(await suggest(q)); }catch(e){} }, 200); });
+  inp.addEventListener('focus', () => { if(mine && !inp.value.trim()) show([]); });
+  inp.addEventListener('blur', () => setTimeout(() => box.hidden = true, 150));
+  inp._first = () => last[0] || null;
 }
 let origin = null, dest = null, mode = 'car';
-wireSuggest('#origin', '#sugg-origin', p => origin = p);
+wireSuggest('#origin', '#sugg-origin', p => origin = p, true);
 wireSuggest('#dest', '#sugg-dest', p => dest = p);
 $('#btn-mypos').addEventListener('click', async () => { if(!pos){ toast('Sem posição GPS ainda'); return; } origin = {lat:pos.latitude, lon:pos.longitude, name:'Minha posição'}; $('#origin').value = 'A obter morada…'; const n = await reverseGeocode(pos.latitude, pos.longitude); $('#origin').value = n || 'Minha posição'; origin.name = (n||'').split(',').pop().trim() || 'Minha posição'; });
 $$('.mode').forEach(b => b.addEventListener('click', () => { $$('.mode').forEach(x => x.classList.remove('on')); b.classList.add('on'); mode = b.dataset.mode; }));
 $$('#chips .pill').forEach(b => b.addEventListener('click', () => b.classList.toggle('on')));
 
 /* ---------- routing (OSRM, follows roads) ---------- */
+const ROUTERS = ['https://router.project-osrm.org', 'https://routing.openstreetmap.de/routed-car'];
+async function osrm(path, ms = 12000){   // o primeiro servidor que responder ganha; nunca fica preso mais de 12 s
+  const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), ms);
+  try{ return await Promise.any(ROUTERS.map(async b => { const j = await (await fetch(b + path, {signal: ctl.signal})).json(); if(j.code !== 'Ok') throw new Error(j.code); return j; })); }
+  catch(e){ throw new Error('O serviço de rotas não respondeu'); } finally{ clearTimeout(to); ctl.abort(); }
+}
 async function route(a, b, vias=[]) {
   const pts = [a, ...vias, b].map(p => `${p.lon},${p.lat}`).join(';');
-  const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${pts}?overview=full&geometries=geojson&steps=true&annotations=false`);
-  const j = await r.json(); if(j.code !== 'Ok') throw new Error('Rota não encontrada');
+  const j = await osrm(`/route/v1/driving/${pts}?overview=full&geometries=geojson&steps=true&annotations=false`);
   const rt = j.routes[0];
   let tollM = 0; const refs = new Set();
   rt.legs.forEach(l => l.steps.forEach(s => { const ref = (s.ref || '').split(';')[0].trim(); const isMotorway = /^(A ?\d|AP-?\d|A-\d|E ?\d)/i.test(ref) || /autoestrada|autopista|autovía|autoroute/i.test(s.name || ''); if(isMotorway){ tollM += s.distance; refs.add(ref || 'AE'); } }));
@@ -555,7 +576,7 @@ let mapPlan, planLayer;
 $('#btn-plan').addEventListener('click', async () => {
   if(!origin && pos) origin = {lat:pos.latitude, lon:pos.longitude, name: ($('#origin').value||'Minha posição').split(',').pop().trim()};
   if(!origin){ toast('Indique a saída'); return; }
-  if(!dest){ const q = $('#dest').value.trim(); if(!q){ toast('Indique o destino'); return; } try{ const r = (await geocode(q))[0]; if(!r) throw 0; dest = {lat:+r.lat, lon:+r.lon, name: shortName(r), full:r.display_name}; }catch(e){ toast('Destino não encontrado'); return; } }
+  if(!dest){ const q = $('#dest').value.trim(); if(!q){ toast('Indique o destino'); return; } try{ const r = $('#dest')._first() || (await suggest(q))[0]; if(!r) throw 0; dest = r; }catch(e){ toast('Destino não encontrado'); return; } }
   const btn = $('#btn-plan'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span> A planear…';
   try{
     const kinds = $$('#chips .pill.on').map(b => b.dataset.k);
@@ -566,12 +587,10 @@ $('#btn-plan').addEventListener('click', async () => {
     trip.legs = legs; trip.route = legs.flatMap(l => l.coords);
     trip.distance = legs.reduce((s,l) => s + (l.type==='car' ? l.distance : 0), 0); trip.flightKm = legs.filter(l=>l.type==='plane').reduce((s,l)=> s+l.distance,0)/1000;
     trip.duration = legs.reduce((s,l) => s + l.duration, 0); trip.tollM = legs.reduce((s,l) => s + l.tollM, 0); trip.refs = legs.flatMap(l => l.refs);
-    try{ trip.pois = await pois(dest, kinds); if(!trip.pois.length){ await new Promise(r => setTimeout(r, 1500)); trip.pois = await pois(dest, kinds); } }catch(e){ trip.pois = []; }   // 2.ª tentativa se os serviços falharem
-    const notab = p => -(p.fame || 0)*0.25 + (p.wiki || p.wd ? 0 : 3) + (p.heritage ? 0 : 1) + p.d/4000;
-    const seen = new Set(); trip.stops = trip.pois.filter(p => ['attraction','viewpoint','museum','beach'].includes(p.kind)).sort((a,b) => notab(a) - notab(b)).filter(p => { const k = p.name.toLowerCase(); if(seen.has(k)) return false; seen.add(k); return true; }).slice(0,4).map(p => ({...p, note: p.kind === 'viewpoint' ? 'Miradouro' : p.kind === 'museum' ? 'Museu' : p.kind === 'beach' ? 'Praia' : 'Ponto turístico'}));
+    trip.pois = []; trip.loadingSights = true;
     current = trip; store.set('current', current);
     const rec = store.get('recent', []); rec.unshift({o: origin.name, d: dest.name, km: Math.round(trip.distance/1000), mode}); store.set('recent', rec.slice(0,5));
-    go('plan'); if(trip.mode === 'car' && trip.stops.length) reroute(trip);   // a rota passa pelas paragens, pela melhor ordem
+    go('plan'); loadSights(trip);   // a rota aparece já; os melhores pontos e a ordem para o vlog chegam em segundos
   }catch(e){ console.error(e); toast('Não consegui calcular: ' + e.message); }
   btn.disabled = false; btn.innerHTML = 'Planear rota';
 });
@@ -585,7 +604,7 @@ function renderPlan(){
   $('#st-fuel-l').textContent = settings.fuel; $('#st-fuel').textContent = eur(fuelCost(t.distance)); $('#st-toll').textContent = t.tollM ? eur(tollCost(t.tollM)) : '€0';
   $('#plan-note').textContent = `Estimativa: ${settings.cons} L/100 km × ${eur(settings.price)}/L` + (t.refs.length ? ` · autoestradas: ${t.refs.join(', ')}` : ' · sem portagens detetadas');
   $('#plan-count').textContent = `${t.stops.length} paradas · 1 destino`;
-  $('#stops').innerHTML = t.stops.map((s,i) => `<div class="stop"><span class="n">${i+1}</span><div class="grow"><div class="t">${s.name}</div><div class="s">${s.note||''}</div></div><button class="i" data-sinfo="${i}" aria-label="Resumo">i</button><button class="x" data-rm="${i}">✕</button></div>`).join('') || '<p class="hint">Sem pontos turísticos encontrados no mapa. Adicione manualmente.</p>';
+  $('#stops').innerHTML = t.stops.map((s,i) => `<div class="stop"><span class="n">${i+1}</span><div class="grow"><div class="t">${s.name}</div><div class="s">${s.why || s.note || ''}</div></div><button class="i" data-sinfo="${i}" aria-label="Resumo">i</button><button class="x" data-rm="${i}">✕</button></div>`).join('') || '<p class="hint">Sem pontos turísticos encontrados no mapa. Adicione manualmente.</p>';
   $$('#stops [data-rm]').forEach(b => b.addEventListener('click', () => { t.stops.splice(+b.dataset.rm,1); store.set('current', t); renderPlan(); clearTimeout(rerouting); rerouting = setTimeout(() => reroute(t), 500); }));
   $$('#stops [data-sinfo]').forEach(b => b.addEventListener('click', () => stopInfo(t.stops[+b.dataset.sinfo])));
   renderSights();
@@ -598,33 +617,95 @@ function renderPlan(){
   setTimeout(() => mapPlan.invalidateSize(), 50); setTimeout(() => mapPlan.fitBounds(L.latLngBounds(t.route), {paddingTopLeft:[30,110], paddingBottomRight:[30, 360]}), 120);
 }
 /* ---------- pontos turísticos: escolher, ordenar automaticamente e preparar as falas do vlog ---------- */
-const SIGHT_KINDS = ['attraction', 'viewpoint', 'museum', 'beach'];
-const KPT = {attraction:'ponto turístico', viewpoint:'miradouro', museum:'museu', beach:'praia', restaurant:'restaurante', hotel:'alojamento'};
+const SIGHT_KINDS = ['attraction', 'viewpoint', 'museum', 'beach', 'nature'];
+const KPT = {attraction:'ponto turístico', viewpoint:'miradouro / vista', museum:'museu', beach:'praia', nature:'natureza', restaurant:'restaurante', hotel:'alojamento'};
 const sightsOf = t => (t.pois || []).filter(p => SIGHT_KINDS.includes(p.kind));
 const isSel = (t, p) => (t.stops || []).some(s => s.name === p.name);
 const fmtD = d => d < 1000 ? Math.round(d) + ' m' : (d/1000).toFixed(1).replace('.', ',') + ' km';
 let allSights = false;
 function renderSights(){
   const t = current; if(!t) return; const full = sightsOf(t), list = allSights ? full : full.slice(0, 20);
-  $('#sights-title').textContent = `Pontos turísticos em ${t.dest.name}` + (full.length ? ` (${full.length})` : '');
-  $('#sights').innerHTML = list.map((p, i) => `<div class="sight ${isSel(t, p) ? 'on' : ''}" data-si="${i}"><span class="ck">${isSel(t, p) ? '✓' : ''}</span><div class="grow"><div class="t">${p.name}</div><div class="s">${p.fame >= 15 ? '⭐ muito conhecido · ' : ''}${KPT[p.kind] || 'local'} · ${fmtD(p.d || 0)} do centro${p.fee === 'no' ? ' · grátis' : p.fee === 'yes' ? ' · pago' : ''}${p.hours ? ' · tem horário' : ''}</div></div><button class="i" data-info="${i}" aria-label="Resumo">i</button></div>`).join('') + (full.length > list.length ? `<button class="btn sm ghost" id="sights-more" style="margin-top:8px">Mostrar todos (${full.length})</button>` : '') || '<p class="hint">Sem pontos turísticos encontrados perto do destino.</p>';
+  $('#sights-title').textContent = `Os melhores sítios em ${t.dest.name}` + (full.length ? ` (${full.length})` : '');
+  if(t.loadingSights){ $('#sights').innerHTML = '<p class="hint"><span class="spin"></span> A escolher os sítios mais bonitos e conhecidos…</p>'; return; }
+  $('#sights').innerHTML = list.map((p, i) => `<div class="sight ${isSel(t, p) ? 'on' : ''}" data-si="${i}"><span class="ck">${isSel(t, p) ? '✓' : ''}</span>${p.img ? `<img src="${p.img}" alt="" loading="lazy" style="width:52px;height:52px;border-radius:10px;object-fit:cover;flex:none">` : ''}<div class="grow"><div class="t">${p.name}</div><div class="s">${i < 5 && p.fame >= 6 ? '⭐ imperdível · ' : p.fame >= 10 ? '⭐ muito conhecido · ' : ''}${KPT[p.kind] || 'local'} · ${fmtD(p.d || 0)} do centro${p.fee === 'no' ? ' · grátis' : p.fee === 'yes' ? ' · pago' : ''}${p.hours ? ' · tem horário' : ''}</div></div><button class="i" data-info="${i}" aria-label="Resumo">i</button></div>`).join('') + (full.length > list.length ? `<button class="btn sm ghost" id="sights-more" style="margin-top:8px">Mostrar todos (${full.length})</button>` : '') || '<p class="hint">Sem pontos turísticos encontrados perto do destino.</p>';
   if($('#sights-more')) $('#sights-more').onclick = () => { allSights = true; renderSights(); };
   $$('#sights [data-si]').forEach(el => el.addEventListener('click', e => { if(e.target.closest('[data-info]')) return; toggleSight(list[+el.dataset.si]); }));
   $$('#sights [data-info]').forEach(b => b.addEventListener('click', () => stopInfo(list[+b.dataset.info])));
 }
 let rerouting = null;
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, r) => setTimeout(() => r(new Error('demorou demasiado')), ms))]);
+// os sítios que vale a pena visitar (Wikidata): só categorias "de visita" — cascatas, miradouros, montes, santuários, castelos, museus, jardins, praias…
+// ordenados pela fama (em quantas línguas tem artigo na Wikipédia); natureza com bónus; igrejas pequenas e coisas longe ficam para trás
+const WD_CLS = {Q34038:'nature', Q23397:'nature', Q46169:'nature', Q179049:'nature', Q22698:'nature', Q1107656:'nature', Q8502:'viewpoint', Q6017969:'viewpoint', Q33506:'museum', Q40080:'beach'};
+const WD_ALL = ['Q34038','Q6017969','Q23413','Q33506','Q22698','Q40080','Q4989906','Q16560','Q2977','Q1107656','Q23397','Q839954','Q570116','Q163687','Q44613','Q8502','Q46169','Q179049','Q697295','Q1081138','Q16970','Q12280','Q57821','Q12518'];
+async function bestSights(p){
+  const q = `SELECT ?item ?itemLabel ?coord ?sl ?cls ?img WHERE { SERVICE wikibase:around { ?item wdt:P625 ?coord. bd:serviceParam wikibase:center "Point(${p.lon} ${p.lat})"^^geo:wktLiteral. bd:serviceParam wikibase:radius "35". } VALUES ?cls { ${WD_ALL.map(c => 'wd:' + c).join(' ')} } ?item wdt:P31/wdt:P279? ?cls. ?item wikibase:sitelinks ?sl. OPTIONAL { ?item wdt:P18 ?img } SERVICE wikibase:label { bd:serviceParam wikibase:language "pt,es,gl,en". } }`;
+  const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 15000);
+  try{
+    const j = await (await fetch('https://query.wikidata.org/sparql?format=json&query=' + encodeURIComponent(q), {headers: {Accept: 'application/sparql-results+json'}, signal: ctl.signal})).json();
+    const m = new Map();
+    for(const b of j.results.bindings){ const id = b.item.value.split('/').pop(), c = b.cls.value.split('/').pop(); let o = m.get(id);
+      if(!o){ const [lon, lat] = b.coord.value.replace(/^Point\(|\)$/g, '').split(' ').map(Number); o = {name: b.itemLabel.value, lat, lon, fame: +b.sl.value, wd: id, cls: new Set(), img: b.img ? b.img.value.replace(/^http:/, 'https:') + '?width=160' : '', d: dist(p.lat, p.lon, lat, lon), hours: '', fee: '', heritage: ''}; m.set(id, o); }
+      o.cls.add(c); }
+    const NAT = ['Q34038','Q23397','Q8502','Q46169','Q179049','Q6017969'];
+    return [...m.values()].filter(o => !/^Q\d+$/.test(o.name)).map(o => { const cl = [...o.cls], nature = cl.some(c => NAT.includes(c)), onlyChurch = cl.every(c => c === 'Q16970' || c === 'Q12280');
+        o.kind = cl.map(c => WD_CLS[c]).find(Boolean) || 'attraction'; o.score = o.fame + (nature ? 6 : 0) + (o.img ? 1 : 0) - Math.max(0, o.d/1000 - (nature ? 20 : 8))*.6 - (onlyChurch && o.fame < 4 ? 5 : 0);
+        o.keep = nature ? o.d < 35000 : o.d < 15000; delete o.cls; return o; })
+      .filter(o => o.keep).sort((a, b) => b.score - a.score).slice(0, 40);
+  }finally{ clearTimeout(to); }
+}
+const toStop = p => ({name: p.name, lat: p.lat, lon: p.lon, kind: p.kind, wiki: p.wiki, wd: p.wd, img: p.img, fame: p.fame, hours: p.hours, fee: p.fee, website: p.website, heritage: p.heritage, d: p.d, note: KPT[p.kind] || ''});
+async function loadSights(t){
+  renderSights(); $('#plan-count').textContent = 'A procurar os melhores sítios…';
+  let list = []; try{ list = await withTimeout(bestSights(t.dest), 16000); }catch(e){}
+  if(list.length < 3){ try{ const old = await withTimeout(pois(t.dest, ['attraction', 'viewpoint', 'museum', 'beach']), 20000); const seen = new Set(list.map(x => x.name.toLowerCase())); list = list.concat(old.filter(x => !seen.has(x.name.toLowerCase()))); }catch(e){} }
+  t.pois = list; t.loadingSights = false;
+  const extra = (t.kinds || []).filter(k => k === 'restaurant' || k === 'hotel'); if(extra.length) withTimeout(poisOSM(t.dest, extra), 25000).then(r => { t.pois = t.pois.concat(r); store.set('current', t); }).catch(() => {});   // restaurantes/alojamento chegam depois, sem atrasar
+  if(!t.stops.length){ const pick = []; let ch = 0; for(const p of list.filter(p => SIGHT_KINDS.includes(p.kind))){ const isCh = /igreja|capela|basílica|mosteiro/i.test(p.name); if(isCh && ch >= 1) continue; if(isCh) ch++; pick.push(p); if(pick.length >= 4) break; } t.stops = pick.map(toStop); }
+  store.set('current', t); if(current === t) renderPlan(); await planVlog(t);
+}
+// pôr do sol (algoritmo da NOAA) → hora local
+function sunsetAt(lat, lon, date = new Date()){
+  const r = Math.PI/180, n = Math.floor((date - new Date(date.getFullYear(), 0, 0))/864e5), g = 2*Math.PI/365*(n - 1);
+  const eq = 229.18*(.000075 + .001868*Math.cos(g) - .032077*Math.sin(g) - .014615*Math.cos(2*g) - .040849*Math.sin(2*g));
+  const dc = .006918 - .399912*Math.cos(g) + .070257*Math.sin(g) - .006758*Math.cos(2*g) + .000907*Math.sin(2*g) - .002697*Math.cos(3*g) + .00148*Math.sin(3*g);
+  const ha = Math.acos(Math.cos(90.833*r)/(Math.cos(lat*r)*Math.cos(dc)) - Math.tan(lat*r)*Math.tan(dc))/r, min = 720 - 4*(lon - ha) - eq;
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0)); d.setUTCMinutes(Math.round(min)); return d.toLocaleTimeString('pt-PT', {hour: '2-digit', minute: '2-digit'});
+}
+// ordem pensada para o vlog: abre no sítio mais conhecido; acaba no sítio mais alto/com vista ao pôr do sol; o meio pela ordem mais curta
+async function planVlog(t){
+  if(t.mode !== 'car') return; const S = t.stops.filter(s => s.kind !== 'fuel' && s.kind !== 'photo');
+  $('#plan-count').textContent = 'A preparar a ordem do vlog…';
+  try{
+    if(S.length){ try{ const e = await withTimeout(jget(`https://api.open-meteo.com/v1/elevation?latitude=${S.map(s => s.lat).join(',')}&longitude=${S.map(s => s.lon).join(',')}`), 6000); S.forEach((s, i) => s.elev = Math.round(e.elevation?.[i])); }catch(e){} }
+    const city = t.dest.name, sun = sunsetAt(t.dest.lat, t.dest.lon), ok = v => Number.isFinite(v);
+    const scenic = s => (s.kind === 'viewpoint' || s.kind === 'nature' ? 150 : 0) + (ok(s.elev) ? s.elev : 0) + (/miradouro|monte|serra|santuário|castelo|cascata/i.test(s.name) ? 80 : 0);
+    const last = S.length > 1 ? S.reduce((a, b) => scenic(b) > scenic(a) ? b : a) : null, rest = S.filter(s => s !== last);
+    const first = rest.length ? rest.reduce((a, b) => (b.fame || 0) > (a.fame || 0) ? b : a) : null; let mid = rest.filter(s => s !== first);
+    if(mid.length > 1){ const pts = [first, ...mid, last || t.dest].map(p => `${p.lon},${p.lat}`).join(';'); const j = await osrm(`/trip/v1/driving/${pts}?roundtrip=false&source=first&destination=last&overview=false`).catch(() => null);
+      if(j) mid = j.waypoints.map((w, i) => ({i, k: w.waypoint_index})).filter(o => o.i > 0 && o.i <= mid.length).sort((a, b) => a.k - b.k).map(o => mid[o.i - 1]); }
+    const ordered = [first, ...mid, last].filter(Boolean);
+    if(first) first.why = `🎬 Começa aqui: é o sítio mais conhecido de ${city}${first.fame ? ` (tem artigo em ${first.fame} línguas)` : ''} — boa abertura para o vlog.`;
+    mid.forEach(s => s.why = '↪ Fica no caminho entre as outras paragens.');
+    if(last) last.why = `🌅 Acaba aqui ao pôr do sol (hoje às ${sun})${ok(last.elev) ? `, a ${last.elev} m de altitude` : ''}: a melhor luz e vista para fechar o vlog.`;
+    t.stops = [...ordered, ...t.stops.filter(s => !S.includes(s))];
+    const r = await route(t.origin, last || t.dest, ordered.slice(0, last ? -1 : undefined)); t.legs = [{type: 'car', ...r}]; t.route = r.coords; t.distance = r.distance; t.duration = r.duration; t.tollM = r.tollM; t.refs = r.refs;
+    store.set('current', t); if(current === t) renderPlan();
+  }catch(e){ toast('Não consegui ordenar: ' + e.message); if(current === t) renderPlan(); }
+}
 function toggleSight(p){
   const t = current; if(isSel(t, p)) t.stops = t.stops.filter(s => s.name !== p.name);
-  else t.stops.push({name: p.name, lat: p.lat, lon: p.lon, kind: p.kind, wiki: p.wiki, wd: p.wd, hours: p.hours, fee: p.fee, website: p.website, heritage: p.heritage, d: p.d, note: KPT[p.kind] || ''});
+  else t.stops.push(toStop(p));
   store.set('current', t); renderPlan(); clearTimeout(rerouting); rerouting = setTimeout(() => reroute(t), 700);
 }
 // ordem ótima (OSRM "trip": saída fixa no início, destino fixo no fim) e rota a passar por todas as paragens
-async function reroute(t){
+async function reroute(t){ return planVlog(t); }
+async function rerouteOld(t){
   if(t.mode !== 'car') return;
   $('#plan-count').textContent = 'A ordenar a rota…';
   try{
     if(t.stops.length > 1){ const pts = [t.origin, ...t.stops, t.dest].map(p => `${p.lon},${p.lat}`).join(';');
-      const j = await (await fetch(`https://router.project-osrm.org/trip/v1/driving/${pts}?roundtrip=false&source=first&destination=last&overview=false`)).json();
+      const j = await osrm(`/trip/v1/driving/${pts}?roundtrip=false&source=first&destination=last&overview=false`).catch(() => ({}));
       if(j.code === 'Ok') t.stops = j.waypoints.map((w, i) => ({i, k: w.waypoint_index})).filter(o => o.i > 0 && o.i <= t.stops.length).sort((a, b) => a.k - b.k).map(o => t.stops[o.i - 1]); }
     const r = await route(t.origin, t.dest, t.stops); t.legs = [{type: 'car', ...r}]; t.route = r.coords; t.distance = r.distance; t.duration = r.duration; t.tollM = r.tollM; t.refs = r.refs;
     store.set('current', t); if(current === t) renderPlan();
@@ -749,7 +830,7 @@ $('#btn-regen').addEventListener('click', async () => {
 /* ---------- roteiro do vídeo ---------- */
 const DAYS_PT = {Mo:'Seg', Tu:'Ter', We:'Qua', Th:'Qui', Fr:'Sex', Sa:'Sáb', Su:'Dom', PH:'feriados'};
 function fmtHours(h){ if(!h) return ''; if(h.trim() === '24/7') return 'aberto 24 horas'; return h.replace(/\b(Mo|Tu|We|Th|Fr|Sa|Su|PH)\b/g, m => DAYS_PT[m]).replace(/\boff\b/g, 'fechado').replace(/\s*;\s*/g, ' · ').replace(/,(?=\S)/g, ', '); }
-const KIND_PT = {attraction:'ponto turístico', viewpoint:'miradouro', museum:'museu', beach:'praia', restaurant:'restaurante', hotel:'alojamento'};
+const KIND_PT = {attraction:'ponto turístico', viewpoint:'miradouro', museum:'museu', beach:'praia', nature:'sítio natural', restaurant:'restaurante', hotel:'alojamento'};
 async function jget(u){ const r = await fetch(u); if(!r.ok) throw new Error(r.status); return r.json(); }
 function yearOf(claims){ try{ const v = claims.P571[0].mainsnak.datavalue.value.time; const y = parseInt(v.slice(0, v.indexOf('-', 1)), 10); return y < 0 ? `${-y} a.C.` : String(y); }catch(e){ return ''; } }
 async function enrichPlace(name, wiki, wd, city){
@@ -858,7 +939,7 @@ function startDrive(){
   if(watchId) navigator.geolocation.clearWatch(watchId);
   watchId = navigator.geolocation.watchPosition(onFix, e => $('#dr-gps').textContent = 'GPS · sem sinal', {enableHighAccuracy:true, maximumAge:1000, timeout:10000});
   if('wakeLock' in navigator) navigator.wakeLock.request('screen').then(w => wakeLock = w).catch(()=>{});
-  updateDriveStats();
+  updateDriveStats(); renderStep();
 }
 function onFix(p){
   const t = current; if(!t || t.status !== 'driving') return; const c = p.coords; pos = c;
@@ -879,7 +960,7 @@ function updateDriveStats(){
   $('#dr-done').textContent = (done/1000).toFixed(1).replace('.', ','); $('#dr-left').textContent = mins(left / Math.max(8, t.distance / Math.max(1, t.duration))); $('#dr-fuel').textContent = eur(fuelCost(done)); $('#dr-toll').textContent = eur(tollCost(Math.min(t.tollM, done * (t.tollM / Math.max(1,t.distance)))));
   const here = t.track.at(-1) || {lat:t.route[0][0], lon:t.route[0][1]}; const next = t.stops.find(s => !s.done) || t.dest; const dn = dist(here.lat, here.lon, next.lat, next.lon);
   $('#dr-dist').textContent = km(dn); $('#dr-next').textContent = 'até ' + next.name + (next === t.dest ? ' · destino' : ` · parada ${t.stops.indexOf(next)+1} de ${t.stops.length}`);
-  if(dn < 120 && next !== t.dest && !next.done){ next.done = true; toast('Chegou: ' + next.name, 4000); if(navigator.vibrate) navigator.vibrate(200); }
+  if(dn < 120 && next !== t.dest && !next.done){ next.done = true; next.arrivedAt = Date.now(); toast('Chegou: ' + next.name, 4000); if(navigator.vibrate) navigator.vibrate(200); renderStep(); }
 }
 $('#btn-center').addEventListener('click', () => { follow = true; if(carMarker) mapDrive.setView(carMarker.getLatLng(), 16); });
 $('#btn-night').addEventListener('click', () => { const dark = !!mapDrive._tiles._dark; mapDrive.removeLayer(mapDrive._tiles); mapDrive._tiles = tileLayer(!dark).addTo(mapDrive); });
@@ -910,7 +991,19 @@ async function cloudSave(t, quiet){ if(!window.LRCloud || !LRCloud.configured){ 
   catch(e){ if(!quiet) toast('Nuvem: ' + e.message, 5000); return false; } }
 $('#btn-cloud').addEventListener('click', () => current && cloudSave(current));
 $('#btn-cloudkey').addEventListener('click', () => { if(!window.LRCloud) return; const k = LRCloud.ensureKey(); const n = prompt('A sua chave da nuvem (escreva a mesma no computador, em Viagem 3D → ☁ Nuvem). Pode trocar por outra:', k); if(n && n.trim() && n.trim() !== k) LRCloud.setKey(n); });
-$('#btn-waze').addEventListener('click', () => { const next = current.stops.find(s => !s.done) || current.dest; location.href = `https://waze.com/ul?ll=${next.lat},${next.lon}&navigate=yes`; });
+// navegação paragem a paragem com o Waze: Ir → (chegas) Cheguei → Ir para a seguinte … → Casa
+const waze = p => { location.href = `https://waze.com/ul?ll=${p.lat},${p.lon}&navigate=yes&zoom=17`; };
+async function askHome(){ const q = prompt('Morada de casa (rua, n.º, cidade):', settings.home?.name || ''); if(!q) return null; try{ const r = (await suggest(q))[0]; if(!r) throw 0; settings.home = {lat: r.lat, lon: r.lon, name: r.full}; store.set('settings', settings); toast('🏠 Casa: ' + r.title); return settings.home; }catch(e){ toast('Não encontrei essa morada'); return null; } }
+function renderStep(){
+  const t = current, el = $('#dr-step'); if(!t || !el) return; const S = t.stops.filter(s => s.kind !== 'fuel' && s.kind !== 'photo'), next = S.find(s => !s.done), n = next ? S.indexOf(next) + 1 : 0;
+  const box = (title, sub, btns) => `<div style="padding:12px;border-radius:14px;background:var(--soft);margin-bottom:8px"><div style="font-weight:800">${title}</div>${sub ? `<div class="s" style="margin-top:2px">${sub}</div>` : ''}<div class="row" style="margin-top:10px">${btns}</div></div>`;
+  if(next) el.innerHTML = box(`Paragem ${n} de ${S.length}: ${next.name}`, next.why || '', `<button class="btn accent" id="st-go">🧭 Ir no Waze</button><button class="btn ghost" id="st-arrive">✓ Cheguei</button>`);
+  else el.innerHTML = box(S.length ? 'Todas as paragens feitas 🎉' : 'Sem paragens', settings.home ? 'Casa: ' + settings.home.name : 'Define a morada de casa para voltares com o Waze.', `<button class="btn accent" id="st-home">🏠 Ir para casa (Waze)</button>`);
+  $('#st-go')?.addEventListener('click', () => waze(next));
+  $('#st-arrive')?.addEventListener('click', () => { next.done = true; next.arrivedAt = Date.now(); store.set('current', t); toast('📍 ' + next.name + ' — bom vlog! Quando quiseres, carrega em "Ir no Waze" para a próxima.', 4500); renderStep(); updateDriveStats(); });
+  $('#st-home')?.addEventListener('click', async () => { const h = settings.home || await askHome(); if(h) waze(h); });
+}
+$('#btn-sethome').addEventListener('click', askHome);
 $('#btn-finish').addEventListener('click', () => { if(!confirm('Terminar a viagem e passar ao vídeo e custos?')) return; const t = current; t.status = 'done'; t.endedAt = Date.now(); t.trackDistance = trackDist(t.track); if(watchId){ navigator.geolocation.clearWatch(watchId); watchId = null; } if(recTimer) clearInterval(recTimer); if(wakeLock){ wakeLock.release(); wakeLock = null; } store.set('current', t); go('diary'); cloudSave(t, true); });
 
 /* ---------- diary ---------- */
