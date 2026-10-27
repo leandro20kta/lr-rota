@@ -3,7 +3,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Viagem 3D — LR Rota</title>
 <link rel="stylesheet" href="vendor/maplibre/maplibre-gl.css">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800&family=Montserrat:wght@700;800&display=swap">
 <style>
 :root{--ui:#101317;--ui2:#1B2027;--blue:#2E8BFF;--txt:#fff;--mut:#A9B3C1}
 html,body{margin:0;height:100%;background:#0B0F14;font-family:Inter,system-ui,sans-serif;color:var(--txt);overflow:hidden}
@@ -124,7 +124,7 @@ const T = [0], D = [0]; { const NS = Math.min(20000, Math.max(2000, Math.round(T
   const cv = []; for(let i = 0; i <= NS; i++){ const d = i*SD, a = bearingOf(posAt(d - 20).p, posAt(d).p), b = bearingOf(posAt(d).p, posAt(d + 20).p); cv.push(Math.abs(((b - a + 540) % 360) - 180)/20); }
   box(cv, W(25));
   { const c = cv.slice(), r = W(30); for(let i = 0; i <= NS; i++){ let m = 0; for(let j = Math.max(0, i - r); j <= Math.min(NS, i + r); j++) if(c[j] > m) m = c[j]; cv[i] = m; } }
-  const pauses = STOPS.filter(p => p.pause || p.kind === 'fuel').map(p => ({d: p.d, s: Math.min(Math.max(+p.pause || 0, p.kind === 'fuel' ? 4 : 0), Math.max(1.2, DUR*.07))})).sort((a, b) => a.d - b.d), pz = pauses.reduce((a, b) => a + b.s, 0);
+  const pauses = STOPS.filter((p, i) => i === 0 || i === STOPS.length - 1 || p.pause || p.kind === 'fuel' || p.photo || p.photoId).map(p => ({d: p.d, s: Math.min(2, Math.max(1.2, DUR*.08))})).sort((a, b) => a.d - b.d), pz = pauses.reduce((a, b) => a + b.s, 0);
   // travagem e arranque suaves nas paragens com pausa (abastecimento)
   // curvas e rotundas: o carro nunca roda mais de ~220°/s no vídeo (7° por imagem); o tempo recupera-se nas retas
   const sp0 = sp.slice();
@@ -167,7 +167,7 @@ const style = {version: 8, glyphs, sources: {omt, dem},
     {id:'road', type:'line', source:'omt', 'source-layer':'transportation', filter:['in',['get','class'],['literal',['motorway','trunk','primary','secondary','tertiary','minor','service']]], layout:{'line-cap':'round','line-join':'round'}, paint:{'line-color': ['match',['get','class'],'motorway',C.mway,['trunk','primary'],C.roadHi,C.road], 'line-width': ['interpolate',['exponential',1.6],['zoom'],10,['match',['get','class'],'motorway',2,'trunk',1.6,.5],17,['match',['get','class'],'motorway',30,'trunk',24,['primary','secondary'],19,10]]}},
     {id:'bld', type:'fill-extrusion', source:'omt', 'source-layer':'building', minzoom: 13, paint:{'fill-extrusion-color': C.bld, 'fill-extrusion-height-transition': {duration: 0}, 'fill-extrusion-height': ['coalesce',['get','render_height'],8], 'fill-extrusion-base': ['coalesce',['get','render_min_height'],0], 'fill-extrusion-opacity': .92, 'fill-extrusion-vertical-gradient': true}},
   ]};
-const map = new maplibregl.Map({container: 'map', style, center: line[0], zoom: 15.5, pitch: 62, bearing: 0, interactive: !Q.get('capture'), attributionControl: false, maxTileCacheSize: 2000, canvasContextAttributes: {antialias: true, preserveDrawingBuffer: true}, maxPitch: 80, fadeDuration: 0});
+const map = new maplibregl.Map({container: 'map', style, center: line[0], zoom: 15.5, pitch: 62, bearing: 0, interactive: !Q.get('capture'), attributionControl: false, maxTileCacheSize: 2000, canvasContextAttributes: {antialias: true, preserveDrawingBuffer: true}, maxPitch: 80, fadeDuration: 250});
 await new Promise(r => map.on('load', r));
 if(ATLAS){
   map.addSource('dem2', {...dem});
@@ -217,14 +217,15 @@ async function loadCarGLB(){
   const m = g.scene; const box = new THREE.Box3().setFromObject(m), sz = box.getSize(new THREE.Vector3()); m.scale.setScalar(4.8/Math.max(sz.x, sz.z)); box.setFromObject(m); m.position.y -= box.min.y;
   wheels = WHEELS.map(n => m.getObjectByName(n)).filter(Boolean); steerPiv = ['roda_FE_pivot', 'roda_FD_pivot'].map(n => m.getObjectByName(n)).filter(Boolean);
   m.traverse(o => { if(!o.isMesh) return; (Array.isArray(o.material) ? o.material : [o.material]).forEach(mt => {
-    if(/^(Paint|Coloured|GrelhaPreta)$/.test(mt.name)){ mt.color.set('#0A0A0C'); mt.metalness = .35; mt.roughness = .32; if('clearcoat' in mt){ mt.clearcoat = 1; mt.clearcoatRoughness = .035; } mt.envMapIntensity = .9; /* preto de brinquedo: só brilhos pequenos */ }
-    if(mt.name === 'GlassRed'){ mt.emissive.set('#FF0000'); mt.emissiveIntensity = 1.8; mt.color.set('#FF0000'); mt.toneMapped = false; }   // sem tone mapping: vermelho puro, não alaranjado
-    if(mt.name === 'GlassMtl'){ mt.color.set('#010102'); mt.envMapIntensity = .12; mt.roughness = .18; if('clearcoat' in mt) mt.clearcoat = 0; }   // vidro escuro (película): sem faixa branca
+    if(/^(Paint|Coloured)$/.test(mt.name)){ mt.color.setRGB(.01, .01, .012); mt.metalness = .25; mt.roughness = .4; if('clearcoat' in mt){ mt.clearcoat = .3; mt.clearcoatRoughness = .12; } mt.envMapIntensity = 1.1; }   // tom do vídeo 360° (preto acetinado), um pouco mais nítido
+    if(mt.name === 'GrelhaPreta'){ mt.color.set('#050506'); mt.envMapIntensity = .8; }
+    if(mt.name === 'GlassRed'){ mt.emissive.set('#E00000'); mt.emissiveIntensity = .9; mt.color.set('#FF0000'); mt.toneMapped = false; }   // sem tone mapping: vermelho puro, não alaranjado
+    if(mt.name === 'GlassMtl'){ mt.color.set('#010102'); mt.envMapIntensity = .35; mt.roughness = .12; if('clearcoat' in mt) mt.clearcoat = 0; }   // vidros escuros (película), todos iguais
     if(/^(Carbon1|Base|CaliperAZone)$/.test(mt.name)){ mt.color.set('#050505'); mt.envMapIntensity = .2; }
   }); });
   // brilho vermelho dos farolins (visível de cima) — atrás do carro (frente = +X)
   box.setFromObject(m); const glow = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); const r = g.createRadialGradient(32,32,1,32,32,31); r.addColorStop(0,'rgba(255,0,0,1)'); r.addColorStop(.35,'rgba(255,0,0,.5)'); r.addColorStop(1,'rgba(255,0,0,0)'); g.fillStyle = r; g.fillRect(0,0,64,64); return new THREE.CanvasTexture(c); })();
-  const zw = (box.max.z - box.min.z)/2*.72; [zw, -zw].forEach(z => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: glow, color: '#ffffff', transparent: true, blending: THREE.AdditiveBlending, depthWrite: false})); sp.position.set(box.min.x + .02, .95, z); sp.scale.set(1.1, 1.1, 1); m.add(sp); });
+  const zw = (box.max.z - box.min.z)/2*.72; [].forEach(z => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: glow, color: '#ffffff', transparent: true, blending: THREE.AdditiveBlending, depthWrite: false})); sp.position.set(box.min.x + .02, .95, z); sp.scale.set(1.1, 1.1, 1); m.add(sp); });
   return m;
 }
 const carState = {lng: line[0][0], lat: line[0][1], alt: 0, yaw: 0, dist: 0};
@@ -234,20 +235,13 @@ const carLayer = {
     this.camera = new THREE.Camera(); this.scene = new THREE.Scene();
     this.renderer = new THREE.WebGLRenderer({canvas: mp.getCanvas(), context: gl, antialias: true}); this.renderer.autoClear = false; this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     const pm = new THREE.PMREMGenerator(this.renderer); // estúdio escuro com tiras de luz (como se fotografa um carro preto): a pintura fica preta e as tiras desenham as linhas e os detalhes
-    const studio = new THREE.Scene(); { const g = new THREE.SphereGeometry(60, 48, 32), P = g.attributes.position, col = []; for(let i = 0; i < P.count; i++){ const y = P.getY(i)/60, v = y > 0 ? .62*Math.exp(-y*5.5) + .1 : .62*Math.exp(y*14) + .025; col.push(v, v*1.01, v*1.05); }
-      g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); studio.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({vertexColors: true, side: THREE.BackSide}))); }   // céu escuro em cima, horizonte claro, chão escuro
-    const strip = (w, h, pos, k) => { const mm = new THREE.MeshBasicMaterial({side: THREE.DoubleSide}); mm.color.setRGB(k, k, k); const q = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mm); q.position.set(...pos); q.lookAt(0, 0, 0); studio.add(q); };
-    strip(26, 2.2, [0, 22, 3], 2.2); strip(26, 1.4, [0, 20, -6], 1.4);   // + caixa grande e suave por cima: vê-se a forma do tejadilho        // tiras por cima (reflexo no tejadilho e no capô)
-    strip(4, 14, [24, 8, 0], 2); strip(4, 14, [-24, 8, 0], 1.5);        // luzes à frente e atrás
-    strip(30, 3, [0, 4, 26], 3); strip(30, 3, [0, 4, -26], 3);        // faixas laterais baixas (contorno das portas)
-    
-    this.scene.environment = pm.fromScene(studio, .02).texture; this.scene.environmentIntensity = 1;
-    const sun = new THREE.DirectionalLight('#FFF6EC', 2); sun.position.set(-.6, 1, .45); this.scene.add(sun); this.scene.add(new THREE.HemisphereLight('#DDE8F5', '#3A3D42', .12));   // luz neutra: o preto fica preto
+    this.scene.environment = pm.fromScene(new RoomEnvironment(), .04).texture; this.scene.environmentIntensity = .4; this.renderer.toneMappingExposure = .95;   // estúdio suave (igual ao vídeo 360°)
+    const sun = new THREE.DirectionalLight('#FFD9A8', 1.35); sun.position.set(-.6, 1, .45); this.scene.add(sun); this.scene.add(new THREE.HemisphereLight('#3F86C4', '#2A1E14', .4)); const rim = new THREE.DirectionalLight('#2F8FD6', 1); rim.position.set(.8, .6, -.5); this.scene.add(rim);   // luz neutra: o preto fica preto
     try{ carModel = await loadCarGLB(); }catch(e){ console.warn('carro:', e); window.__carErr = String(e); const b = new THREE.Mesh(new THREE.BoxGeometry(4.6, 1.4, 1.9), new THREE.MeshStandardMaterial({color:'#111'})); b.position.y = .7; carModel = new THREE.Group(); carModel.add(b); }
     // sombra de contacto
     const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'); const gg = x.createRadialGradient(64,64,4,64,64,62); gg.addColorStop(0,'rgba(0,0,0,.9)'); gg.addColorStop(.55,'rgba(0,0,0,.55)'); gg.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle = gg; x.fillRect(0,0,128,128);
     const sh = new THREE.Mesh(new THREE.PlaneGeometry(6.6, 3.3), new THREE.MeshBasicMaterial({map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false})); sh.rotation.x = -Math.PI/2; sh.position.y = .05;
-    this.holder = new THREE.Group(); this.holder.add(carModel, sh); this.scene.add(this.holder); this.ready = true; mp.triggerRepaint();
+    this.holder = new THREE.Group(); this.holder.add(carModel); this.scene.add(this.holder); this.ready = true; mp.triggerRepaint();
   },
   render(gl, args){
     if(!this.ready) return;
@@ -326,14 +320,14 @@ async function loadPhotos(){
 }
 let PHOTOS_READY = loadPhotos();
 // polaroide da paragem (entra ao aproximar, fica na paragem, sai ao afastar) — desenhada no vídeo
-function drawPhoto(x, k, W, H, s, d){
+function drawPhoto(x, k, W, H, s, d, left){
   const P = PHOTOS.get(s); if(!P) return; const R = Math.max(s.pause || s.kind === 'fuel' ? 1200 : 1600, TOTAL/TEND*1.4), g = Math.abs(s.d - d);   // em vídeos curtos a foto fica ~3 s if(g >= R) return;
-  const a = Math.min(1, (R - g)/(R*.3)), e = a*a*(3 - 2*a), pw = 400*k, ph = 270*k, fw = pw + 24*k, fh = ph + 74*k;
-  const cx = W - 60*k - fw/2, cy = H*.47 + (1 - e)*40*k; x.save(); x.globalAlpha = e; x.translate(cx, cy); x.rotate((-3 + 2*(1 - e))*Math.PI/180); x.scale(.85 + .15*e, .85 + .15*e);
+  const a = Math.min(1, (R - g)/(R*.3)), e = a*a*(3 - 2*a), pw = 290*k, ph = 195*k, fw = pw + 20*k, fh = ph + 58*k;
+  const cx = left ? 60*k + fw/2 : W - 60*k - fw/2, cy = H*.5 + (1 - e)*40*k; x.save(); x.globalAlpha = e; x.translate(cx, cy); x.rotate(((left ? 3 : -3) + 2*(1 - e))*Math.PI/180); x.scale(.85 + .15*e, .85 + .15*e);
   x.shadowColor = 'rgba(0,0,0,.35)'; x.shadowBlur = 24*k; x.shadowOffsetY = 8*k; x.fillStyle = '#FBF8F1'; x.fillRect(-fw/2, -fh/2, fw, fh); x.shadowColor = 'transparent';
   const im = P.img, sc = Math.max(pw/im.width, ph/im.height), sw = pw/sc, sh = ph/sc; x.drawImage(im, (im.width - sw)/2, (im.height - sh)/2, sw, sh, -pw/2, -fh/2 + 12*k, pw, ph);
-  x.fillStyle = '#1F2328'; x.font = `800 ${24*k}px Inter`; x.textAlign = 'center'; x.fillText(s.name, 0, fh/2 - 26*k);
-  if(P.credit){ x.font = `600 ${8.5*k}px Inter`; x.fillStyle = 'rgba(255,255,255,.9)'; x.shadowColor = 'rgba(0,0,0,.8)'; x.shadowBlur = 3*k; x.textAlign = 'right'; x.fillText(P.credit.slice(0, 90), pw/2 - 6*k, -fh/2 + 12*k + ph - 6*k); }
+  x.fillStyle = '#1F2328'; x.font = `800 ${19*k}px Montserrat, Inter`; x.textAlign = 'center'; x.fillText(s.name.trim(), 0, fh/2 - 20*k);
+  if(P.credit){ x.font = `600 ${7*k}px Inter`; x.fillStyle = 'rgba(255,255,255,.9)'; x.shadowColor = 'rgba(0,0,0,.8)'; x.shadowBlur = 3*k; x.textAlign = 'right'; x.fillText(P.credit.slice(0, 90), pw/2 - 6*k, -fh/2 + 12*k + ph - 6*k); }
   x.restore(); x.textAlign = 'left';
 }
 const TITLE = Q.get('title') || `${STOPS[0]?.name || ''} → ${STOPS.at(-1)?.name || ''}`;
@@ -347,24 +341,19 @@ function drawAppHud(d, u){
   // título (com fundo suave para não se misturar com os nomes do mapa)
   if(!ATLAS){ const g = x.createLinearGradient(0, 0, 0, 160*k); const P = DARK ? '14,22,32' : MAPSTYLE === 'vintage' || ATLAS ? '242,233,208' : '255,255,255'; g.addColorStop(0, `rgba(${P},.92)`); g.addColorStop(.75, `rgba(${P},.6)`); g.addColorStop(1, `rgba(${P},0)`); x.fillStyle = g; x.fillRect(0, 0, W, 160*k); }
   rr(24*k, 22*k, 214*k, 40*k, 20*k, '#0A5BD6'); x.fillStyle = '#fff'; x.font = `800 ${17*k}px Inter`; x.fillText('LEANDRO NA ROTA', 44*k, 48*k);
-  x.shadowColor = 'rgba(0,0,0,.35)'; x.shadowBlur = 10*k; x.fillStyle = DARK ? '#FFFFFF' : MAPSTYLE === 'vintage' ? '#3B2A18' : '#1F2328'; x.font = `800 ${34*k}px Inter`; if(ATLAS){ x.save(); x.shadowBlur = 0; x.lineJoin = 'round'; x.lineWidth = 7*k; x.strokeStyle = 'rgba(250,246,236,.9)'; x.strokeText(TITLE, 26*k, 104*k); x.restore(); } x.fillText(TITLE, 26*k, 104*k); x.shadowBlur = 0;
-  x.font = `700 ${17*k}px Inter`; x.fillStyle = DARK ? '#C9D3DF' : '#3C4043'; { const names = STOPS.slice(1, -1).filter(s => s.kind !== 'fuel').map(s => s.name); let n = names.length, t = names.join(' · '); while(n > 1 && x.measureText(t).width > W - 300*k){ n--; t = names.slice(0, n).join(' · ') + ` · +${names.length - n}`; } x.fillText(t, 27*k, 130*k); }
+  { x.font = `800 ${28*k}px Montserrat, Inter`; const tw = x.measureText(TITLE).width; x.shadowColor = 'rgba(0,0,0,.3)'; x.shadowBlur = 14*k; rr(24*k, 72*k, tw + 40*k, 50*k, 14*k, 'rgba(17,20,26,.78)'); x.shadowBlur = 0; x.fillStyle = '#FFFFFF'; x.fillText(TITLE, 44*k, 106*k); }
   // cartão da paragem (ao chegar / na pausa) + foto
-  { const ph = STOPS.filter(s => PHOTOS.has(s)).sort((a, b) => Math.abs(a.d - d) - Math.abs(b.d - d))[0]; if(ph) drawPhoto(x, k, W, H, ph, d); }   // uma foto de cada vez (a do ponto mais próximo)
+  { const ph = STOPS.filter(s => PHOTOS.has(s)).sort((a, b) => Math.abs(a.d - d) - Math.abs(b.d - d)); if(ph[0]){ drawPhoto(x, k, W, H, ph[0], d, false); if(ph[1] && Math.abs(ph[1].d - ph[0].d) < 700) drawPhoto(x, k, W, H, ph[1], d, true); } }   // a do ponto mais próximo; se houver outro ali ao lado, aparece do outro lado
   // (o cartão branco com o ícone foi retirado: ficam só as fotos)
   // barra de progresso com as paragens
   const px = 40*k, pw = W - 80*k, py = H - 46*k; rr(px - 24*k, py - 40*k, pw + 48*k, 74*k, 16*k, DARK ? 'rgba(16,22,30,.92)' : MAPSTYLE === 'vintage' || ATLAS ? 'rgba(240,229,205,.94)' : 'rgba(255,255,255,.94)');
   rr(px, py - 3*k, pw, 6*k, 3*k, DARK ? '#3A4656' : '#E3DED6'); rr(px, py - 3*k, pw*d/TOTAL, 6*k, 3*k, RCOL);
-  // nomes sem se sobreporem: partida e chegada sempre; os outros em cima, senão em baixo, senão só o ponto
-  x.font = `700 ${12*k}px Inter`; const lab = s => s.kind === 'fuel' ? '⛽ ' + s.name : s.name, gap = 10*k;
-  const lx = s => { const sx = px + pw*s.d/TOTAL, w = x.measureText(lab(s)).width; return s === STOPS[0] || s === STOPS.at(-1) ? sx : Math.max(px + w/2, Math.min(px + pw - w/2, sx)); };
-  const span = s => { const sx = lx(s), w = x.measureText(lab(s)).width; return s === STOPS[0] ? [sx, sx + w] : s === STOPS.at(-1) ? [sx - w, sx] : [sx - w/2, sx + w/2]; };
-  const rows = [[], []], free = (r, a) => rows[r].every(b => a[1] + gap < b[0] || a[0] > b[1] + gap);
-  const place = new Map(); [STOPS[0], STOPS.at(-1)].forEach(s => { place.set(s, 0); rows[0].push(span(s)); });
-  STOPS.forEach(s => { if(place.has(s)) return; const a = span(s); const r = free(0, a) ? 0 : free(1, a) ? 1 : -1; place.set(s, r); if(r >= 0) rows[r].push(a); });
-  STOPS.forEach(s => { const sx = px + pw*s.d/TOTAL; x.fillStyle = s.d <= d ? (s.kind === 'fuel' ? '#F57C00' : '#E53935') : '#BDB6AC'; x.beginPath(); x.arc(sx, py, 7*k, 0, 7); x.fill(); x.strokeStyle = '#fff'; x.lineWidth = 2.5*k; x.stroke(); const r = place.get(s); if(r < 0) return; x.fillStyle = DARK ? '#DDE5EE' : '#3C4043'; x.font = `700 ${12*k}px Inter`; x.textAlign = s === STOPS[0] ? 'left' : s === STOPS.at(-1) ? 'right' : 'center'; x.fillText(lab(s), lx(s), r ? py + 20*k : py - 16*k); x.textAlign = 'left'; });
+  { const pin = (cx, col) => { x.save(); x.fillStyle = col; x.strokeStyle = '#fff'; x.lineWidth = 2.5*k; x.beginPath(); x.moveTo(cx, py + 1*k); x.bezierCurveTo(cx - 3*k, py - 6*k, cx - 11*k, py - 12*k, cx - 11*k, py - 20*k); x.arc(cx, py - 20*k, 11*k, Math.PI, 0); x.bezierCurveTo(cx + 11*k, py - 12*k, cx + 3*k, py - 6*k, cx, py + 1*k); x.closePath(); x.fill(); x.stroke(); x.fillStyle = '#fff'; x.beginPath(); x.arc(cx, py - 20*k, 4.2*k, 0, 7); x.fill(); x.restore(); };
+    const ex = px + pw, done = d >= TOTAL - 5; pin(px, '#E53935');                                   // partida: pino (gota)
+    x.beginPath(); x.arc(ex, py, 9*k, 0, 7); x.fillStyle = done ? '#E53935' : '#FFFFFF'; x.fill(); x.lineWidth = 3*k; x.strokeStyle = done ? '#FFFFFF' : '#1F2328'; x.stroke(); x.beginPath(); x.arc(ex, py, 3.2*k, 0, 7); x.fillStyle = done ? '#FFFFFF' : '#1F2328'; x.fill();   // chegada: ponto
+    x.fillStyle = '#3C4043'; x.font = `700 ${13*k}px Montserrat, Inter`; x.textAlign = 'left'; x.fillText(STOPS[0].name.trim(), px + 18*k, py - 13*k); x.textAlign = 'right'; x.fillText(STOPS.at(-1).name.trim(), ex - 18*k, py - 13*k); x.textAlign = 'left'; }
   x.fillStyle = DARK ? '#FFFFFF' : '#1F2328'; x.font = `800 ${15*k}px Inter`; x.textAlign = 'right'; x.fillText(`${(d/1000).toFixed(0)} / ${(TOTAL/1000).toFixed(0)} km`, W - 30*k, 46*k); x.textAlign = 'left';
-  x.fillStyle = DARK ? 'rgba(255,255,255,.6)' : 'rgba(0,0,0,.55)'; x.font = `600 ${10*k}px Inter`; x.textAlign = 'right'; x.fillText('© OpenStreetMap · OpenMapTiles · OpenFreeMap', W - 30*k, H - 76*k); x.textAlign = 'left';
+  if(u < .12 || u > .9){ x.fillStyle = 'rgba(0,0,0,.5)'; x.font = `600 ${8.5*k}px Inter`; x.textAlign = 'right'; x.fillText('© OpenStreetMap contributors · OpenMapTiles · OpenFreeMap', W - 30*k, H - 76*k); x.textAlign = 'left'; }
 }
 /* ---------- drone: alto e afastado na autoestrada; desce e segue de perto nas vilas; à saída sobe devagar ---------- */
 const TEND = T.at(-1);
@@ -546,7 +535,7 @@ async function exportVideo(W0){
   const W_ = +(Q.get('w') || W0), tag0 = W_ >= 3840 ? '4K' : Math.round(W_*9/16) + 'p', stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
   const name = `lr-rota-${(STOPS[0]?.name || 'viagem').replace(/\W+/g, '-')}-${(STOPS.at(-1)?.name || '').replace(/\W+/g, '-')}-${tag0}-${stamp}.mp4`;
   let picked = null; if(!+(Q.get('bench') || 0) && window.showSaveFilePicker && navigator.userActivation?.isActive){ try{ picked = await showSaveFilePicker({suggestedName: name, startIn: 'downloads', types: [{description: 'Vídeo MP4', accept: {'video/mp4': ['.mp4']}}]}); }catch(e){ if(e.name === 'AbortError'){ status('Exportação cancelada.'); return; } } }
-  status('A preparar as fotos das paragens…'); await Promise.race([PHOTOS_READY, new Promise(r => setTimeout(r, 10000))]);
+  status('A preparar as fotos das paragens…'); await Promise.race([Promise.all([PHOTOS_READY, document.fonts.load('800 28px Montserrat'), document.fonts.load('700 13px Montserrat')]), new Promise(r => setTimeout(r, 10000))]);
   const { Muxer, ArrayBufferTarget, FileSystemWritableFileStreamTarget } = await import('./vendor/mp4-muxer/mp4-muxer.mjs');
   const W = +(Q.get('w') || W0), H = Math.round(W*9/16), FPS = +(Q.get('fps') || 30), BR = +(Q.get('br') || (W >= 3840 ? 35e6 : W >= 2560 ? 20e6 : 12e6)), PR = W >= 2560 ? W/1920 : 1;
   const BENCH = +(Q.get('bench') || 0), U0 = +(Q.get('from') || 0);
@@ -565,12 +554,12 @@ async function exportVideo(W0){
   // mantém o ecrã ligado e não depende do requestAnimationFrame (o Chrome trava-o quando o ecrã apaga)
   let wake = null; const getWake = async () => { try{ wake = await navigator.wakeLock?.request('screen'); }catch(e){} }; await getWake();
   const onVis = () => { if(document.visibilityState === 'visible' && (!wake || wake.released)) getWake(); }; document.addEventListener('visibilitychange', onVis);
-  const draw = () => new Promise(r => { map.redraw(); setTimeout(r, 0); }); const ready = () => map.isSourceLoaded('omt') && (!map.getSource('dem2') || map.isSourceLoaded('dem2'));
+  const draw = () => new Promise(r => { map.redraw(); setTimeout(r, 0); }); const ready = () => map.areTilesLoaded();
   const T = {frame: 0, wait: 0, draw: 0, enc: 0}; const t0 = performance.now(); let tA;
   for(let i = 0; i < N; i++){
     const u = BENCH ? U0 + i*0.0004 : i/(N-1);
     tA = performance.now(); frame(u, i === 0); await draw(); T.frame += performance.now() - tA;
-    tA = performance.now(); let w = 0; while(!ready() && w++ < 60) await new Promise(r => setTimeout(r, 15)); if(w) await draw(); T.wait += performance.now() - tA;   // no máx. ~1 s à espera de tiles
+    tA = performance.now(); let w = 0; while(!ready() && w++ < 200) await new Promise(r => setTimeout(r, 15)); if(w) await draw(); T.wait += performance.now() - tA;   // no máx. ~1 s à espera de tiles
     tA = performance.now(); let src = rc; if(GC){ GC.draw(map.getCanvas(), hudC, i); src = GC.canvas; } else drawRec(); const vf = new VideoFrame(src, {timestamp: Math.round(i*1e6/FPS), duration: Math.round(1e6/FPS)}); T.draw += performance.now() - tA;
     tA = performance.now(); enc.encode(vf, {keyFrame: i % (FPS*2) === 0}); vf.close(); while(enc.encodeQueueSize > 4) await new Promise(r => setTimeout(r, 2)); T.enc += performance.now() - tA;
     if(i % 15 === 0 || i === N-1){ const el = (performance.now() - t0)/1000, left = el/(i+1)*(N-i-1); status(`A exportar ${tag}… ${Math.round((i+1)/N*100)}% · faltam ~${left > 90 ? Math.ceil(left/60) + ' min' : Math.ceil(left) + ' s'}`); }
