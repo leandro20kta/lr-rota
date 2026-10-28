@@ -113,6 +113,7 @@ textarea.note{width:100%;resize:none;padding:10px 12px;border:1px solid #D5DBE5;
 @keyframes blink{50%{opacity:.25}}
 .toast{position:absolute;left:50%;bottom:calc(var(--sab) + 90px);transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:999px;font-size:13px;font-weight:600;z-index:2000;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90%;text-align:center}
 .toast.show{opacity:1}
+#map-drive.maplibregl-map{position:absolute!important;inset:0}   /* o CSS do MapLibre punha a altura a 0 */
 .nv-top{position:absolute;left:12px;right:12px;top:calc(var(--sat) + 10px);z-index:500;display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:20px;background:#0D6B3C;color:#fff;box-shadow:0 10px 30px rgba(0,0,0,.28)}
 .nv-ico{width:58px;height:58px;flex:none;display:flex;align-items:center;justify-content:center}
 .nv-txt{flex:1;min-width:0}.nv-txt b{display:block;font-size:30px;font-weight:800;letter-spacing:-.5px;line-height:1.05}.nv-txt span{display:block;font-size:16px;font-weight:600;line-height:1.25;margin-top:3px;opacity:.96}
@@ -947,7 +948,7 @@ const PUCK = '<svg width="48" height="48" viewBox="0 0 48 48"><circle cx="24" cy
 async function initNavMap(c){
   await loadML(); if(NV.map){ NV.map.resize(); return; }
   NV.map = new maplibregl.Map({container: 'map-drive', style: 'https://tiles.openfreemap.org/styles/liberty', center: [c.lon, c.lat], zoom: 16, pitch: 55, attributionControl: {compact: true}});
-  NV.map.on('dragstart', () => { NV.follow = false; }); await new Promise(r => NV.map.on('load', r));
+  NV.map.on('dragstart', () => { NV.follow = false; }); await new Promise(r => NV.map.on('load', r)); NV.map.resize();
   const first = NV.map.getStyle().layers.find(l => l.type === 'symbol')?.id;
   NV.map.addSource('nv-track', {type: 'geojson', data: lineGeo([])}); NV.map.addSource('nv-route', {type: 'geojson', data: lineGeo([])});
   NV.map.addLayer({id: 'nv-track', type: 'line', source: 'nv-track', layout: {'line-cap': 'round', 'line-join': 'round'}, paint: {'line-color': '#8E9AAF', 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 3, 18, 12], 'line-opacity': .8}}, first);
