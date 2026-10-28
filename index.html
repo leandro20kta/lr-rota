@@ -121,6 +121,7 @@ textarea.note{width:100%;resize:none;padding:10px 12px;border:1px solid #D5DBE5;
 .nv-speed{position:absolute;left:16px;top:calc(var(--sat) + 176px);z-index:500;width:62px;height:62px;border-radius:50%;background:#fff;box-shadow:0 3px 12px rgba(15,23,42,.25);display:flex;flex-direction:column;align-items:center;justify-content:center}
 .nv-speed b{font-size:22px;line-height:1;font-weight:800}.nv-speed span{font-size:10px;color:var(--muted)}
 .nv-eta{display:grid;grid-template-columns:repeat(3,1fr);text-align:center;margin:2px 0 6px}.nv-eta b{display:block;font-size:24px;font-weight:800;letter-spacing:-.3px}.nv-eta div:first-child b{color:#0D6B3C}.nv-eta span{font-size:11px;color:var(--muted);font-weight:600}
+.nv-stats{display:none!important}   /* custos ficam para o fim da viagem: mais mapa visível */
 .nv-stats .stat{background:transparent;text-align:center;padding:2px}.nv-stats b{font-size:14px}.nv-stats span{font-size:10px}
 .nv-pin{width:30px;height:30px;border-radius:50%;background:#fff;color:#0A5BD6;font:800 13px Inter;display:flex;align-items:center;justify-content:center;border:3px solid #2F7CFF;box-shadow:0 2px 8px rgba(0,0,0,.3)}
 .nv-pin.done{background:#1B873F;color:#fff;border-color:#fff}
@@ -1033,7 +1034,7 @@ function navFix(c){
   if(!NV.map || !NV.puck) return; const P = [c.longitude, c.latitude]; NV.speed = c.speed || 0;
   const gh = c.heading != null && !isNaN(c.heading) && NV.speed > 3 ? c.heading : null; if(NV.coords.length) navUpdate({lat: c.latitude, lon: c.longitude}, c.accuracy);
   const hdg = gh ?? NV.routeBear ?? NV.heading; NV.heading = hdg; NV.puck.setLngLat(P).setRotation(hdg);
-  if(NV.follow) NV.map.easeTo({center: P, bearing: hdg, pitch: 55, zoom: NV.speed > 25 ? 15.4 : NV.speed > 14 ? 16 : 16.9, padding: {top: innerHeight*.38, bottom: 0, left: 0, right: 0}, duration: 950, easing: x => x});
+  if(NV.follow){ const top = ($('.nv-top')?.offsetHeight || 90) + 40, bot = ($('.nv-sheet')?.offsetHeight || 300), vis = Math.max(120, innerHeight - top - bot); NV.map.easeTo({center: P, bearing: hdg, pitch: 55, zoom: NV.speed > 25 ? 15.4 : NV.speed > 14 ? 16 : 16.9, padding: {top: top + vis*.45, bottom: bot, left: 0, right: 0}, duration: 950, easing: x => x}); }   // a seta fica no terço de baixo da parte visível do mapa
 }
 function startDrive(){
   const t = current; if(!t){ go('home'); return; }
