@@ -125,6 +125,9 @@ textarea.note{width:100%;resize:none;padding:10px 12px;border:1px solid #D5DBE5;
 .nv-stats .stat{background:transparent;text-align:center;padding:2px}.nv-stats b{font-size:14px}.nv-stats span{font-size:10px}
 .nv-pin{width:30px;height:30px;border-radius:50%;background:#fff;color:#0A5BD6;font:800 13px Inter;display:flex;align-items:center;justify-content:center;border:3px solid #2F7CFF;box-shadow:0 2px 8px rgba(0,0,0,.3)}
 .nv-pin.done{background:#1B873F;color:#fff;border-color:#fff}
+.plan-go{position:sticky;bottom:0;background:linear-gradient(rgba(255,255,255,0),#fff 30%);padding-top:14px;margin-top:4px}
+details.more{margin-top:14px;border-top:1px solid var(--line);padding-top:10px}details.more summary{font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;list-style:none;padding:6px 0}details.more summary::before{content:'＋ '}details.more[open] summary::before{content:'－ '}
+.btn.big{padding:17px 18px;font-size:17px;border-radius:16px}
 .car-marker{width:34px;height:60px;background:url(icons/car.png) center/contain no-repeat;filter:drop-shadow(0 4px 6px rgba(0,0,0,.45));transform-origin:center}
 .leaflet-control-attribution{font-size:9px}
 .ring{width:148px;height:148px;border-radius:50%;background:var(--brand-tint);display:flex;align-items:center;justify-content:center;position:relative;margin:0 auto}
@@ -213,6 +216,12 @@ textarea.note{width:100%;resize:none;padding:10px 12px;border:1px solid #D5DBE5;
       <div class="item" style="position:relative"><span style="width:12px;height:12px;border-radius:50%;border:3px solid var(--brand);flex:none"></span><div class="grow"><label class="s" for="origin" style="text-transform:uppercase;letter-spacing:.5px;font-weight:600;font-size:11px">Saída</label><input class="wide" id="origin" type="text" placeholder="A obter a sua posição…" autocomplete="off"><div class="sugg" id="sugg-origin" hidden></div></div><button class="pill" id="btn-mypos" style="font-size:12px;padding:6px 10px;background:var(--brand-tint);color:var(--brand)">Minha posição</button></div>
       <div class="item" style="background:var(--soft);position:relative"><svg width="12" height="14" viewBox="0 0 24 28" fill="#0A5BD6" style="flex:none"><path d="M12 28s10-9 10-17A10 10 0 0 0 2 11c0 8 10 17 10 17z"/></svg><div class="grow"><label class="s" for="dest" style="text-transform:uppercase;letter-spacing:.5px;font-weight:600;font-size:11px">Destino</label><input class="wide" id="dest" type="text" placeholder="Ponte de Lima, Vigo, Paris…" autocomplete="off"><div class="sugg" id="sugg-dest" hidden></div></div></div>
     </div>
+    <button class="btn big" id="btn-plan" style="margin-top:14px">Planear rota <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+    <p class="hint" style="text-align:center;margin-top:8px">Escolhe o destino — a app encontra os melhores sítios, a ordem para o vlog e leva-te lá.</p>
+    <div class="label">Recentes</div>
+    <div id="recent"></div>
+    <button class="btn ghost" id="btn-snow" style="margin-top:6px">❄ Onde há neve esta semana?</button>
+    <details class="more"><summary>Mais opções (avião, restaurantes, hotéis…)</summary>
     <div class="label">Como vou chegar</div>
     <div class="modes">
       <button class="mode on" data-mode="car"><svg class="ico" width="52" height="36" viewBox="0 0 64 44"><use href="#icCar"/></svg>Carro</button>
@@ -224,11 +233,7 @@ textarea.note{width:100%;resize:none;padding:10px 12px;border:1px solid #D5DBE5;
     <div class="chips" id="chips">
       <button class="pill on" data-k="attraction">Pontos turísticos</button><button class="pill on" data-k="restaurant">Restaurantes</button><button class="pill on" data-k="hotel">Hotéis</button><button class="pill" data-k="viewpoint">Miradouros</button><button class="pill" data-k="beach">Praias</button><button class="pill" data-k="museum">Museus</button>
     </div>
-    <button class="btn ghost" id="btn-snow" style="margin-top:12px">❄ Onde há neve esta semana?</button>
-    <div class="label">Recentes</div>
-    <div id="recent"></div>
-    <div style="height:12px"></div>
-    <button class="btn" id="btn-plan">Planear rota <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+    </details>
   </div>
   <nav class="tabs" data-tabs></nav>
 </section>
@@ -242,13 +247,13 @@ textarea.note{width:100%;resize:none;padding:10px 12px;border:1px solid #D5DBE5;
     <div class="handle"></div>
     <div style="display:flex;align-items:baseline;justify-content:space-between"><h2 id="plan-title" style="margin:0;font-size:20px;font-weight:800;letter-spacing:-.4px">…</h2><span id="plan-when" style="font-size:13px;font-weight:600;color:var(--muted)"></span></div>
     <div class="stats"><div class="stat"><span>Distância</span><b id="st-dist">–</b></div><div class="stat"><span>Tempo</span><b id="st-time">–</b></div><div class="stat blue"><span id="st-fuel-l">Gasóleo</span><b id="st-fuel">–</b></div><div class="stat warn"><span>Portagem</span><b id="st-toll">–</b></div></div>
-    <p class="hint" id="plan-note">Estimativas. Ajuste consumo e preço em Veículo.</p>
-    <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:13px;font-weight:700">Paradas sugeridas</span><button class="pill" data-go="script" style="background:transparent;color:var(--accent);padding:0;margin-right:12px">Roteiro</button><button class="pill" data-go="guide" style="background:transparent;color:var(--brand);padding:0">Ver guia do destino</button></div>
+    <p class="hint" id="plan-note">Estimativas. Ajusta consumo e preço em Definições.</p>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px"><span style="font-size:15px;font-weight:800">O teu roteiro</span><button class="pill" data-go="guide" style="background:transparent;color:var(--brand);padding:0">Guia do destino ›</button></div>
     <div id="stops"></div>
     <button class="btn sm ghost" id="btn-addstop">+ Adicionar parada</button>
-    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-top:6px;gap:8px"><span style="font-size:13px;font-weight:700" id="sights-title">Pontos turísticos</span><span class="hint" style="margin:0;text-align:right" id="sights-hint">toque para escolher · ordem automática</span></div>
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-top:6px;gap:8px"><span style="font-size:15px;font-weight:800" id="sights-title">Mais sítios</span><span class="hint" style="margin:0;text-align:right" id="sights-hint">toca para pôr ou tirar</span></div>
     <div id="sights"></div>
-    <div class="row"><button class="btn ghost" data-go="video">Vídeo</button><button class="btn accent" id="btn-start"><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M6 4l14 8-14 8z"/></svg>Iniciar viagem</button></div>
+    <div class="plan-go"><button class="btn accent big" id="btn-start" style="width:100%"><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M6 4l14 8-14 8z"/></svg>Iniciar viagem</button></div>
   </div>
 </section>
 
@@ -381,7 +386,7 @@ textarea.note{width:100%;resize:none;padding:10px 12px;border:1px solid #D5DBE5;
 
 <!-- 9 · Veículo / Definições -->
 <section id="s-settings" class="screen">
-  <div class="topbar"><button class="iconbtn" data-go="history"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button><div class="grow"><span class="sub">Definições</span><h1>Meu veículo</h1></div></div>
+  <div class="topbar"><div class="grow"><span class="sub">Leandro na Rota</span><h1>Definições</h1></div></div>
   <div class="scroll">
     <div style="display:flex;align-items:center;gap:16px;padding:16px;border-radius:16px;background:#171D2B;color:#fff"><div style="width:96px;height:96px;border-radius:14px;background:#1B2232 url(icons/car.png) center/70% no-repeat;flex:none"></div><div style="flex:1"><div style="font-size:11px;font-weight:600;color:#94A3B8;text-transform:uppercase;letter-spacing:.5px">Ícone no mapa</div><div style="font-size:16px;font-weight:700;margin:4px 0">O seu carro</div><div style="font-size:12px;color:#CBD5E1;line-height:1.4">Tamanho padrão de GPS, roda com a direção.</div></div></div>
     <div class="label">Veículo</div>
@@ -397,8 +402,10 @@ textarea.note{width:100%;resize:none;padding:10px 12px;border:1px solid #D5DBE5;
     <div class="card">
       <div class="item"><div class="grow"><span class="t">Modo noite automático</span><span class="s">Escuro após o pôr do sol</span></div><button class="toggle on" id="m-night"></button></div>
       <div class="item"><div class="grow"><span class="t">Linha da rota</span></div><select id="m-line"><option value="neon">Neon laranja</option><option value="blue">Azul</option></select></div>
-      <div class="item"><div class="grow"><span class="t">Chave Google Maps</span><span class="s">Opcional · sem chave usa OpenStreetMap</span></div><input type="password" id="k-google" placeholder="AIza…"></div>
+      <div class="item" style="display:none"><div class="grow"><span class="t">Chave Google Maps</span><span class="s">Opcional · sem chave usa OpenStreetMap</span></div><input type="password" id="k-google" placeholder="AIza…"></div>
     </div>
+    <div class="label">Casa</div>
+    <div class="card"><div class="item"><div class="grow"><span class="t">Morada de casa</span><span class="s" id="home-show">Para o botão "Ir para casa"</span></div><button class="btn sm ghost" id="btn-home2" style="width:auto">Definir</button></div></div>
     <div class="label">Inteligência artificial</div>
     <div class="card">
       <div class="item"><div class="grow"><span class="t">Chave Claude (Anthropic)</span><span class="s">Para gerar o guia do destino</span></div><input type="password" id="k-claude" placeholder="sk-ant-…"></div>
@@ -409,6 +416,7 @@ textarea.note{width:100%;resize:none;padding:10px 12px;border:1px solid #D5DBE5;
     <div style="height:14px"></div>
     <button class="btn" id="btn-save-settings">Guardar</button>
   </div>
+  <nav class="tabs" data-tabs></nav>
 </section>
 
 <!-- 10 · Capa -->
@@ -461,10 +469,9 @@ function lineStyle(){ return settings.line === 'neon' ? {color:'#FF6A2A', weight
 
 /* ---------- tabs ---------- */
 $$('[data-tabs]').forEach(n => { n.innerHTML = `
-  <button class="tab" data-go="home"><svg class="ico" width="30" height="30" viewBox="0 0 64 64"><use href="#icPin"/></svg>Nova rota</button>
+  <button class="tab" data-go="home"><svg class="ico" width="30" height="30" viewBox="0 0 64 64"><use href="#icPin"/></svg>Viajar</button>
   <button class="tab" data-go="history"><svg class="ico" width="30" height="30" viewBox="0 0 64 64"><use href="#icMap"/></svg>Viagens</button>
-  <button class="tab" data-go="video"><svg class="ico" width="30" height="30" viewBox="0 0 64 64"><use href="#icVideo"/></svg>Vídeo</button>
-  <button class="tab" data-go="settings"><svg class="ico" width="36" height="30" viewBox="0 0 64 44"><use href="#icCar"/></svg>Veículo</button>`;
+  <button class="tab" data-go="settings"><svg class="ico" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Definições</button>`;
   n.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => go(b.dataset.go)));
 });
 
@@ -618,7 +625,7 @@ function renderPlan(){
   $('#st-dist').textContent = km(t.distance) + (t.flightKm ? ` + ✈ ${Math.round(t.flightKm)} km` : ''); $('#st-time').textContent = mins(t.duration);
   $('#st-fuel-l').textContent = settings.fuel; $('#st-fuel').textContent = eur(fuelCost(t.distance)); $('#st-toll').textContent = t.tollM ? eur(tollCost(t.tollM)) : '€0';
   $('#plan-note').textContent = `Estimativa: ${settings.cons} L/100 km × ${eur(settings.price)}/L` + (t.refs.length ? ` · autoestradas: ${t.refs.join(', ')}` : ' · sem portagens detetadas');
-  $('#plan-count').textContent = `${t.stops.length} paradas · 1 destino`;
+  $('#plan-count').textContent = `${t.stops.length} paragens`;
   $('#stops').innerHTML = t.stops.map((s,i) => `<div class="stop"><span class="n">${i+1}</span><div class="grow"><div class="t">${s.name}</div><div class="s">${s.why || s.note || ''}</div></div><button class="i" data-sinfo="${i}" aria-label="Resumo">i</button><button class="x" data-rm="${i}">✕</button></div>`).join('') || '<p class="hint">Sem pontos turísticos encontrados no mapa. Adicione manualmente.</p>';
   $$('#stops [data-rm]').forEach(b => b.addEventListener('click', () => { t.stops.splice(+b.dataset.rm,1); store.set('current', t); renderPlan(); clearTimeout(rerouting); rerouting = setTimeout(() => reroute(t), 500); }));
   $$('#stops [data-sinfo]').forEach(b => b.addEventListener('click', () => stopInfo(t.stops[+b.dataset.sinfo])));
@@ -640,7 +647,7 @@ const fmtD = d => d < 1000 ? Math.round(d) + ' m' : (d/1000).toFixed(1).replace(
 let allSights = false;
 function renderSights(){
   const t = current; if(!t) return; const full = sightsOf(t), list = allSights ? full : full.slice(0, 20);
-  $('#sights-title').textContent = `Os melhores sítios em ${t.dest.name}` + (full.length ? ` (${full.length})` : '');
+  $('#sights-title').textContent = `Mais sítios em ${t.dest.name}`;
   if(t.loadingSights){ $('#sights').innerHTML = '<p class="hint"><span class="spin"></span> A escolher os sítios mais bonitos e conhecidos…</p>'; return; }
   $('#sights').innerHTML = list.map((p, i) => `<div class="sight ${isSel(t, p) ? 'on' : ''}" data-si="${i}"><span class="ck">${isSel(t, p) ? '✓' : ''}</span>${p.img ? `<img src="${p.img}" alt="" loading="lazy" style="width:52px;height:52px;border-radius:10px;object-fit:cover;flex:none">` : ''}<div class="grow"><div class="t">${p.name}</div><div class="s">${i < 5 && p.fame >= 6 ? '⭐ imperdível · ' : p.fame >= 10 ? '⭐ muito conhecido · ' : ''}${KPT[p.kind] || 'local'} · ${fmtD(p.d || 0)} do centro${p.fee === 'no' ? ' · grátis' : p.fee === 'yes' ? ' · pago' : ''}${p.hours ? ' · tem horário' : ''}</div></div><button class="i" data-info="${i}" aria-label="Resumo">i</button></div>`).join('') + (full.length > list.length ? `<button class="btn sm ghost" id="sights-more" style="margin-top:8px">Mostrar todos (${full.length})</button>` : '') || '<p class="hint">Sem pontos turísticos encontrados perto do destino.</p>';
   if($('#sights-more')) $('#sights-more').onclick = () => { allSights = true; renderSights(); };
@@ -1111,6 +1118,7 @@ function renderStep(){
   $('#st-home')?.addEventListener('click', async () => { const h = settings.home || await askHome(); if(h) waze(h); });
 }
 $('#btn-sethome').addEventListener('click', askHome);
+$('#btn-home2').addEventListener('click', async () => { await askHome(); if(settings.home) $('#home-show').textContent = settings.home.name; });
 $('#btn-finish').addEventListener('click', () => { if(!confirm('Terminar a viagem e passar ao vídeo e custos?')) return; const t = current; t.status = 'done'; t.endedAt = Date.now(); t.trackDistance = trackDist(t.track); if(watchId){ navigator.geolocation.clearWatch(watchId); watchId = null; } if(recTimer) clearInterval(recTimer); if(wakeLock){ wakeLock.release(); wakeLock = null; } store.set('current', t); go('diary'); cloudSave(t, true); });
 
 /* ---------- diary ---------- */
@@ -1142,7 +1150,7 @@ function drawMini(c, route){ if(!route || !route.length) return; const ctx = c.g
 function bounds(r){ return { minLat: Math.min(...r.map(p=>p[0])), maxLat: Math.max(...r.map(p=>p[0])), minLon: Math.min(...r.map(p=>p[1])), maxLon: Math.max(...r.map(p=>p[1])) }; }
 
 /* ---------- settings ---------- */
-function renderSettings(){ $('#v-name').value = settings.name; $('#v-fuel').value = settings.fuel; $('#v-cons').value = settings.cons; $('#v-price').value = settings.price; $('#v-tollkm').value = settings.tollkm; $('#v-vv').classList.toggle('on', settings.vv !== false); $('#m-night').classList.toggle('on', settings.night !== false); $('#m-line').value = settings.line; $('#k-google').value = settings.gkey; $('#k-claude').value = settings.ckey; }
+function renderSettings(){ if(settings.home && $('#home-show')) $('#home-show').textContent = settings.home.name; $('#v-name').value = settings.name; $('#v-fuel').value = settings.fuel; $('#v-cons').value = settings.cons; $('#v-price').value = settings.price; $('#v-tollkm').value = settings.tollkm; $('#v-vv').classList.toggle('on', settings.vv !== false); $('#m-night').classList.toggle('on', settings.night !== false); $('#m-line').value = settings.line; $('#k-google').value = settings.gkey; $('#k-claude').value = settings.ckey; }
 $$('.toggle').forEach(b => b.addEventListener('click', () => b.classList.toggle('on')));
 $('#btn-save-settings').addEventListener('click', () => { settings.name = $('#v-name').value; settings.fuel = $('#v-fuel').value; settings.cons = parseFloat($('#v-cons').value) || 6.5; settings.price = parseFloat($('#v-price').value) || 1.72; settings.tollkm = parseFloat($('#v-tollkm').value) || 0.09; settings.vv = $('#v-vv').classList.contains('on'); settings.night = $('#m-night').classList.contains('on'); settings.line = $('#m-line').value; settings.gkey = $('#k-google').value.trim(); settings.ckey = $('#k-claude').value.trim(); store.set('settings', settings); toast('Guardado'); go('history'); });
 $('#btn-export-data').addEventListener('click', () => { const blob = new Blob([JSON.stringify({settings, trips, current}, null, 1)], {type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'lr-rota-backup.json'; a.click(); });
@@ -1268,7 +1276,7 @@ $('#btn-cover-export').addEventListener('click', () => { drawCover(); $('#cv-can
 
 /* ---------- screen hooks ---------- */
 function onShow(n){
-  if(n === 'home'){ const rec = store.get('recent', []); $('#recent').innerHTML = rec.map(r => `<div class="item" style="border:0;background:var(--soft);border-radius:12px;margin-bottom:8px;padding:12px 14px"><span style="flex:1;font-size:14px;font-weight:500">${r.o} → ${r.d}</span><span style="font-size:12px;color:var(--muted)">${r.mode === 'car' ? r.km + ' km' : 'voo'}</span></div>`).join('') || '<p class="hint">Sem viagens recentes.</p>'; if(pos && !$('#origin').value) reverseGeocode(pos.latitude, pos.longitude).then(nm => { if(nm){ $('#origin').value = nm; origin = {lat:pos.latitude, lon:pos.longitude, name: nm.split(',').pop().trim()}; } }); }
+  if(n === 'home'){ const seenR = new Set(), rec = store.get('recent', []).filter(r => { const k = r.o + '>' + r.d; if(seenR.has(k)) return false; seenR.add(k); return true; }).slice(0, 3); $('#recent').innerHTML = rec.map((r, i) => `<button class="item" data-rec="${i}" style="width:100%;text-align:left;border:0;background:var(--soft);border-radius:12px;margin-bottom:8px;padding:12px 14px;font:inherit"><span style="flex:1;font-size:14px;font-weight:600">${r.o} → ${r.d}</span><span style="font-size:12px;color:var(--muted)">${r.mode === 'car' ? r.km + ' km' : 'voo'}</span></button>`).join('') || '<p class="hint">Ainda sem viagens.</p>'; $$('#recent [data-rec]').forEach(b => b.onclick = () => { const r = rec[+b.dataset.rec]; $('#dest').value = r.d; $('#dest').dispatchEvent(new Event('input')); $('#dest').focus(); }); if(pos && !$('#origin').value) reverseGeocode(pos.latitude, pos.longitude).then(nm => { if(nm){ $('#origin').value = nm; origin = {lat:pos.latitude, lon:pos.longitude, name: nm.split(',').pop().trim()}; } }); }
   if(n === 'plan') renderPlan(); if(n === 'guide') renderGuide(); if(n === 'drive') startDrive(); if(n === 'diary') renderDiary(); if(n === 'script') renderScript(); if(n === 'history') renderHistory(); if(n === 'settings') renderSettings();
   if(n === 'video'){ $('#vid-info').textContent = current && current.route ? `${mins(current.duration)} de viagem → ${vidDur} s de vídeo` : ''; if(current && current.route){ preloadTiles(); setTimeout(() => drawFrame($('#vid-canvas'), 1), 600); } else drawFrame($('#vid-canvas'), 1); }
   if(n === 'cover'){ $('#cv-sub').textContent = current ? `${current.origin.name} → ${current.dest.name}` : 'Viagem'; setTimeout(drawCover, 300); }
