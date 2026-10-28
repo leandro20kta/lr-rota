@@ -113,6 +113,16 @@ textarea.note{width:100%;resize:none;padding:10px 12px;border:1px solid #D5DBE5;
 @keyframes blink{50%{opacity:.25}}
 .toast{position:absolute;left:50%;bottom:calc(var(--sab) + 90px);transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:999px;font-size:13px;font-weight:600;z-index:2000;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90%;text-align:center}
 .toast.show{opacity:1}
+.nv-top{position:absolute;left:12px;right:12px;top:calc(var(--sat) + 10px);z-index:500;display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:20px;background:#0D6B3C;color:#fff;box-shadow:0 10px 30px rgba(0,0,0,.28)}
+.nv-ico{width:58px;height:58px;flex:none;display:flex;align-items:center;justify-content:center}
+.nv-txt{flex:1;min-width:0}.nv-txt b{display:block;font-size:30px;font-weight:800;letter-spacing:-.5px;line-height:1.05}.nv-txt span{display:block;font-size:16px;font-weight:600;line-height:1.25;margin-top:3px;opacity:.96}
+.nv-then{position:absolute;left:24px;top:calc(var(--sat) + 96px);z-index:499;background:#0A4F2D;color:#fff;font:700 13px Inter,system-ui;padding:7px 12px;border-radius:0 0 12px 12px;box-shadow:0 6px 14px rgba(0,0,0,.2)}
+.nv-speed{position:absolute;left:16px;top:calc(var(--sat) + 176px);z-index:500;width:62px;height:62px;border-radius:50%;background:#fff;box-shadow:0 3px 12px rgba(15,23,42,.25);display:flex;flex-direction:column;align-items:center;justify-content:center}
+.nv-speed b{font-size:22px;line-height:1;font-weight:800}.nv-speed span{font-size:10px;color:var(--muted)}
+.nv-eta{display:grid;grid-template-columns:repeat(3,1fr);text-align:center;margin:2px 0 6px}.nv-eta b{display:block;font-size:24px;font-weight:800;letter-spacing:-.3px}.nv-eta div:first-child b{color:#0D6B3C}.nv-eta span{font-size:11px;color:var(--muted);font-weight:600}
+.nv-stats .stat{background:transparent;text-align:center;padding:2px}.nv-stats b{font-size:14px}.nv-stats span{font-size:10px}
+.nv-pin{width:30px;height:30px;border-radius:50%;background:#fff;color:#0A5BD6;font:800 13px Inter;display:flex;align-items:center;justify-content:center;border:3px solid #2F7CFF;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.nv-pin.done{background:#1B873F;color:#fff;border-color:#fff}
 .car-marker{width:34px;height:60px;background:url(icons/car.png) center/contain no-repeat;filter:drop-shadow(0 4px 6px rgba(0,0,0,.45));transform-origin:center}
 .leaflet-control-attribution{font-size:9px}
 .ring{width:148px;height:148px;border-radius:50%;background:var(--brand-tint);display:flex;align-items:center;justify-content:center;position:relative;margin:0 auto}
@@ -258,20 +268,22 @@ textarea.note{width:100%;resize:none;padding:10px 12px;border:1px solid #D5DBE5;
 <!-- 5 · Em rota -->
 <section id="s-drive" class="screen">
   <div class="map" id="map-drive"></div>
-  <div class="banner"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V8M6 14l6-6 6 6"/></svg><div style="flex:1"><b id="dr-dist">–</b><span id="dr-next">a calcular…</span></div></div>
-  <span class="float" style="top:calc(var(--sat) + 96px);left:16px"><span class="rec"></span><span id="dr-rec">REC 00:00:00</span></span>
-  <span class="float" style="top:calc(var(--sat) + 96px);right:16px;color:var(--ok)" id="dr-gps">GPS · –</span>
-  <button class="fab" style="top:calc(var(--sat) + 150px);right:16px" id="btn-center" aria-label="Centrar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L4 20l8-4 8 4z"/></svg></button>
-  <button class="fab" style="top:calc(var(--sat) + 206px);right:16px" id="btn-flag" aria-label="Marcar ponto"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4h12l-2 4 2 4H5"/></svg></button>
-  <button class="fab" style="top:calc(var(--sat) + 262px);right:16px" id="btn-night">3D</button>
-  <button class="fab" style="top:calc(var(--sat) + 318px);right:16px;font-size:20px" id="btn-fuel" aria-label="Abastecer">⛽</button>
-  <button class="fab" style="top:calc(var(--sat) + 374px);right:16px;font-size:20px" id="btn-photo" aria-label="Foto da paragem">📷</button>
-  <div class="float" style="left:16px;bottom:236px;flex-direction:column;gap:0;border-radius:14px;padding:8px 12px"><b id="dr-speed" style="font-size:22px;line-height:1">0</b><span style="font-size:10px;color:var(--muted)">km/h</span></div>
-  <div class="sheet">
+  <div class="nv-top"><div class="nv-ico" id="nv-ico"></div><div class="nv-txt"><b id="dr-dist">–</b><span id="dr-next">A preparar a navegação…</span></div></div>
+  <div class="nv-then" id="nv-then" hidden></div>
+  <span class="float" style="top:calc(var(--sat) + 124px);left:16px"><span class="rec"></span><span id="dr-rec">REC 00:00:00</span></span>
+  <span class="float" style="top:calc(var(--sat) + 124px);right:16px;color:var(--ok)" id="dr-gps">GPS · –</span>
+  <button class="fab" style="top:calc(var(--sat) + 176px);right:16px" id="btn-center" aria-label="Centrar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L4 20l8-4 8 4z"/></svg></button>
+  <button class="fab" style="top:calc(var(--sat) + 232px);right:16px;font-size:19px" id="btn-night" aria-label="Voz">🔊</button>
+  <button class="fab" style="top:calc(var(--sat) + 288px);right:16px" id="btn-flag" aria-label="Marcar ponto"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4h12l-2 4 2 4H5"/></svg></button>
+  <button class="fab" style="top:calc(var(--sat) + 344px);right:16px;font-size:20px" id="btn-fuel" aria-label="Abastecer">⛽</button>
+  <button class="fab" style="top:calc(var(--sat) + 400px);right:16px;font-size:20px" id="btn-photo" aria-label="Foto da paragem">📷</button>
+  <div class="nv-speed"><b id="dr-speed">0</b><span>km/h</span></div>
+  <div class="sheet nv-sheet">
     <div class="handle"></div>
-    <div class="stats"><div class="stat" style="background:transparent;text-align:center"><b id="dr-done">0,0</b><span>km feitos</span></div><div class="stat" style="background:transparent;text-align:center"><b id="dr-left">–</b><span>restantes</span></div><div class="stat" style="background:transparent;text-align:center"><b id="dr-fuel" style="color:var(--brand-dark)">€0,00</b><span>gasóleo</span></div><div class="stat" style="background:transparent;text-align:center"><b id="dr-toll" style="color:var(--warn)">€0,00</b><span>portagem</span></div></div>
+    <div class="nv-eta"><div><b id="nv-eta">--:--</b><span>chegada</span></div><div><b id="nv-tleft">–</b><span>tempo</span></div><div><b id="nv-kleft">–</b><span>distância</span></div></div>
     <div id="dr-step"></div>
-    <div class="row"><button class="btn ghost" id="btn-sethome">🏠 Morada de casa</button><button class="btn dark" id="btn-finish">Terminar</button></div>
+    <div class="stats nv-stats"><div class="stat"><b id="dr-done">0,0</b><span>km feitos</span></div><div class="stat"><b id="dr-left">–</b><span>restante</span></div><div class="stat"><b id="dr-fuel" style="color:var(--brand-dark)">€0,00</b><span>gasóleo</span></div><div class="stat"><b id="dr-toll" style="color:var(--warn)">€0,00</b><span>portagem</span></div></div>
+    <div class="row"><button class="btn ghost" id="btn-sethome">🏠 Casa</button><button class="btn dark" id="btn-finish">Terminar viagem</button></div>
   </div>
 </section>
 
@@ -924,17 +936,110 @@ $('#btn-sc-ai').addEventListener('click', async () => {
 
 /* ---------- drive ---------- */
 let mapDrive, driveLayer, carMarker, trackLine, recStart = null, recTimer = null, wakeLock = null, follow = true, lastFix = null;
+/* ---------- navegação dentro da app (como Waze/Google Maps): seta que te segue, manobras, voz, recálculo ---------- */
+let mlReady = null;
+const loadML = () => mlReady ||= new Promise((res, rej) => { if(window.maplibregl) return res(); const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'vendor/maplibre/maplibre-gl.css'; document.head.appendChild(l); const sc = document.createElement('script'); sc.src = 'vendor/maplibre/maplibre-gl.js'; sc.onload = res; sc.onerror = rej; document.head.appendChild(sc); });
+const NV = {map: null, puck: null, coords: [], cum: [], steps: [], target: null, total: 0, dur: 0, spoken: {}, voice: store.get('voice', true), along: 0, segI: 0, offSince: 0, lastReroute: 0, follow: true, heading: 0, marks: [], pending: null, arrived: null, speed: 0};
+const lineGeo = c => ({type: 'Feature', properties: {}, geometry: {type: 'LineString', coordinates: c.length > 1 ? c : []}});
+const hv = (a, b) => dist(a[1], a[0], b[1], b[0]);
+function projSeg(P, A, B){ const k = Math.cos(P[1]*Math.PI/180)*111320, m = 110540, ax = (A[0]-P[0])*k, ay = (A[1]-P[1])*m, bx = (B[0]-P[0])*k, by = (B[1]-P[1])*m, dx = bx - ax, dy = by - ay, L2 = dx*dx + dy*dy; let t = L2 ? -(ax*dx + ay*dy)/L2 : 0; t = Math.max(0, Math.min(1, t)); const x = ax + t*dx, y = ay + t*dy; return {d: Math.hypot(x, y), t}; }
+const PUCK = '<svg width="48" height="48" viewBox="0 0 48 48"><circle cx="24" cy="24" r="21" fill="#fff"/><circle cx="24" cy="24" r="17.5" fill="#2F7CFF"/><path d="M24 9l9.5 23L24 26.5 14.5 32z" fill="#fff"/></svg>';
+async function initNavMap(c){
+  await loadML(); if(NV.map){ NV.map.resize(); return; }
+  NV.map = new maplibregl.Map({container: 'map-drive', style: 'https://tiles.openfreemap.org/styles/liberty', center: [c.lon, c.lat], zoom: 16, pitch: 55, attributionControl: {compact: true}});
+  NV.map.on('dragstart', () => { NV.follow = false; }); await new Promise(r => NV.map.on('load', r));
+  const first = NV.map.getStyle().layers.find(l => l.type === 'symbol')?.id;
+  NV.map.addSource('nv-track', {type: 'geojson', data: lineGeo([])}); NV.map.addSource('nv-route', {type: 'geojson', data: lineGeo([])});
+  NV.map.addLayer({id: 'nv-track', type: 'line', source: 'nv-track', layout: {'line-cap': 'round', 'line-join': 'round'}, paint: {'line-color': '#8E9AAF', 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 3, 18, 12], 'line-opacity': .8}}, first);
+  NV.map.addLayer({id: 'nv-route-case', type: 'line', source: 'nv-route', layout: {'line-cap': 'round', 'line-join': 'round'}, paint: {'line-color': '#0B4FB3', 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 7, 18, 26]}}, first);
+  NV.map.addLayer({id: 'nv-route', type: 'line', source: 'nv-route', layout: {'line-cap': 'round', 'line-join': 'round'}, paint: {'line-color': '#3A86FF', 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 4.5, 18, 19]}}, first);
+  const el = document.createElement('div'); el.innerHTML = PUCK; NV.puck = new maplibregl.Marker({element: el, rotationAlignment: 'map', pitchAlignment: 'map'}).setLngLat([c.lon, c.lat]).addTo(NV.map);
+}
+function navMarks(){ const t = current; NV.marks.forEach(m => m.remove()); NV.marks = []; if(!NV.map) return;
+  const S = t.stops.filter(s => s.kind !== 'fuel' && s.kind !== 'photo');
+  S.forEach((s, i) => { const el = document.createElement('div'); el.className = 'nv-pin' + (s.done ? ' done' : ''); el.textContent = s.done ? '✓' : i + 1; NV.marks.push(new maplibregl.Marker({element: el}).setLngLat([s.lon, s.lat]).addTo(NV.map)); });
+  if(NV.target && !S.includes(NV.target)){ NV.marks.push(new maplibregl.Marker({color: '#E53935'}).setLngLat([NV.target.lon, NV.target.lat]).addTo(NV.map)); } }
+function speak(txt){ if(!NV.voice || !('speechSynthesis' in window)) return; try{ speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(txt), vs = speechSynthesis.getVoices(); u.lang = 'pt-PT'; u.voice = vs.find(v => /pt[-_]PT/i.test(v.lang)) || vs.find(v => /^pt/i.test(v.lang)) || null; u.rate = 1.03; speechSynthesis.speak(u); }catch(e){} }
+const DIRS = {left: 'à esquerda', right: 'à direita', 'slight left': 'ligeiramente à esquerda', 'slight right': 'ligeiramente à direita', 'sharp left': 'bem à esquerda', 'sharp right': 'bem à direita', straight: 'em frente', uturn: 'inversão de marcha'};
+const roadOf = s => s.ref && s.name ? `${s.name} (${s.ref})` : s.ref || s.name;
+function instr(s){ const r = roadOf(s), on = r ? ` para ${r}` : '', d = DIRS[s.mod] || '';
+  switch(s.type){
+    case 'depart': return `Siga${r ? ' pela ' + r : ' em frente'}`;
+    case 'arrive': return 'Chegou ao destino';
+    case 'roundabout': case 'rotary': return `Na rotunda, saia na ${s.exit || 1}.ª saída${on}`;
+    case 'exit roundabout': case 'exit rotary': return `Saia da rotunda${on}`;
+    case 'roundabout turn': return `Na rotunda, vire ${d}${on}`;
+    case 'on ramp': return `Entre${r ? ' na ' + r : ' na via rápida'}`;
+    case 'off ramp': return `Saia ${d}${s.dest ? ' em direção a ' + s.dest.split(',')[0] : on}`;
+    case 'fork': return `Na bifurcação, mantenha-se ${d}${on}`;
+    case 'merge': return `Junte-se ao trânsito${r ? ' na ' + r : ''}`;
+    case 'end of road': return `No fim da estrada, vire ${d}${on}`;
+    case 'continue': case 'new name': return s.mod === 'uturn' ? 'Faça inversão de marcha' : s.mod && s.mod !== 'straight' ? `Mantenha-se ${d}${on}` : `Continue${r ? ' pela ' + r : ' em frente'}`;
+    default: return s.mod === 'uturn' ? 'Faça inversão de marcha' : s.mod === 'straight' ? `Siga em frente${on}` : `Vire ${d}${on}`;
+  } }
+function navIcon(s){ const W = '#fff', svg = p => `<svg width="56" height="56" viewBox="0 0 48 48" fill="none" stroke="${W}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+  if(!s) return svg('<path d="M24 40V10M13 21l11-11 11 11"/>');
+  if(s.type === 'arrive') return svg('<path d="M14 42V8h20l-4 7 4 7H14"/>');
+  if(/roundabout|rotary/.test(s.type)) return svg('<circle cx="24" cy="22" r="9"/><path d="M24 42V31M33 22h7M36 18l4 4-4 4"/>');
+  const m = s.mod;
+  if(m === 'uturn') return svg('<path d="M30 42V18a8 8 0 0 0-16 0v8M8 21l6 6 6-6"/>');
+  if(m === 'left' || m === 'sharp left') return svg('<path d="M30 42V22a6 6 0 0 0-6-6H10M17 9l-7 7 7 7"/>');
+  if(m === 'right' || m === 'sharp right') return svg('<path d="M18 42V22a6 6 0 0 1 6-6h14M31 9l7 7-7 7"/>');
+  if(m === 'slight left') return svg('<path d="M28 42V26l-12-14M14 22V11h11"/>');
+  if(m === 'slight right') return svg('<path d="M20 42V26l12-14M34 22V11H23"/>');
+  return svg('<path d="M24 42V10M13 21l11-11 11 11"/>'); }
+const fmtNav = m => m >= 1000 ? (m/1000).toFixed(1).replace('.', ',') + ' km' : (m < 100 ? Math.max(10, Math.round(m/10)*10) : Math.round(m/50)*50) + ' m';
+const sayD = m => m >= 1000 ? (m/1000).toFixed(1).replace('.', ',').replace(',0', '') + ' quilómetros' : (m < 100 ? Math.round(m/10)*10 : Math.round(m/50)*50) + ' metros';
+function setBanner(st, text, dm){ $('#nv-ico').innerHTML = navIcon(st); $('#dr-dist').textContent = dm == null ? '' : fmtNav(dm); $('#dr-next').textContent = text; }
+function hereNow(){ const t = current; return pos ? {lat: pos.latitude, lon: pos.longitude} : (t.track.at(-1) || {lat: t.route[0][0], lon: t.route[0][1]}); }
+async function navTo(target){
+  const h = hereNow(); NV.target = target; NV.arrived = null; setBanner(null, 'A calcular a rota até ' + target.name + '…', null); navMarks();
+  try{
+    const j = await osrm(`/route/v1/driving/${h.lon},${h.lat};${target.lon},${target.lat}?overview=full&geometries=geojson&steps=true`);
+    if(NV.target !== target) return; const r = j.routes[0]; NV.coords = r.geometry.coordinates; NV.cum = [0]; for(let i = 1; i < NV.coords.length; i++) NV.cum.push(NV.cum[i-1] + hv(NV.coords[i-1], NV.coords[i]));
+    let acc = 0; NV.steps = r.legs[0].steps.map(x => { const o = {type: x.maneuver.type, mod: x.maneuver.modifier || '', exit: x.maneuver.exit, name: x.name || '', ref: (x.ref || '').split(';')[0], dest: x.destinations || '', along: acc}; acc += x.distance; return o; });
+    const k = NV.cum.at(-1)/Math.max(1, acc); NV.steps.forEach(x => x.along *= k);
+    NV.total = NV.cum.at(-1); NV.dur = r.duration; NV.spoken = {}; NV.segI = 0; NV.offSince = 0;
+    NV.map?.getSource('nv-route')?.setData(lineGeo(NV.coords));
+    speak(`A caminho de ${target.name}. ${sayD(NV.total)}, cerca de ${Math.max(1, Math.round(NV.dur/60))} minutos.`);
+    navUpdate(h, 10); renderStep();
+  }catch(e){ setBanner(null, 'Sem ligação ao serviço de rotas. A tentar de novo…', null); setTimeout(() => { if(NV.target === target && !NV.coords.length) navTo(target); }, 6000); }
+}
+function navUpdate(h, accu){
+  if(!NV.coords.length || NV.coords.length < 2) return; const P = [h.lon, h.lat];
+  let best = {d: 1e12, i: NV.segI, t: 0}; const scan = (a, b) => { for(let i = a; i < b; i++){ const pr = projSeg(P, NV.coords[i], NV.coords[i+1]); if(pr.d < best.d) best = {d: pr.d, i, t: pr.t}; } };
+  scan(Math.max(0, NV.segI - 15), Math.min(NV.coords.length - 1, NV.segI + 300)); if(best.d > 150) scan(0, NV.coords.length - 1);
+  NV.segI = best.i; NV.along = NV.cum[best.i] + best.t*(NV.cum[best.i+1] - NV.cum[best.i]); const left = Math.max(0, NV.total - NV.along);
+  NV.routeBear = bearing(NV.coords[best.i][1], NV.coords[best.i][0], NV.coords[best.i+1][1], NV.coords[best.i+1][0]);
+  if(best.d > 45 && (accu ?? 20) < 40){ NV.offSince ||= Date.now(); if(Date.now() - NV.offSince > 6000 && Date.now() - NV.lastReroute > 15000){ NV.lastReroute = Date.now(); speak('A recalcular a rota.'); navTo(NV.target); return; } } else NV.offSince = 0;
+  if(left < 35){ navArrive(); return; }
+  const ni = NV.steps.findIndex((x, i) => i > 0 && x.along > NV.along + 3), st = NV.steps[ni] || NV.steps.at(-1), dm = Math.max(0, st.along - NV.along);
+  setBanner(st, st.type === 'arrive' ? 'Chegada: ' + NV.target.name : instr(st), dm);
+  const nx = NV.steps[ni + 1], th = $('#nv-then'); if(nx && nx.along - st.along < 220 && nx.type !== 'arrive'){ th.hidden = false; th.innerHTML = 'Depois: ' + instr(nx); } else th.hidden = true;
+  const v = NV.speed || 12, far = v > 22 ? 900 : v > 14 ? 450 : 250, near = v > 22 ? 140 : 45;
+  if(dm < far && dm > near*1.6 && !NV.spoken[ni + 'f']){ NV.spoken[ni + 'f'] = 1; speak(`Daqui a ${sayD(dm)}, ${instr(st)}`); }
+  if(dm <= near && !NV.spoken[ni + 'n']){ NV.spoken[ni + 'n'] = 1; speak(instr(st)); }
+  NV.map?.getSource('nv-route')?.setData(lineGeo([P, ...NV.coords.slice(best.i + 1)]));
+  const tl = left/Math.max(1, NV.total)*NV.dur; $('#nv-eta').textContent = new Date(Date.now() + tl*1000).toLocaleTimeString('pt-PT', {hour: '2-digit', minute: '2-digit'}); $('#nv-tleft').textContent = mins(tl); $('#nv-kleft').textContent = km(left);
+}
+function navArrive(){
+  const tg = NV.target; if(!tg || NV.arrived === tg) return; NV.arrived = tg; NV.coords = []; NV.map?.getSource('nv-route')?.setData(lineGeo([])); $('#nv-then').hidden = true;
+  setBanner({type: 'arrive'}, 'Chegaste: ' + tg.name, null); $('#nv-eta').textContent = '✓'; $('#nv-tleft').textContent = '–'; $('#nv-kleft').textContent = '–'; speak(`Chegaste a ${tg.name}.`); if(navigator.vibrate) navigator.vibrate([200, 100, 200]);
+  if(current.stops.includes(tg) && !tg.done){ tg.done = true; tg.arrivedAt = Date.now(); store.set('current', current); }
+  navMarks(); renderStep();
+}
+function navFix(c){
+  if(!NV.map || !NV.puck) return; const P = [c.longitude, c.latitude]; NV.speed = c.speed || 0;
+  const gh = c.heading != null && !isNaN(c.heading) && NV.speed > 3 ? c.heading : null; if(NV.coords.length) navUpdate({lat: c.latitude, lon: c.longitude}, c.accuracy);
+  const hdg = gh ?? NV.routeBear ?? NV.heading; NV.heading = hdg; NV.puck.setLngLat(P).setRotation(hdg);
+  if(NV.follow) NV.map.easeTo({center: P, bearing: hdg, pitch: 55, zoom: NV.speed > 25 ? 15.4 : NV.speed > 14 ? 16 : 16.9, padding: {top: innerHeight*.38, bottom: 0, left: 0, right: 0}, duration: 950, easing: x => x});
+}
 function startDrive(){
   const t = current; if(!t){ go('home'); return; }
-  if(!mapDrive){ mapDrive = L.map('map-drive', {zoomControl:false}); mapDrive._tiles = tileLayer(isNight()).addTo(mapDrive); mapDrive.on('dragstart', () => follow = false); }
-  else { mapDrive.removeLayer(mapDrive._tiles); mapDrive._tiles = tileLayer(isNight()).addTo(mapDrive); }
-  if(driveLayer) driveLayer.remove(); driveLayer = L.layerGroup().addTo(mapDrive);
-  t.legs.forEach(l => L.polyline(l.coords, l.type === 'plane' ? {color:'#2F7CFF', weight:4, dashArray:'2 10'} : Object.assign({}, lineStyle(), {opacity:.55})).addTo(driveLayer));
-  t.stops.forEach((s,i) => L.marker([s.lat,s.lon], {icon: L.divIcon({className:'', html:`<div style="width:26px;height:26px;border-radius:50%;background:#fff;color:#0A5BD6;font:800 12px Inter;display:flex;align-items:center;justify-content:center;border:3px solid #2F7CFF">${i+1}</div>`, iconSize:[26,26], iconAnchor:[13,13]})}).addTo(driveLayer));
-  L.marker([t.dest.lat, t.dest.lon]).addTo(driveLayer);
-  trackLine = L.polyline(t.track.map(p => [p.lat, p.lon]), lineStyle()).addTo(driveLayer);
-  carMarker = L.marker(t.track.length ? [t.track.at(-1).lat, t.track.at(-1).lon] : t.route[0], {icon: L.divIcon({className:'', html:'<div class="car-marker" id="car-el"></div>', iconSize:[34,60], iconAnchor:[17,30]}), zIndexOffset: 1000}).addTo(driveLayer);
-  setTimeout(() => { mapDrive.invalidateSize(); mapDrive.setView(carMarker.getLatLng(), 16); }, 60);
+  try{ speechSynthesis?.speak(new SpeechSynthesisUtterance('')); }catch(e){}   // o iPhone só deixa falar depois de um toque
+  $('#btn-night').textContent = NV.voice ? '🔊' : '🔇';
+  const h = hereNow(); initNavMap(h).then(() => { NV.map.getSource('nv-track').setData(lineGeo(t.track.map(p => [p.lon, p.lat]))); navMarks(); NV.map.jumpTo({center: [h.lon, h.lat], zoom: 16, pitch: 55});
+    if(!NV.target){ const S = t.stops.filter(s => s.kind !== 'fuel' && s.kind !== 'photo'); const nx = S.find(s => !s.done); if(nx) navTo(nx); else if(t.dest) navTo(t.dest); } }).catch(e => setBanner(null, 'Não consegui abrir o mapa: ' + e.message, null));
   t.status = 'driving'; if(!t.startedAt) t.startedAt = Date.now(); recStart = t.startedAt; store.set('current', t);
   if(recTimer) clearInterval(recTimer); recTimer = setInterval(() => { const s = Math.floor((Date.now() - recStart)/1000); $('#dr-rec').textContent = 'REC ' + [s/3600, s/60%60, s%60].map(v => String(Math.floor(v)).padStart(2,'0')).join(':'); }, 1000);
   if(watchId) navigator.geolocation.clearWatch(watchId);
@@ -946,12 +1051,9 @@ function onFix(p){
   const t = current; if(!t || t.status !== 'driving') return; const c = p.coords; pos = c;
   $('#dr-gps').textContent = 'GPS · ' + Math.round(c.accuracy) + ' m';
   const last = t.track.at(-1); const moved = last ? dist(last.lat, last.lon, c.latitude, c.longitude) : 0;
-  if(!last || moved > 6){ t.track.push({lat:c.latitude, lon:c.longitude, t:Date.now(), s:c.speed}); trackLine.addLatLng([c.latitude, c.longitude]); if(t.track.length % 10 === 0) store.set('current', t); }
-  carMarker.setLatLng([c.latitude, c.longitude]);
-  const hd = c.heading != null && !isNaN(c.heading) ? c.heading : (last ? bearing(last.lat,last.lon,c.latitude,c.longitude) : 0);
-  const el = document.getElementById('car-el'); if(el) el.style.transform = `rotate(${hd}deg)`;
+  if(!last || moved > 6){ t.track.push({lat:c.latitude, lon:c.longitude, t:Date.now(), s:c.speed}); if(t.track.length % 5 === 0) NV.map?.getSource('nv-track')?.setData(lineGeo(t.track.map(p => [p.lon, p.lat]))); if(t.track.length % 10 === 0) store.set('current', t); }
+  navFix(c);
   $('#dr-speed').textContent = c.speed != null ? Math.round(c.speed*3.6) : '–';
-  if(follow) mapDrive.panTo([c.latitude, c.longitude], {animate:true, duration:.5});
   updateDriveStats();
 }
 function bearing(a,b,c,d){ const y = Math.sin((d-b)*Math.PI/180)*Math.cos(c*Math.PI/180), x = Math.cos(a*Math.PI/180)*Math.sin(c*Math.PI/180) - Math.sin(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.cos((d-b)*Math.PI/180); return (Math.atan2(y,x)*180/Math.PI + 360) % 360; }
@@ -959,12 +1061,10 @@ function trackDist(tr){ let d = 0; for(let i=1;i<tr.length;i++) d += dist(tr[i-1
 function updateDriveStats(){
   const t = current; const done = trackDist(t.track); const left = Math.max(0, t.distance - done);
   $('#dr-done').textContent = (done/1000).toFixed(1).replace('.', ','); $('#dr-left').textContent = mins(left / Math.max(8, t.distance / Math.max(1, t.duration))); $('#dr-fuel').textContent = eur(fuelCost(done)); $('#dr-toll').textContent = eur(tollCost(Math.min(t.tollM, done * (t.tollM / Math.max(1,t.distance)))));
-  const here = t.track.at(-1) || {lat:t.route[0][0], lon:t.route[0][1]}; const next = t.stops.find(s => !s.done) || t.dest; const dn = dist(here.lat, here.lon, next.lat, next.lon);
-  $('#dr-dist').textContent = km(dn); $('#dr-next').textContent = 'até ' + next.name + (next === t.dest ? ' · destino' : ` · parada ${t.stops.indexOf(next)+1} de ${t.stops.length}`);
-  if(dn < 120 && next !== t.dest && !next.done){ next.done = true; next.arrivedAt = Date.now(); toast('Chegou: ' + next.name, 4000); if(navigator.vibrate) navigator.vibrate(200); renderStep(); }
+
 }
-$('#btn-center').addEventListener('click', () => { follow = true; if(carMarker) mapDrive.setView(carMarker.getLatLng(), 16); });
-$('#btn-night').addEventListener('click', () => { const dark = !!mapDrive._tiles._dark; mapDrive.removeLayer(mapDrive._tiles); mapDrive._tiles = tileLayer(!dark).addTo(mapDrive); });
+$('#btn-center').addEventListener('click', () => { NV.follow = true; if(pos) navFix(pos); });
+$('#btn-night').addEventListener('click', () => { NV.voice = !NV.voice; store.set('voice', NV.voice); $('#btn-night').textContent = NV.voice ? '🔊' : '🔇'; if(NV.voice) speak('Voz ligada.'); else try{ speechSynthesis.cancel(); }catch(e){} });
 $('#btn-flag').addEventListener('click', () => { if(!pos) return; const name = prompt('Nome do ponto (ex.: Miradouro lindo)') || 'Ponto marcado'; current.stops.push({name, lat:pos.latitude, lon:pos.longitude, note:'Marcado na viagem', done:true}); store.set('current', current); toast('Ponto marcado'); });
 $('#btn-fuel').addEventListener('click', () => { if(!pos){ toast('Ainda sem GPS'); return; } const name = prompt('Posto (ex.: Repsol)', 'Repsol') || 'Abastecimento'; current.stops.push({name, lat: pos.latitude, lon: pos.longitude, note: 'Abastecimento', kind: 'fuel', pause: 4, done: true, t: Date.now()}); store.set('current', current); toast('⛽ Abastecimento marcado'); });
 // fotos das paragens (📷 durante a viagem): ficam no IndexedDB; no vídeo aparecem quando o carro chega a esse ponto
@@ -997,11 +1097,15 @@ const waze = p => { location.href = `https://waze.com/ul?ll=${p.lat},${p.lon}&na
 async function askHome(){ const q = prompt('Morada de casa (rua, n.º, cidade):', settings.home?.name || ''); if(!q) return null; try{ const r = (await suggest(q))[0]; if(!r) throw 0; settings.home = {lat: r.lat, lon: r.lon, name: r.full}; store.set('settings', settings); toast('🏠 Casa: ' + r.title); return settings.home; }catch(e){ toast('Não encontrei essa morada'); return null; } }
 function renderStep(){
   const t = current, el = $('#dr-step'); if(!t || !el) return; const S = t.stops.filter(s => s.kind !== 'fuel' && s.kind !== 'photo'), next = S.find(s => !s.done), n = next ? S.indexOf(next) + 1 : 0;
-  const box = (title, sub, btns) => `<div style="padding:12px;border-radius:14px;background:var(--soft);margin-bottom:8px"><div style="font-weight:800">${title}</div>${sub ? `<div class="s" style="margin-top:2px">${sub}</div>` : ''}<div class="row" style="margin-top:10px">${btns}</div></div>`;
-  if(next) el.innerHTML = box(`Paragem ${n} de ${S.length}: ${next.name}`, next.why || '', `<button class="btn accent" id="st-go">🧭 Ir no Waze</button><button class="btn ghost" id="st-arrive">✓ Cheguei</button>`);
-  else el.innerHTML = box(S.length ? 'Todas as paragens feitas 🎉' : 'Sem paragens', settings.home ? 'Casa: ' + settings.home.name : 'Define a morada de casa para voltares com o Waze.', `<button class="btn accent" id="st-home">🏠 Ir para casa (Waze)</button>`);
+  const box = (title, sub, main, small) => `<div style="padding:12px;border-radius:16px;background:var(--soft);margin-bottom:8px"><div style="font-weight:800;font-size:16px">${title}</div>${sub ? `<div class="s" style="margin-top:3px">${sub}</div>` : ''}${main ? `<div style="margin-top:10px">${main}</div>` : ''}<div style="display:flex;gap:8px;margin-top:8px">${small}</div></div>`;
+  const going = next && NV.target === next && NV.coords.length;
+  const sm = (id, txt) => `<button class="btn sm ghost" id="${id}" style="flex:1">${txt}</button>`;
+  if(next) el.innerHTML = box(`Paragem ${n} de ${S.length}: ${next.name}`, next.why || '', going ? '' : `<button class="btn accent" id="st-nav" style="width:100%">▶ ${n > 1 && S[n-2]?.done ? 'Seguir para a próxima' : 'Navegar até lá'}</button>`, sm('st-arrive', '✓ Já cheguei') + sm('st-go', 'Abrir no Waze'));
+  else el.innerHTML = box(S.length ? 'Todas as paragens feitas 🎉' : 'Sem paragens', settings.home ? 'Casa: ' + settings.home.name : 'Define a morada de casa (botão 🏠 Casa).', `<button class="btn accent" id="st-homenav" style="width:100%">🏠 Ir para casa</button>`, sm('st-home', 'Casa no Waze'));
+  $('#st-nav')?.addEventListener('click', () => navTo(next));
+  $('#st-homenav')?.addEventListener('click', async () => { const h = settings.home || await askHome(); if(h) navTo({lat: h.lat, lon: h.lon, name: 'casa'}); });
   $('#st-go')?.addEventListener('click', () => waze(next));
-  $('#st-arrive')?.addEventListener('click', () => { next.done = true; next.arrivedAt = Date.now(); store.set('current', t); toast('📍 ' + next.name + ' — bom vlog! Quando quiseres, carrega em "Ir no Waze" para a próxima.', 4500); renderStep(); updateDriveStats(); });
+  $('#st-arrive')?.addEventListener('click', () => { if(NV.target === next){ navArrive(); return; } next.done = true; next.arrivedAt = Date.now(); store.set('current', t); toast('📍 ' + next.name + ' — bom vlog! Quando quiseres, carrega em "Seguir para a próxima".', 4500); navMarks(); renderStep(); updateDriveStats(); });
   $('#st-home')?.addEventListener('click', async () => { const h = settings.home || await askHome(); if(h) waze(h); });
 }
 $('#btn-sethome').addEventListener('click', askHome);
